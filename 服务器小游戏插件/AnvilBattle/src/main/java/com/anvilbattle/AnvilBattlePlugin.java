@@ -14,6 +14,7 @@ public final class AnvilBattlePlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new AnvilBattleManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         AnvilBattleCommand command = new AnvilBattleCommand(this, manager);
         PluginCommand anvil = getCommand("anvil");

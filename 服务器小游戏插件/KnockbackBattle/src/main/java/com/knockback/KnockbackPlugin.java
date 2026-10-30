@@ -14,6 +14,7 @@ public class KnockbackPlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new KnockbackManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         KnockbackCommand command = new KnockbackCommand(this, manager);
         PluginCommand kb = getCommand("knockback");

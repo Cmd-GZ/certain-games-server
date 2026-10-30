@@ -13,6 +13,7 @@ public class HotPotatoPlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new HotPotatoManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         HotPotatoCommand cmd = new HotPotatoCommand(this);
         PluginCommand hp = getCommand("hotpotato");

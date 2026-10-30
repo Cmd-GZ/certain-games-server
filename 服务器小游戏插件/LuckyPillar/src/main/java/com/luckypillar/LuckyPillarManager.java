@@ -185,7 +185,23 @@ public class LuckyPillarManager {
         saveAll();
     }
 
+    /**
+     * 声明地盘（{@code docs/框架不变量.md} 的 I2）：圆形场地转成外接 AABB。
+     * 只在内存里读字段，不碰配置；还没建场的场地会被 {@code Regions} 静默跳过。
+     */
+    public void publishRegions() {
+        com.hub.region.Regions.begin("luckypillar");
+        arenas.forEach((name, a) -> {
+            // 幸运之柱的场地半径是「按人数动态算」的（ring-radius: 0 = 自动，clamp 5~32），
+            // 静态配置里没有固定值。地盘声明要保守：拿不到就按上限 32 声明（宁可偏大）。
+            double r = a.getRadius() > 0 ? a.getRadius() : 32;
+            com.hub.region.Regions.disc("luckypillar", name, a.getCenter(), r,
+                    com.hub.region.Regions.DEFAULT_DISC_HEIGHT);
+        });
+    }
+
     public void saveAll() {
+        publishRegions();   // 场地可能刚被改过，重新声明（I2）
         ConfigurationSection sec = plugin.getConfig().createSection("arenas");
         for (Map.Entry<String, LuckyPillarArena> e : arenas.entrySet()) {
             e.getValue().save(sec.createSection(e.getKey()));

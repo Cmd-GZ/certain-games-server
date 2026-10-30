@@ -13,6 +13,7 @@ public class TntRunPlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new TntRunManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         TntRunCommand cmd = new TntRunCommand(this);
         PluginCommand tr = getCommand("tntrun");

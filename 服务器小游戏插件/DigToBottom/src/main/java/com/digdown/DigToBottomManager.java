@@ -125,7 +125,19 @@ public class DigToBottomManager {
     }
 
     /** 把 arenas 段整体写回 config.yml（其余全局配置保持内存里的值）。 */
+    /**
+     * 声明地盘（{@code docs/框架不变量.md} 的 I2）：圆形场地转成外接 AABB。
+     * 只在内存里读字段，不碰配置；还没建场的场地会被 {@code Regions} 静默跳过。
+     */
+    public void publishRegions() {
+        com.hub.region.Regions.begin("digdown");
+        arenas.forEach((name, a) ->
+                com.hub.region.Regions.disc("digdown", name, a.getCenter(), a.getRadius(),
+                        com.hub.region.Regions.DEFAULT_DISC_HEIGHT));
+    }
+
     public void saveAll() {
+        publishRegions();   // 场地可能刚被改过，重新声明（I2）
         plugin.getConfig().set("arenas", null);
         ConfigurationSection sec = plugin.getConfig().createSection("arenas");
         for (DigToBottomArena a : arenas.values()) {

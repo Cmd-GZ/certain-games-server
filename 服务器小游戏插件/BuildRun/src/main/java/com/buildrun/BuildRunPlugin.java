@@ -13,6 +13,7 @@ public class BuildRunPlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new BuildRunManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         BuildRunCommand cmd = new BuildRunCommand(this);
         PluginCommand br = getCommand("buildrun");

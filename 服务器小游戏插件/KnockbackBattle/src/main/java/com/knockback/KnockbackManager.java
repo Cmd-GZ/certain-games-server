@@ -278,6 +278,14 @@ public final class KnockbackManager {
         return secondsLeft;
     }
 
+    /** 声明地盘（{@code docs/框架不变量.md} 的 I2）。单场游戏，场地名用空串。 */
+    public void publishRegions() {
+        com.hub.region.Regions.begin("knockback");
+        if (arena != null) {
+            com.hub.region.Regions.box("knockback", "", arena.getPos1(), arena.getPos2());
+        }
+    }
+
     public KnockbackArena arena() {
         return arena;
     }

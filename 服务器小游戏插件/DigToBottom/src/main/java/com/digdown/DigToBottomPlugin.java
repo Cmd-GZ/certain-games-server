@@ -14,6 +14,7 @@ public class DigToBottomPlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new DigToBottomManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         DigToBottomCommand command = new DigToBottomCommand(this);
         PluginCommand dig = getCommand("dig");

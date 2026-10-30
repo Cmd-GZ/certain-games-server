@@ -297,7 +297,18 @@ public class BuildRunManager {
     // 配置 / 战绩落盘
     // ==================================================================
 
+    /**
+     * 声明地盘（{@code docs/框架不变量.md} 的 I2）：把每个场地的边界报给框架。
+     * 只在内存里读字段，不碰配置；还没建场的场地会被 {@code Regions} 静默跳过。
+     */
+    public void publishRegions() {
+        com.hub.region.Regions.begin("buildrun");
+        arenas.forEach((name, a) ->
+                com.hub.region.Regions.box("buildrun", name, a.getPos1(), a.getPos2()));
+    }
+
     public void saveAll() {
+        publishRegions();   // 场地可能刚被改过，重新声明（I2）
         // 先把磁盘上的当前值读进内存，再只重写 arenas 段。
         // 否则关服时（onDisable -> saveAll -> saveConfig）会用内存里的旧值覆盖 config.yml：
         // 线上手改了 build-seconds 之类的键，传上去又被旧值写回去，表现为"改了配置没生效"。

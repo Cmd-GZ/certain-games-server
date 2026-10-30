@@ -14,6 +14,7 @@ public class GroupRacePlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new GroupRaceManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         GroupRaceCommand command = new GroupRaceCommand(this, manager);
         PluginCommand race = getCommand("race");

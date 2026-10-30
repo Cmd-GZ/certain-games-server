@@ -1,5 +1,5 @@
 name: HotPotato
-version: '1.0.2'
+version: '1.0.3'
 main: com.hotpotato.HotPotatoPlugin
 api-version: '1.21'
 description: 烫手山芋：传 TNT、倒计时爆炸淘汰

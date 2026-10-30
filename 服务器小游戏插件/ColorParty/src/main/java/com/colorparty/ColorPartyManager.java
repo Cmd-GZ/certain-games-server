@@ -206,7 +206,18 @@ public class ColorPartyManager {
         }
     }
 
+    /**
+     * 声明地盘（{@code docs/框架不变量.md} 的 I2）：把每个场地的边界报给框架。
+     * 只在内存里读字段，不碰配置；还没建场的场地会被 {@code Regions} 静默跳过。
+     */
+    public void publishRegions() {
+        com.hub.region.Regions.begin("colorparty");
+        arenas.forEach((name, a) ->
+                com.hub.region.Regions.box("colorparty", name, a.getPos1(), a.getPos2()));
+    }
+
     public void saveAll() {
+        publishRegions();   // 场地可能刚被改过，重新声明（I2）
         ConfigurationSection sec = plugin.getConfig().createSection("arenas");
         for (Map.Entry<String, ColorPartyArena> e : arenas.entrySet()) {
             e.getValue().save(sec.createSection(e.getKey()));

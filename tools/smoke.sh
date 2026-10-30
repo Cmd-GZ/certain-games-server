@@ -120,10 +120,12 @@ echo "== 断言"
 if [ "$done_seen" = 1 ]; then
   n_plugins=$(grep -c 'Loading server plugin' "$LOG" || true)
   echo "   插件加载: $n_plugins 个"
-  bad=$(grep -cE '\[(ERROR|SEVERE)\]' "$LOG" || true)
+  # 注意：Paper 的日志格式是 "[hh:mm:ss ERROR]:"，不是 "[ERROR]" ——
+  # 早期版本这里写成 \[ERROR\] 导致"有错也报 0"，等于断言形同虚设。
+  bad=$(grep -cE ' (ERROR|SEVERE)\]:' "$LOG" || true)
   echo "   ERROR/SEVERE: $bad 行"
   if [ "$bad" != 0 ]; then
-    grep -E '\[(ERROR|SEVERE)\]' "$LOG" | head -10 | sed 's/^/     /'
+    grep -E ' (ERROR|SEVERE)\]:' "$LOG" | head -10 | sed 's/^/     /'
     rc=1
   fi
 fi

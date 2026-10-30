@@ -1,5 +1,5 @@
 name: TntRun
-version: '1.0.1'
+version: '1.0.2'
 main: com.tntrun.TntRunPlugin
 api-version: '1.21'
 description: 雪塔大作战（原 TNT Run）：踩雪层层塌、挖雪得雪球、雪球砸雪块

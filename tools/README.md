@@ -57,6 +57,13 @@ tools/smoke.sh --deploy --expect 'SkyPit v1\.0\.3'
 **注意**：需要客户端的交互（真的拿两个人对打验 PvP）这里做不到 —— Paper 26.2 没有可用的
 MockBukkit，也没有测试客户端。这部分只能靠上游进游戏实测，或者后续做"假玩家"驱动。
 
+## 两条踩过的坑（别再改回去）
+
+1. **`build.sh` 必须 `clean`**：增量编译会复用 `target/classes`，留下"构建成功但 jar 是半成品"
+   （类里带 ECJ 的 `Unresolved compilation problems`，插件一启用就 `java.lang.Error`）。全量 clean 只多几秒。
+2. **`smoke.sh` 的 ERROR 正则**：Paper 日志格式是 `[06:09:08 ERROR]:`，不是 `[ERROR]`。
+   早期写成 `\[ERROR\]` 导致永远匹配不上，等于"有错也报 0 行"。
+
 ## 已知限制
 
 - `smoke.sh` 用的是**整份服务器副本**（`.server/run/...`），起服会写世界数据。

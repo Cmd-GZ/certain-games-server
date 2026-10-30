@@ -13,6 +13,7 @@ public class FootballPlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new FootballManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         FootballCommand cmd = new FootballCommand(this);
         PluginCommand fb = getCommand("football");

@@ -13,6 +13,7 @@ public class ColorPartyPlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new ColorPartyManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         ColorPartyCommand cmd = new ColorPartyCommand(this);
         PluginCommand cp = getCommand("colorparty");

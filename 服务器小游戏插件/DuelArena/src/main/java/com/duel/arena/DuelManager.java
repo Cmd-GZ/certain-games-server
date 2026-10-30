@@ -134,6 +134,11 @@ public class DuelManager {
     }
 
     public void saveAll() {
+        // R2 单一写者（docs/框架不变量.md）：先把磁盘上的当前值读进内存，再只重写自己负责的段。
+        // 否则关服时（onDisable -> saveAll -> saveConfig）会用内存里的旧值整份覆盖 config.yml：
+        // 线上手改了别的键，传上去又被旧值写回去，表现为"改了配置没生效"（和 BuildRun 同一个坑）。
+        plugin.reloadConfig();
+
         ConfigurationSection sec = plugin.getConfig().createSection("arenas");
         for (Map.Entry<String, DuelArena> e : arenas.entrySet()) {
             e.getValue().save(sec.createSection(e.getKey()));

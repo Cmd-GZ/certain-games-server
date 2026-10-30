@@ -42,7 +42,7 @@ echo "== Maven: $MVN"
 
 # MiniGameLib 必须先 install：其它模块都依赖 com.hub:minigame-lib
 echo "== [1/3] MiniGameLib install"
-if ! "$MVN" "${COMMON[@]}" -f MiniGameLib/pom.xml install -DskipTests > /tmp/mg-build.log 2>&1; then
+if ! "$MVN" "${COMMON[@]}" -f MiniGameLib/pom.xml clean install -DskipTests > /tmp/mg-build.log 2>&1; then
   echo "MiniGameLib 构建失败，日志："; tail -40 /tmp/mg-build.log; exit 1
 fi
 
@@ -50,7 +50,10 @@ echo "== [2/3] 其余 25 个模块 package"
 fail=0
 for pom in */pom.xml; do
   case "$pom" in MiniGameLib/pom.xml) continue ;; esac
-  if ! "$MVN" "${COMMON[@]}" -f "$pom" package -DskipTests >> /tmp/mg-build.log 2>&1; then
+  # 用 clean package：增量编译在某些情况下会复用 target/classes 里的旧/坏 class，
+  # 表现为"构建成功但 jar 里是半成品"（真实踩过：类里带着 ECJ 的
+  # "Unresolved compilation problems"，插件一启用就 Error）。全量 clean 只多几秒。
+  if ! "$MVN" "${COMMON[@]}" -f "$pom" clean package -DskipTests >> /tmp/mg-build.log 2>&1; then
     echo "  失败: $pom"; fail=1
   fi
 done

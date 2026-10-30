@@ -411,6 +411,11 @@ public class MurderMysteryManager {
     }
 
     public void saveAll() {
+        // R2 单一写者（docs/框架不变量.md）：先把磁盘上的当前值读进内存，再只重写自己负责的段。
+        // 否则关服时（onDisable -> saveAll -> saveConfig）会用内存里的旧值整份覆盖 config.yml：
+        // 线上手改了别的键，传上去又被旧值写回去，表现为"改了配置没生效"（和 BuildRun 同一个坑）。
+        plugin.reloadConfig();
+
         // config.yml 根本没读进来（YAML 语法错误）时千万不能回写：内存里是空的，
         // 一写就会把玩家手写的场地配置整份清掉。这里只保存战绩，配置文件原样留着等人修。
         if (plugin.getConfig().getKeys(false).isEmpty()) {
@@ -1250,6 +1255,8 @@ public class MurderMysteryManager {
 
     /** 给旧配置补上 role-chance / crossbow-cost 默认值（只补缺失键，不改已有值）。 */
     private void ensureRoleChanceDefaults() {
+        // R2：补默认值前先读盘，否则这个 saveConfig() 会用内存里的旧值整份覆盖 config.yml。
+        plugin.reloadConfig();
         if (plugin.getConfig().getKeys(false).isEmpty()) {
             return; // 配置文件没读进来时别回写，避免清掉手写内容
         }

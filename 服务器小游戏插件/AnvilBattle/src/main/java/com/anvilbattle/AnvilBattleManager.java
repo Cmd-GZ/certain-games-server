@@ -331,7 +331,16 @@ public final class AnvilBattleManager {
         return true;
     }
 
+    /** 声明地盘（{@code docs/框架不变量.md} 的 I2）。单场游戏，场地名用空串。 */
+    public void publishRegions() {
+        com.hub.region.Regions.begin("anvilbattle");
+        if (arena != null) {
+            com.hub.region.Regions.box("anvilbattle", "", arena.getPos1(), arena.getPos2());
+        }
+    }
+
     public void saveAll() {
+        publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (plugin.getConfig().getKeys(false).isEmpty()) {
             return;
         }

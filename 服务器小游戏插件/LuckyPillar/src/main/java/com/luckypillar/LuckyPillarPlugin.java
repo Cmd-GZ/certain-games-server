@@ -14,6 +14,7 @@ public class LuckyPillarPlugin extends JavaPlugin {
         saveDefaultConfig(); // 首次启动铺一份线上 config.yml（源码里的只是模板）
         manager = new LuckyPillarManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         LuckyPillarCommand cmd = new LuckyPillarCommand(this);
         PluginCommand command = getCommand("luckypillar");
