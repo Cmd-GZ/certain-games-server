@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | `fetch-maven.sh` | 把 Maven 装到 `.server/tools/`（不污染系统） | 只往 `.server/tools/` 写 |
 | `build.sh` | Maven + JDK 25 全量构建 26 个模块 + PlayerTitles + JoinQuitBroadcast | 只写各模块 `target/`；`--deploy` 额外写 `.server/deploy/` |
+| `serve.sh` | **人工测试服**：前台起服，Ctrl-C 或 `stop` 优雅关服 | 写 `.server/.serve.fifo`；`--deploy` 覆盖 `plugins/*.jar`；`--fresh` 重建工作副本 |
 | `smoke.sh` | **冒烟台**：真起一个 Paper 服务器 → 灌命令 → 断言日志 → 干净关服 | 只写 `.server/smoke.log`；`--deploy` 会覆盖服务器 `plugins/*.jar` |
 | `version-check.py` | 检查/修正 `pom.xml` 版本与 `plugin.yml` 版本一致（R4） | `--fix` 时改 pom |
 | `region-report.py` | 生成《区域归属表》（I2 的取证） | **只读**，只写报告 md |
@@ -22,11 +23,23 @@ tools/fetch-maven.sh
 tools/build.sh --deploy
 tools/smoke.sh --deploy
 
+# 进游戏人工验证
+tools/serve.sh --deploy                # 起服，然后客户端连 <本机IP>:25560
+#   关服：Ctrl-C 一次，或另开终端 echo stop > .server/.serve.fifo
+
 # 发版前
 tools/version-check.py                 # 不一致就 exit 1
 tools/region-report.py --out 服务器小游戏插件/docs/区域归属表.md
 tools/smoke.sh --deploy --expect 'SkyPit v1\.0\.3'
 ```
+
+### 人工测试服的三个注意点
+
+| 注意 | 说明 |
+| --- | --- |
+| **必须用 `stop` 关服，别直接杀进程** | 存档和 6 个"关服回写配置"的插件（`MurderMystery / SkyPit / TntRun / DuelArena / HotPotato / BuildRun`）需要走完关服流程；`serve.sh` 的 Ctrl-C 已经帮你转成控制台 `stop` |
+| `--fresh` 才干净 | `.server/run/` 是工作副本，反复测试会修改世界数据。要回到"刚解压"的状态用 `--fresh`（它会顺便补上包里缺的 `world/level.dat`） |
+| 连不上先查两件事 | ① 端口是否 `LISTEN`（`ss -lnt \| grep 25560`）；② 服务器是别的机器就用 `192.168.x.x:25560`，`online-mode=false` 不用正版 |
 
 ## `smoke.sh` 在验什么
 
