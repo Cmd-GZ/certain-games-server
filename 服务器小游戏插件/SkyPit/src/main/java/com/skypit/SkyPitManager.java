@@ -108,6 +108,7 @@ public class SkyPitManager {
         // 玩家记录（唯一文件 plugins/MiniGameLib/players.yml，命名空间 skypit）
         data = PlayerStats.load("skypit", new File(plugin.getDataFolder(), "data.yml"));
 
+        publishRegion(); // 声明地盘（I2）—— 必须在读完全部配置之后
         leaderboards.clear(); // 重载时先清空，否则同一坐标会重复生成浮空文字实体
         for (Map<?, ?> raw : cfg.getMapList("leaderboards")) {
             Location loc = readLocMap(raw);
@@ -174,6 +175,7 @@ public class SkyPitManager {
         cfg.set("leaderboards", lb);
         plugin.saveConfig();
         saveData();
+        publishRegion(); // 区域可能刚被改过，重新声明
     }
 
     private void saveData() {
@@ -197,6 +199,28 @@ public class SkyPitManager {
 
     public boolean hasKitConfigured() {
         return !kit.isEmpty();
+    }
+
+    /**
+     * 把自己的地盘声明给框架（{@code docs/框架不变量.md} 的 I2）。
+     *
+     * <p>天坑是「主城世界里的一个 AABB」，所以声明粒度就是区域，不是世界 ——
+     * 这样主城的公共区仍然归 HubCore 管，天坑这块才归 SkyPit 管。
+     *
+     * <p>调用时机：{@link #load()} 之后、{@link #saveAll()} 之后（改完区域要重新声明），
+     * 以及 {@code /skypit} 的 reload。区域没配好时自动撤销旧声明。
+     */
+    public void publishRegion() {
+        try {
+            com.hub.region.RegionRegistry.unregisterGame("skypit");
+            if (!hasRegion()) {
+                return;
+            }
+            com.hub.region.RegionRegistry.register(
+                    com.hub.region.ArenaRegion.box("skypit", "", pos1, pos2));
+        } catch (RuntimeException ex) {
+            com.hub.diagnostics.Failures.recordAndWarn("SkyPit.声明区域", ex);
+        }
     }
 
     /**

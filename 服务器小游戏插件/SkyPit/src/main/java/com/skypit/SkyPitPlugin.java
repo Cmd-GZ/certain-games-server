@@ -28,6 +28,8 @@ public class SkyPitPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        // 撤销地盘声明，避免 /reload 后留下幽灵区域（I2）
+        com.hub.region.RegionRegistry.unregisterGame("skypit");
         if (manager != null) {
             manager.onDisable(); // 归还所有在场玩家背包
             manager.saveAll();

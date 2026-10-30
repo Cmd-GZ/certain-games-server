@@ -598,7 +598,37 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             out.add("&b[玩家记录] &c文件不存在 &7" + f.getPath() + " &7（战绩会从空开始）");
         }
 
-        // ---- 4. 世界规则 ----
+        // ---- 4. 区域声明（I2） ----
+        var regions = com.hub.region.RegionRegistry.all();
+        var conflicts = com.hub.region.RegionRegistry.conflicts();
+        if (regions.isEmpty()) {
+            out.add("&b[区域] &e还没有任何游戏声明地盘 &7（I2 未落地）");
+            out.add("  &7→ 「玩 A 游戏影响 B 游戏」这类问题目前仍只能靠人记");
+        } else {
+            out.add("&b[区域] &f已声明 " + regions.size() + " 块，来自 "
+                    + com.hub.region.RegionRegistry.owners() + " 个游戏");
+            int shown = 0;
+            for (var r : regions) {
+                if (shown++ >= 8) {
+                    out.add("  &7… 还有 " + (regions.size() - 8) + " 块（完整表见启动日志）");
+                    break;
+                }
+                out.add("  &7- &f" + r.describe());
+            }
+            long cross = conflicts.stream()
+                    .filter(c -> c.type() == com.hub.region.RegionRegistry.Conflict.Type.CROSS_GAME).count();
+            if (conflicts.isEmpty()) {
+                out.add("  &a未发现重叠");
+            } else {
+                out.add("  &c冲突 " + conflicts.size() + " 处（跨游戏 " + cross + "）");
+                for (var c : conflicts) {
+                    out.add("  &7- " + c.describe());
+                }
+            }
+        }
+        out.add("  &7提示：未声明地盘的游戏，别在它附近给别的游戏建场（会互相踩）");
+
+        // ---- 5. 世界规则 ----
         List<World> worlds = Bukkit.getWorlds();
         out.add("&b[世界] &f" + worlds.size() + " 个");
         for (World w : worlds) {
@@ -607,7 +637,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             out.add("  &7- &f" + w.getName() + " &7pvp=&f" + pvp + " &7keepInventory=&f" + keep);
         }
 
-        // ---- 5. 指向文档（不在此处重复不变量状态，避免与文档不一致）----
+        // ---- 6. 指向文档（不在此处重复不变量状态，避免与文档不一致）----
         out.add("&b[不变量] &7状态见 &fdocs/框架不变量.md&7 第 6 节（本文档是唯一权威）");
         out.add("&8&m                                             ");
 

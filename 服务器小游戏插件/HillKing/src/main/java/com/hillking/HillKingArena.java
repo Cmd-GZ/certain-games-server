@@ -42,6 +42,7 @@ public final class HillKingArena {
                 spawns.add(loc);
             }
         }
+        publishRegion();   // 声明地盘（I2）
     }
 
     public void save() {
@@ -58,6 +59,28 @@ public final class HillKingArena {
         }
         cfg.set("arena.spawns", encoded);
         plugin.saveConfig();
+        publishRegion();   // 区域可能刚被 /hill build 改过，重新声明
+    }
+
+    /**
+     * 把自己的地盘声明给框架（{@code docs/框架不变量.md} 的 I2）。
+     *
+     * <p>山丘之王是「某世界里一个半径 R 的圆台」，但**地盘声明统一用外接 AABB**：
+     * 声明宁可偏大（多管一块空地）也不能偏小（别人溜进来我不管）。
+     * 高度上按台面上下各留 12 格，覆盖跳跃与被击飞的位移。
+     * 玩法判定仍走 {@link #containsXZ(Location)} 的圆形逻辑，两者互不影响。
+     */
+    public void publishRegion() {
+        try {
+            com.hub.region.RegionRegistry.unregisterGame("hillking");
+            if (!hasCircle()) {
+                return;         // 还没建场：不声明，也就不会和别人冲突
+            }
+            com.hub.region.RegionRegistry.register(
+                    com.hub.region.ArenaRegion.around("hillking", "", center, radius, 24));
+        } catch (RuntimeException ex) {
+            com.hub.diagnostics.Failures.recordAndWarn("HillKing.声明区域", ex);
+        }
     }
 
     public boolean hasCircle() {

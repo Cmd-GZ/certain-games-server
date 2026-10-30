@@ -30,6 +30,7 @@ public class HillKingPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        com.hub.region.RegionRegistry.unregisterGame("hillking");   // 撤销地盘声明（I2）
         if (manager != null) {
             manager.shutdown();
         }
