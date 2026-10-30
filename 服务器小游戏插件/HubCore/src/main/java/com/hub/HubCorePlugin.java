@@ -1,6 +1,7 @@
 package com.hub;
 
 import com.hub.api.HubAPI;
+import com.hub.diagnostics.Failures;
 import com.hub.game.GameInfo;
 import com.hub.game.GameRegistry;
 import com.hub.menu.MenuEditor;
@@ -240,8 +241,9 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
                 }
             }
             case "arena" -> arenaCommand(sender, args);
+            case "doctor" -> doctor(sender);
             default -> sender.sendMessage(LEGACY.deserialize(
-                    "&c用法：/hub [menu|set|reload|lock|item|games|arena] &7，菜单编辑见 &f/hub menu help"));
+                    "&c用法：/hub [menu|set|reload|lock|item|games|arena|doctor] &7，菜单编辑见 &f/hub menu help"));
         }
         return true;
     }
@@ -478,7 +480,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return startsWith(Arrays.asList("menu", "set", "reload", "lock", "item", "games", "arena"), args[0]);
+            return startsWith(Arrays.asList("menu", "set", "reload", "lock", "item", "games", "arena", "doctor"), args[0]);
         }
         if (args[0].equalsIgnoreCase("arena")) {
             if (args.length == 2) {
@@ -541,6 +543,80 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
     }
 
     /** 管理权限：OP 或 plugin.yml 里声明的 hub.admin。 */
+    // ---------- /hub doctor：体检面板 ----------
+
+    /**
+     * 输出一份服务器体检报告。
+     *
+     * <p>对应 {@code docs/框架不变量.md} 的 <b>R3 失败可见</b>：让"悄悄出错的地方"有一个
+     * 能被非开发者看懂的地方。目前包含四块：插件版本、被吞异常、玩家记录、世界规则。
+     *
+     * <p>设计约束：**只读**，不修改任何状态；控制台也能跑（方便进冒烟台做断言）。
+     */
+    private void doctor(CommandSender sender) {
+        if (!isAdmin(sender)) {
+            sender.sendMessage(LEGACY.deserialize("&c只有 OP 或拥有 hub.admin 权限的玩家可以执行。"));
+            return;
+        }
+        List<String> out = new ArrayList<>();
+        out.add("&8&m                                             ");
+        out.add("&e&l小游戏服体检 &7(/hub doctor)");
+
+        // ---- 1. 插件版本 ----
+        var plugins = Bukkit.getPluginManager().getPlugins();
+        List<String> names = new ArrayList<>();
+        for (var pl : plugins) {
+            names.add(pl.getName() + " " + pl.getDescription().getVersion());
+        }
+        names.sort(String::compareTo);
+        out.add("&b[插件] &f" + plugins.length + " 个：&7" + String.join("&7, &f", names));
+
+        // ---- 2. 被吞掉的异常 ----
+        if (Failures.isEmpty()) {
+            out.add("&b[被吞异常] &a0 条 &7（没有东西在悄悄失败）");
+        } else {
+            out.add("&b[被吞异常] &c" + Failures.total() + " 次 &7，最近 " + Failures.recent().size() + " 条：");
+            List<Failures.Entry> recent = Failures.recent();
+            for (int i = Math.max(0, recent.size() - 5); i < recent.size(); i++) {
+                out.add("  &7- &f" + recent.get(i).line());
+            }
+            out.add("  &7按来源统计：");
+            for (var e : Failures.counts()) {
+                out.add("  &7- &f" + e.getKey() + " &7× &c" + e.getValue());
+            }
+        }
+
+        // ---- 3. 玩家记录 ----
+        var f = com.hub.data.PlayerStats.file();
+        if (f.isFile()) {
+            long size = f.length();
+            String when = new java.text.SimpleDateFormat("MM-dd HH:mm")
+                    .format(new java.util.Date(f.lastModified()));
+            out.add("&b[玩家记录] &f" + f.getPath() + " &7(" + size + " B，改于 " + when + ")");
+            out.add("  &7" + com.hub.data.PlayerStats.summary());
+        } else {
+            out.add("&b[玩家记录] &c文件不存在 &7" + f.getPath() + " &7（战绩会从空开始）");
+        }
+
+        // ---- 4. 世界规则 ----
+        List<World> worlds = Bukkit.getWorlds();
+        out.add("&b[世界] &f" + worlds.size() + " 个");
+        for (World w : worlds) {
+            Object pvp = w.getGameRuleValue(GameRule.PVP);
+            Object keep = w.getGameRuleValue(GameRule.KEEP_INVENTORY);
+            out.add("  &7- &f" + w.getName() + " &7pvp=&f" + pvp + " &7keepInventory=&f" + keep);
+        }
+
+        // ---- 5. 指向文档（不在此处重复不变量状态，避免与文档不一致）----
+        out.add("&b[不变量] &7状态见 &fdocs/框架不变量.md&7 第 6 节（本文档是唯一权威）");
+        out.add("&8&m                                             ");
+
+        for (String line : out) {
+            sender.sendMessage(LEGACY.deserialize(line));
+        }
+        getLogger().info("/hub doctor 由 " + sender.getName() + " 执行；被吞异常 " + Failures.total() + " 次");
+    }
+
     private boolean isAdmin(CommandSender sender) {
         return sender instanceof Player p ? (p.isOp() || p.hasPermission("hub.admin")) : true;
     }

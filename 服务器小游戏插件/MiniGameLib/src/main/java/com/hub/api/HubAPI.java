@@ -1,5 +1,6 @@
 package com.hub.api;
 
+import com.hub.diagnostics.Failures;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -234,13 +235,26 @@ public final class HubAPI {
             for (Consumer<Player> h : lobbyHandlers) {
                 try {
                     h.accept(p);
-                } catch (Exception ignored) {
-                    // 单个插件出错不影响其它插件回主城
+                } catch (Exception ex) {
+                    // 单个插件出错不能影响其它插件回主城，但**必须留痕**（R3 失败可见）。
+                    // 这里原来是一个空的 catch，于是"某个游戏的 lobby handler 一直崩"
+                    // 在日志里完全看不出来，只能靠玩家反馈"回主城后状态不对"。
+                    Failures.recordAndWarn("HubAPI.lobbyHandler/" + handlerName(h), ex);
                 }
             }
         } finally {
             notifyingLobby = false;
         }
+    }
+
+    /**
+     * 尽量从 lambda 里挖出注册方的类名，让 doctor 能定位到是谁崩了。
+     * lambda 的类名形如 {@code com.skypit.SkyPitPlugin$$Lambda$123/0x...}，截到 {@code $$} 之前即可。
+     */
+    private static String handlerName(Consumer<Player> h) {
+        String n = h.getClass().getName();
+        int i = n.indexOf("$$");
+        return i > 0 ? n.substring(0, i) : n;
     }
 
     /**

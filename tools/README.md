@@ -52,6 +52,8 @@ tools/smoke.sh --deploy --expect 'SkyPit v1\.0\.3'
 5. 干净关服（`JAVA_EXIT=0`）。
 
 `--commands FILE` 可以灌一段控制台命令（一行一条，`#` 开头是注释），用来验"命令链路"。
+相对路径会在参数解析阶段转成绝对路径（脚本中途会 `cd` 进服务器目录）；文件不存在直接报错。
+仓库里有个例子 `.server/smoke-commands.txt`（跑 `hub doctor`）。
 **注意**：需要客户端的交互（真的拿两个人对打验 PvP）这里做不到 —— Paper 26.2 没有可用的
 MockBukkit，也没有测试客户端。这部分只能靠上游进游戏实测，或者后续做"假玩家"驱动。
 

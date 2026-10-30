@@ -490,8 +490,9 @@ public final class LandClaimManager {
         ArcadeBridge.report("landclaim", firsts, seconds, thirds);
         try {
             PlayerStats.save("landclaim", stats);
-        } catch (Exception ignored) {
-            // 保存失败不阻塞结算
+        } catch (Exception ex) {
+            // 保存失败不阻塞结算，但要留痕（R3 失败可见）
+            com.hub.diagnostics.Failures.recordAndWarn("LandClaim.保存玩家记录", ex);
         }
     }
 

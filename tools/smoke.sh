@@ -38,6 +38,15 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# --commands 必须转成绝对路径：后面会 cd 进服务器目录
+if [ -n "$CMDS" ]; then
+  if [ ! -f "$CMDS" ]; then
+    echo "--commands 指定的文件不存在：$CMDS" >&2
+    exit 1
+  fi
+  CMDS="$(cd "$(dirname "$CMDS")" && pwd)/$(basename "$CMDS")"
+fi
+
 if [ -z "$SERVER" ]; then
   SERVER="$(ls -d "$ROOT"/.server/run/small_games/* 2>/dev/null | head -1)"
 fi
@@ -85,7 +94,10 @@ fi
 
 if [ "$done_seen" = 1 ]; then
   sleep 3
-  if [ -n "$CMDS" ] && [ -f "$CMDS" ]; then
+  if [ -n "$CMDS" ]; then
+    if [ ! -f "$CMDS" ]; then
+      echo "❌ 命令脚本不见了：$CMDS"; rc=1
+    fi
     echo "== 喂命令: $CMDS"
     while IFS= read -r line; do
       [ -z "$line" ] && continue

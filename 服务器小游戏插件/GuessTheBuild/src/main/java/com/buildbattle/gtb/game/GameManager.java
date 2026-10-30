@@ -1070,8 +1070,9 @@ public class GameManager {
                 Top3.award(data, firsts, seconds, thirds);
                 try {
                     PlayerStats.save("gtb", data);
-                } catch (java.io.IOException ignored) {
-                    // 保存失败不阻塞结算
+                } catch (java.io.IOException ex) {
+                    // 保存失败不阻塞结算，但要留痕（R3 失败可见）
+                    com.hub.diagnostics.Failures.recordAndWarn("GuessTheBuild.保存战绩", ex);
                 }
             }
             broadcastRaw("&6============================================");
