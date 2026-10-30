@@ -31,7 +31,8 @@
   - `refreshLeaderboards()` 对**区块未加载**的榜单跳过，实体丢了会重新 `spawnDisplay` 并 `saveAll()`，所以 `entity` UUID 会被回写；`/skypit top remove` 移除的是**全部**榜单；
   - 榜单 TextDisplay 会随区块存盘写进世界文件（Paper 26.2 的 `setPersistent(false)` 对存盘**无效**，见 `docs/已知坑.md` §2）；不把浮窗打进整包的修法是 `server/config/paper-world-defaults.yml` → `chunks.entity-per-chunk-save-limit.text_display: 0`：实体只活在内存，区块存盘时按类型跳过（存量实体下次存盘自动洗掉），实体丢失由 `load()` 延时 40t 的 `refreshLeaderboards` + ChunkLoadEvent 重建并回写新 UUID，功能不受影响；
   - 关服 `saveAll()` 用内存回写 `config.yml`（`region/entry/spawn/kit/leaderboards` 整段重写）：运行中手改线上配置会被关服覆盖，改完记得 `/skypit reload`；
-  - PvP 两层：`onDamageGuard`(LOWEST) 只要有一方不在坑内就取消；`onDamageAllow`(HIGHEST) 仅当**双方都在坑内**才放行（所以和 DuelArena 不冲突）；
+  - PvP 两层，**都只在「天坑所在世界」内生效**（1.0.3 起）：`onDamageGuard`(LOWEST) 在坑所在世界里、双方不都在坑内时取消；`onDamageAllow`(HIGHEST) 仅当**双方都在坑内**才放行（覆盖服务器的 `pvp=false`）。
+    早期版本这两个监听器对**所有世界**生效，等于替其它游戏做决定：`world_duel` / `world_lp` 的 `pvp: true` 会被打掉，那些插件只能反向在 HIGHEST 且 `ignoreCancelled=false` 抢回来（见 `docs/已知坑.md` 幸运之柱那条）。现在天坑只在自己的地盘表态，别处一律 `return`——依据 `docs/框架不变量.md` 的 **I2（区域归属）** 与 **I3（事件裁决唯一）**。改这里之前先读那两条；
   - `kills.<uuid>` 与 `names.<uuid>` 由 `recordKill` 成对写入、`resetKills` 成对清空；缺 `names` 时排行榜显示「未知玩家」；
   - `enterPit` 的前置条件是 `hasRegion()`、`isPvpEligible`（非创造/旁观）且不在会话里——区域没配好时走进也不发装备；
   - **进出区域不播公屏**（2026-10-18 用户要求「天坑不要在公屏显示加入游戏」）：`enterPit` 里原来的 `HubAPI.announceJoin(...)` 已删除，走进区域只给本人 `Chat.send`；击杀播报（`handleDeath` 的 `Chat.broadcast`）保留。别为了"提示一下"再把 announceJoin 加回来。

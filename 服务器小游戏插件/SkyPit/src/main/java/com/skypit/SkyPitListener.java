@@ -45,8 +45,13 @@ public class SkyPitListener implements Listener {
     }
 
     /**
-     * PvP 守卫（LOWEST）：主城等区域禁止玩家互伤。
-     * 仅在双方都不在天坑内时取消，决斗等其它插件的 HIGHEST 逻辑可覆盖本层。
+     * PvP 守卫（LOWEST）：天坑**所在世界里**、且双方不都在坑内时，禁止互伤。
+     * <p>
+     * 2026-10-31 修改（依据 {@code docs/框架不变量.md} 的 I2 / I3）：
+     * 原来这里对**所有世界**无条件 {@code setCancelled(true)}，等于替全世界做决定 ——
+     * 于是 {@code world_duel} / {@code world_lp} 的 {@code pvp: true} 被打掉，
+     * 那些游戏只能反向在 HIGHEST 且 {@code ignoreCancelled=false} 抢回来。
+     * 现在只在自己的世界里表态，别的地盘一律不插手。
      */
     @EventHandler(priority = EventPriority.LOWEST)
     public void onDamageGuard(EntityDamageByEntityEvent event) {
@@ -58,6 +63,9 @@ public class SkyPitListener implements Listener {
             return;
         }
         SkyPitManager m = plugin.getManager();
+        if (!m.isPitWorld(victim.getWorld())) {
+            return;                       // 不是我的地盘 —— 一个字都不说
+        }
         if (!m.inPit(victim.getUniqueId()) || !m.inPit(attacker.getUniqueId())) {
             event.setCancelled(true);
         }
@@ -65,6 +73,8 @@ public class SkyPitListener implements Listener {
 
     /**
      * PvP 放行（HIGHEST）：双方都在天坑内时允许伤害（覆盖服务器 pvp=false，与决斗插件同机制）。
+     * <p>
+     * 同样只在坑所在世界生效：别的世界不需要也不应该由本插件来放行。
      */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onDamageAllow(EntityDamageByEntityEvent event) {
@@ -76,6 +86,9 @@ public class SkyPitListener implements Listener {
             return;
         }
         SkyPitManager m = plugin.getManager();
+        if (!m.isPitWorld(victim.getWorld())) {
+            return;
+        }
         if (m.inPit(victim.getUniqueId()) && m.inPit(attacker.getUniqueId())) {
             event.setCancelled(false);
         }

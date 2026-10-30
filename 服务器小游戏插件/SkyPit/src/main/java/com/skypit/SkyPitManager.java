@@ -199,6 +199,20 @@ public class SkyPitManager {
         return !kit.isEmpty();
     }
 
+    /**
+     * 这个世界是不是「天坑所在的世界」。
+     * <p>
+     * 用途：天坑只在自己的世界里对 PvP 表态，别的地方（world_duel / world_lp / world_mm …）
+     * 一律不插手。依据 {@code server/docs/框架不变量.md} 的 I2（区域归属）
+     * 与 I3（事件裁决唯一）：天坑的地盘是「这个世界的这块 AABB」，不是整台服务器。
+     *
+     * @param world 待判定的世界，可为 null
+     * @return 区域已配置且世界一致时为 true；未配置区域时永远 false（不做任何拦截）
+     */
+    public boolean isPitWorld(org.bukkit.World world) {
+        return hasRegion() && world != null && world.equals(pos1.getWorld());
+    }
+
     public boolean contains(Location loc) {
         if (!hasRegion() || loc == null || loc.getWorld() == null) {
             return false;

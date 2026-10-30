@@ -23,3 +23,8 @@ Thumbs.db
 
 # ---- Local agent settings ----
 .claude/
+
+
+
+# ------
+.server/

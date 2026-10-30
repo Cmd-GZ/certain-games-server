@@ -6,7 +6,7 @@
 
     <groupId>com.tntrun</groupId>
     <artifactId>tnt-run</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <packaging>jar</packaging>
 
     <name>TntRun</name>
@@ -34,7 +34,7 @@
         <dependency>
             <groupId>com.hub</groupId>
             <artifactId>minigame-lib</artifactId>
-            <version>1.0.0</version>
+            <version>1.1.1</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

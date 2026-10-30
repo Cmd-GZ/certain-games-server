@@ -6,7 +6,7 @@
 
     <groupId>com.snakeparty</groupId>
     <artifactId>snake-party</artifactId>
-    <version>1.2.0</version>
+    <version>1.2.1</version>
     <packaging>jar</packaging>
 
     <name>SnakeParty</name>
@@ -34,7 +34,7 @@
         <dependency>
             <groupId>com.hub</groupId>
             <artifactId>minigame-lib</artifactId>
-            <version>1.0.0</version>
+            <version>1.1.1</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
