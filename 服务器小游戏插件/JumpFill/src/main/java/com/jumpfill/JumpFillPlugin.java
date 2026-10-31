@@ -13,6 +13,7 @@ public final class JumpFillPlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new JumpFillManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         getServer().getPluginManager().registerEvents(new JumpFillListener(this, manager), this);
         JumpFillCommand command = new JumpFillCommand(this, manager);

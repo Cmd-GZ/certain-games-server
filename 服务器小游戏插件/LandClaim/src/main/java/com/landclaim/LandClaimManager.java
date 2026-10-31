@@ -771,6 +771,15 @@ public final class LandClaimManager {
         return stats == null ? 0 : stats.getInt("firsts." + id, 0);
     }
 
+    /** 声明地盘（{@code docs/框架不变量.md} 的 I2）。 */
+    public void publishRegions() {
+        com.hub.region.Regions.begin("landclaim");
+        if (arena != null) {
+            com.hub.region.Regions.disc("landclaim", "", arena.getCenter(), arena.getRadius(),
+                    com.hub.region.Regions.DEFAULT_DISC_HEIGHT);
+        }
+    }
+
     public LandClaimArena arena() {
         return arena;
     }

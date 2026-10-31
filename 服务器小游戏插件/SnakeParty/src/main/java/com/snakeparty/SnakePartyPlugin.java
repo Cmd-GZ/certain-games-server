@@ -14,6 +14,7 @@ public final class SnakePartyPlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new SnakePartyManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         SnakePartyCommand command = new SnakePartyCommand(this, manager);
         PluginCommand snake = getCommand("snake");

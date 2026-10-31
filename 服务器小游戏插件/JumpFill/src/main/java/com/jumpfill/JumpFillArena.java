@@ -27,7 +27,17 @@ public final class JumpFillArena {
 
     private String worldName = "world";
     private Location water1;
+
+    /** 供区域声明用（{@code docs/框架不变量.md} I2）。 */
+    public Location getPos1() {
+        return water1;
+    }
     private Location water2;
+
+    /** 供区域声明用（{@code docs/框架不变量.md} I2）。 */
+    public Location getPos2() {
+        return water2;
+    }
     private Location lobby;
     private final List<Location> starts = new ArrayList<>();
     private String snapshotWorld;

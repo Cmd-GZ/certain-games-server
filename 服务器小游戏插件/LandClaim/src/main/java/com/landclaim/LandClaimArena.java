@@ -16,7 +16,17 @@ public final class LandClaimArena {
     private final LandClaimPlugin plugin;
     private String worldName = "world";
     private Location center;
+
+    /** 供区域声明用（{@code docs/框架不变量.md} I2）。 */
+    public Location getCenter() {
+        return center;
+    }
     private int radius;
+
+    /** 供区域声明用（{@code docs/框架不变量.md} I2）。 */
+    public int getRadius() {
+        return radius;
+    }
     private Location lobby;
     private final List<Location> spawns = new ArrayList<>();
 

@@ -1,5 +1,5 @@
 name: Quark
-version: '1.0.2'
+version: '1.0.3'
 main: com.quark.QuarkPlugin
 api-version: '1.21'
 description: 粒子枪战：右键发射直线粒子弹道，命中即击杀，限时积分

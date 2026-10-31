@@ -281,7 +281,17 @@ public final class SnakePartyManager {
         saveAll();
     }
 
+    /** 声明地盘（{@code docs/框架不变量.md} 的 I2）。 */
+    public void publishRegions() {
+        com.hub.region.Regions.begin("snakeparty");
+        if (arena != null) {
+            com.hub.region.Regions.disc("snakeparty", "", arena.getCenter(), arena.getRadius(),
+                    com.hub.region.Regions.DEFAULT_DISC_HEIGHT);
+        }
+    }
+
     public void saveAll() {
+        publishRegions();   // 场地可能刚被改过，重新声明（I2）
         arena.save();
     }
 

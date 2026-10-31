@@ -13,6 +13,7 @@ public class MurderMysteryPlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new MurderMysteryManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         MurderMysteryCommand cmd = new MurderMysteryCommand(this);
         PluginCommand mm = getCommand("murdermystery");

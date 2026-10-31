@@ -14,6 +14,7 @@ public class QuarkPlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new QuarkManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         QuarkCommand command = new QuarkCommand(this, manager);
         PluginCommand quark = getCommand("quark");

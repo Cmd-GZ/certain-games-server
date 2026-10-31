@@ -14,6 +14,7 @@ public final class AnimalSlaughterPlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new AnimalSlaughterManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         AnimalSlaughterCommand command = new AnimalSlaughterCommand(this, manager);
         PluginCommand animal = getCommand("animal");

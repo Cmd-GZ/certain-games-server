@@ -227,6 +227,14 @@ public final class QuarkManager {
         return waiting.contains(id) || playing.contains(id);
     }
 
+    /** 声明地盘（{@code docs/框架不变量.md} 的 I2）。 */
+    public void publishRegions() {
+        com.hub.region.Regions.begin("quark");
+        if (arena != null) {
+            com.hub.region.Regions.box("quark", "", arena.getPos1(), arena.getPos2());
+        }
+    }
+
     public QuarkArena arena() {
         return arena;
     }

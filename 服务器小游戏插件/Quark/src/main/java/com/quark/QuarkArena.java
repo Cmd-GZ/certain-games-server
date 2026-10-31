@@ -16,7 +16,17 @@ public final class QuarkArena {
 
     private final JavaPlugin plugin;
     private Location pos1;
+
+    /** 供区域声明用（{@code docs/框架不变量.md} I2）。 */
+    public Location getPos1() {
+        return pos1;
+    }
     private Location pos2;
+
+    /** 供区域声明用（{@code docs/框架不变量.md} I2）。 */
+    public Location getPos2() {
+        return pos2;
+    }
     private Location lobby;
     private final List<Location> spawns = new ArrayList<>();
     private double voidY = -64.0;

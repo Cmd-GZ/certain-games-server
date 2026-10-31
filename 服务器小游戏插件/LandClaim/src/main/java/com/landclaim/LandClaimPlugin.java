@@ -13,6 +13,7 @@ public final class LandClaimPlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new LandClaimManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         getServer().getPluginManager().registerEvents(new LandClaimListener(manager), this);
         LandClaimCommand command = new LandClaimCommand(this, manager);
