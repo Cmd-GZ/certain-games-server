@@ -95,6 +95,31 @@ tools/region-report.py        # 生成《区域归属表》（只读）
 | **生产机文件系统** | **ext4**（无 reflink），内存 32GB |
 | 复制/加载成本 | 16MB 世界复制 50–115ms；15 个世界启动时同一秒内加载完 → **IO 不是瓶颈** |
 
+### 0.7 已定决策（用户拍板，别再问一遍）
+
+| # | 决策 | 备注 |
+| --- | --- | --- |
+| D1 | **主城不模板化** | 主城是唯一的"持久游玩世界"；理由：玩家会留痕迹（建筑/告示牌）、`world/players/` 是玩家存档不能跟着模板复制。等有新需求再重新考虑 |
+| D2 | **房间上限：每游戏 8 个** | 因为选房 UI 是 9×3 箱子：第一排第一格 = "创建新房间"，其余 8 格动态放现有房间。全服上限暂定 24（可调） |
+| D3 | **模板瘦身暂时不做** | 8 房间 × 16MB ≈ 128MB，磁盘无压力。等真有压力再做"发布期裁剪"（见 `docs/模板世界方案评估.md` §8） |
+| D4 | **房间世界放 tmpfs 是可选优化，暂不做** | ext4 上复制 50–115ms 已够快；tmpfs 主要解决"泄漏"和"删除慢"。等 R4（回收/监控）再评估 |
+| D5 | 单局小游戏 = 统一**协议**（session + 房间），不统一**流程** | 单局不需要等待室/领奖台；派对是 `COMPOSITE` 串多个子 session |
+| D6 | `end()` 重复调用 → **警告忽略**（幂等） | 不抛异常，避免"时间到"和"最后一人退出"同时触发时报错给玩家 |
+| D7 | `attach` 冲突 → 框架内**抛异常**，但 `session.join()` 捕获后记 `Failures` + 提示 + 返回 false | 程序错误要留响，玩家体验不能崩 |
+| D8 | 我的工作**只推到 `restruction`**；上游是我们 fork 出来的那个仓库 | 见下方"仓库关系" |
+
+### 0.8 仓库关系（很容易搞错）
+
+| remote | 地址 | 用途 |
+| --- | --- | --- |
+| `origin` | `git@github.com:Cmd-GZ/certain-games-server.git` | **我们自己的 fork**，日常推这里 |
+| `upstream` | `https://github.com/Breeze-dust/games-server-plugins.git` | **真正的上游**（Breeze-dust），只 fetch 不合入别人的分支 |
+
+- 合并上游：`git fetch upstream && git merge upstream/main`（2026-10-31 已合过 3 个提交，
+  其中 `65f6881` 补上了 OneShot 完整源码 + TNTBattle 1.12.1 多场地）。
+- 子模块 `paper-hold-the-fort` 的 checkout 在 `/home/user/MyProject/paper-hold-the-fort`，
+  **当前是只读文件系统**，fetch/写都做不了；要用它得先请用户放开权限。
+
 ---
 
 ## 1. 子仓库（git submodule）改动规矩
