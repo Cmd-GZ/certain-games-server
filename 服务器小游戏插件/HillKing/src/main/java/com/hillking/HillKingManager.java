@@ -3,6 +3,8 @@ package com.hillking;
 import com.hub.api.ArcadeBridge;
 import com.hub.api.GameState;
 import com.hub.api.HubAPI;
+import com.hub.session.EndReason;
+import com.hub.session.SessionState;
 import com.hub.data.PlayerStats;
 import com.hub.util.Chat;
 import com.hub.util.LiveSidebar;
@@ -59,7 +61,10 @@ public final class HillKingManager {
     private final LiveSidebar liveSidebar;
     private final Random random = new Random();
 
-    private State state = State.WAITING;
+    /** 会话（I4/I5）。状态由它持有，本类只读。 */
+    private HillKingSession session;
+    /** 收场时给玩家看的文案（end(reason) 不带文案，所以暂存在这）。 */
+    private String endMessage;
     private final Set<UUID> waiting = new LinkedHashSet<>();
     private final Set<UUID> playing = new LinkedHashSet<>();
     private final Map<UUID, Integer> scores = new HashMap<>();
@@ -208,6 +213,10 @@ public final class HillKingManager {
     // ---------- 生命周期 ----------
 
     public void load() {
+        // 会话（I4/I5）：只在第一次 load 建一次；重复 load（/hill reload）不动已有会话
+        if (session == null) {
+            session = new HillKingSession(this);
+        }
         startCountdown();
         arena.load();
         data = PlayerStats.load("hillking", new File(plugin.getDataFolder(), "data.yml"));
@@ -219,7 +228,7 @@ public final class HillKingManager {
     }
 
     public void reload() {
-        if (state != State.WAITING) {
+        if (!isWaitingState()) {
             return;
         }
         arena.load();
@@ -232,7 +241,9 @@ public final class HillKingManager {
         if (startCountdown != null) {
             startCountdown.cancelAll();
         }
-        state = State.WAITING;
+        if (session != null) {
+            session.end(EndReason.ADMIN_STOP);
+        }
         waiting.clear();
         playing.clear();
         scores.clear();
@@ -249,12 +260,23 @@ public final class HillKingManager {
         return arena;
     }
 
+    /** 兼容旧调用：把 session 状态映射回原来的两态枚举。 */
     public State state() {
-        return state;
+        return isRunningState() ? State.RUNNING : State.WAITING;
+    }
+
+    /** WAITING 阶段（可加入/退出）。 */
+    private boolean isWaitingState() {
+        return session != null && session.state() == SessionState.WAITING;
+    }
+
+    /** 对局进行中。 */
+    private boolean isRunningState() {
+        return session != null && session.state() == SessionState.RUNNING;
     }
 
     public boolean isRunning() {
-        return state == State.RUNNING;
+        return isRunningState();
     }
 
     public boolean isWaiting(Player player) {
@@ -262,7 +284,7 @@ public final class HillKingManager {
     }
 
     public boolean isPlaying(Player player) {
-        return state == State.RUNNING && playing.contains(player.getUniqueId());
+        return isRunningState() && playing.contains(player.getUniqueId());
     }
 
     public boolean isInGame(Player player) {
@@ -290,7 +312,7 @@ public final class HillKingManager {
 
     public void join(Player player) {
         UUID id = player.getUniqueId();
-        if (state != State.WAITING) {
+        if (!isWaitingState()) {
             Chat.send(player, "&c对局正在进行中，请等这一局结束后再加入。");
             return;
         }
@@ -338,11 +360,11 @@ public final class HillKingManager {
             HubAPI.teleportToLobby(player);
             Chat.send(player, "&e你已离开" + GAME + "。");
         }
-        if (state == State.RUNNING && playing.isEmpty()) {
-            endGame("&7所有人都离开了，本局结束。");
+        if (isRunningState() && playing.isEmpty()) {
+            endGame(EndReason.ABORT, "&7所有人都离开了，本局结束。");
             return;
         }
-        if (state == State.WAITING) {
+        if (isWaitingState()) {
             updateCountdown();
         }
         updateBoard();
@@ -359,11 +381,11 @@ public final class HillKingManager {
         scores.remove(id);
         clearGameState(player);
         HubAPI.clearGame(id);
-        if (state == State.RUNNING && playing.isEmpty()) {
-            endGame("&7所有人都离开了，本局结束。");
+        if (isRunningState() && playing.isEmpty()) {
+            endGame(EndReason.ABORT, "&7所有人都离开了，本局结束。");
             return;
         }
-        if (state == State.WAITING) {
+        if (isWaitingState()) {
             updateCountdown();
         }
         updateBoard();
@@ -371,7 +393,7 @@ public final class HillKingManager {
     }
 
     private void updateCountdown() {
-        if (state != State.WAITING) {
+        if (!isWaitingState()) {
             countdown.cancel();
             return;
         }
@@ -381,7 +403,7 @@ public final class HillKingManager {
     // ---------- 开局 / 结算 ----------
 
     public void startGame(boolean force) {
-        if (state != State.WAITING) {
+        if (!isWaitingState()) {
             return;
         }
         if (!arena.isReady()) {
@@ -416,7 +438,7 @@ public final class HillKingManager {
         }
         countdown.cancel();
         cancelTasks();
-        state = State.RUNNING;
+        session.start();
         enableWorldPvp();
         playing.clear();
         playing.addAll(ready);
@@ -459,14 +481,14 @@ public final class HillKingManager {
     }
 
     public void stopGame() {
-        if (state != State.RUNNING) {
+        if (!isRunningState()) {
             return;
         }
-        endGame("&e管理员结束了本局。");
+        endGame(EndReason.ADMIN_STOP, "&e管理员结束了本局。");
     }
 
     private void tickGame() {
-        if (state != State.RUNNING) {
+        if (!isRunningState()) {
             cancelGameTask();
             return;
         }
@@ -479,7 +501,7 @@ public final class HillKingManager {
         }
         secondsLeft--;
         if (secondsLeft <= 0) {
-            endGame("&6&l时间到！");
+            endGame(EndReason.ROUND_END, "&6&l时间到！");
             return;
         }
         if (secondsLeft == 30 || secondsLeft == 10) {
@@ -490,14 +512,23 @@ public final class HillKingManager {
         reportArena();
     }
 
-    private void endGame(String reason) {
-        if (state != State.RUNNING) {
-            return;
+    /** 请求结束对局：交给 session（唯一出口，幂等），文案暂存给 doEndGame。 */
+    private void endGame(EndReason why, String message) {
+        this.endMessage = message;
+        if (session != null) {
+            session.end(why);
         }
+    }
+
+    /**
+     * 真正的收场逻辑。由 {@link HillKingSession#onEnd(EndReason)} 回调，
+     * 所以**必然只执行一次**（框架保证），这里不再需要"是否在 RUNNING"的守卫。
+     */
+    void doEndGame(EndReason why) {
+        String reason = endMessage;
         cancelTasks();
         liveSidebar.hide("hillking");
         restoreWorldPvp();
-        state = State.WAITING;
         secondsLeft = 0;
 
         broadcast("&6&l========== 游戏结束 ==========");
@@ -563,7 +594,7 @@ public final class HillKingManager {
     // ---------- 掉台 / 咸鱼 ----------
 
     public void handleMove(Player player, Location to) {
-        if (state != State.RUNNING || to == null || !playing.contains(player.getUniqueId())) {
+        if (!isRunningState() || to == null || !playing.contains(player.getUniqueId())) {
             return;
         }
         Location center = arena.center();
@@ -586,7 +617,7 @@ public final class HillKingManager {
 
     /** 咸鱼命中：只给击退、不造成伤害。返回 true 表示本次有效。 */
     public boolean fishHit(Player attacker, Player victim) {
-        if (state != State.RUNNING || !playing.contains(attacker.getUniqueId())
+        if (!isRunningState() || !playing.contains(attacker.getUniqueId())
                 || !playing.contains(victim.getUniqueId())) {
             return false;
         }
@@ -641,7 +672,7 @@ public final class HillKingManager {
     // ---------- 计分板 / 动作栏 ----------
 
     private void updateBoard() {
-        if (state != State.RUNNING) {
+        if (!isRunningState()) {
             return;
         }
         if (!sidebarEnabled()) {
@@ -666,7 +697,7 @@ public final class HillKingManager {
     }
 
     private void updateActionBar() {
-        if (state != State.RUNNING) {
+        if (!isRunningState()) {
             return;
         }
         for (UUID id : playing) {
@@ -782,7 +813,7 @@ public final class HillKingManager {
             Chat.send(player, "&e你不在等待队列中。");
             return;
         }
-        if (state != State.WAITING) {
+        if (!isWaitingState()) {
             Chat.send(player, "&e对局已经在进行中。");
             return;
         }
@@ -823,7 +854,7 @@ public final class HillKingManager {
     // ---------- 上报 / 播报 ----------
 
     private void reportArena() {
-        boolean running = state == State.RUNNING;
+        boolean running = isRunningState();
         String extra = running ? "剩余 " + secondsLeft + "s · " + playing.size() + " 人" : null;
         HubAPI.setArena(GAME, ARENA, running ? GameState.PLAYING : GameState.WAITING,
                 waiting.size() + playing.size(), extra);
