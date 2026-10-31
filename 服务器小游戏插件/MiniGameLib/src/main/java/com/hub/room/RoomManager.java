@@ -106,7 +106,7 @@ public final class RoomManager {
 
             ConfigurationSection limits = cfg.getConfigurationSection("limits");
             if (limits != null) {
-                maxRooms = Math.max(1, limits.getInt("max-rooms", 10));
+                maxRooms = limits.getInt("max-rooms", 0);   // <= 0 表示不限制
                 maxPerGame = Math.max(1, limits.getInt("max-per-game", 3));
                 idleSeconds = Math.max(60, limits.getLong("idle-seconds", 300));
             }
@@ -146,7 +146,7 @@ public final class RoomManager {
             }
             ready = true;
             lib.getLogger().info("[房间] 模板 " + TEMPLATES.size() + " 个，"
-                    + "上限：全服 " + maxRooms + " / 每游戏 " + maxPerGame
+                    + "上限：全服 " + (maxRooms <= 0 ? "不限" : maxRooms) + " / 每游戏 " + maxPerGame
                     + "，空置 " + idleSeconds + "s 回收。世界目录：" + base.getPath());
 
             if (reaper == null || reaper.isCancelled()) {
@@ -269,7 +269,7 @@ public final class RoomManager {
         if (!tpl.dir().isDirectory()) {
             return fail("模板目录不存在：" + tpl.dir().getPath());
         }
-        if (ROOMS.size() >= maxRooms) {
+        if (maxRooms > 0 && ROOMS.size() >= maxRooms) {
             reap();
             if (ROOMS.size() >= maxRooms) {
                 return fail("全服房间数已达上限 " + maxRooms + "（先 /hub room delete 或等回收）");
@@ -287,6 +287,7 @@ public final class RoomManager {
 
         File dest = new File(worldDimDir(), roomId);
 
+        long t0 = System.nanoTime();
         // 2) 复制模板（--reflink=auto：btrfs 白拿 0 拷贝，ext4 自动回落）
         try {
             copyDirectory(tpl.dir(), dest);
@@ -301,6 +302,7 @@ public final class RoomManager {
         deleteQuietly(new File(dest, "session.lock"));
         deleteQuietly(new File(dest, "level.dat_old"));
 
+        long tCopy = System.nanoTime();
         // 4) 加载世界（必须主线程）
         Room room = new Room(roomId, tpl);
         try {
@@ -326,8 +328,11 @@ public final class RoomManager {
             }
         }
 
+        long tLoad = System.nanoTime();
         ROOMS.put(roomId, room);
-        log("已创建房间 " + room.describe());
+        log("已创建房间 " + room.describe()
+                + String.format("（复制 %dms / 加载 %dms / 总计 %dms）",
+                (tCopy - t0) / 1_000_000, (tLoad - tCopy) / 1_000_000, (tLoad - t0) / 1_000_000));
         return room;
     }
 
