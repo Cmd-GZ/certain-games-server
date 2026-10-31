@@ -368,8 +368,10 @@ public final class HillKingArena {
         if (loc == null || loc.getWorld() == null) {
             return "";
         }
+        // 反方向也走框架：如果是房间实例世界，写回 tpl:<模板键>（不写临时房间名，
+        // 否则房间一删配置就失效）
         return String.format(Locale.ROOT, "%s,%.2f,%.2f,%.2f,%.1f,%.1f",
-                loc.getWorld().getName(), loc.getX(), loc.getY(), loc.getZ(),
+                com.hub.world.Worlds.tokenOf(loc.getWorld()), loc.getX(), loc.getY(), loc.getZ(),
                 loc.getYaw(), loc.getPitch());
     }
 
@@ -381,7 +383,9 @@ public final class HillKingArena {
         if (parts.length < 4) {
             return null;
         }
-        World world = Bukkit.getWorld(parts[0].trim());
+        // R2 坐标解耦：token 可能是世界名，也可能是 tpl:<模板键>（解析成该模板当前房间的世界）。
+        // 详见 com.hub.world.Worlds 与 docs/坐标解耦清单.md
+        World world = com.hub.world.Worlds.resolve(parts[0]);
         if (world == null) {
             return null;
         }

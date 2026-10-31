@@ -224,6 +224,33 @@ public final class RoomManager {
      * 真正的维度目录还多一层 level 名。最稳的办法是**从已加载世界的目录反推**：
      * 若某个世界的目录父级叫 {@code minecraft}，那它就是我们要的目录。
      */
+    /**
+     * 某个模板当前**存活房间**的世界（R2 坐标解耦用）。
+     *
+     * <p>同一模板可能有多个房间同时在跑，这里返回"第一个"；多房间并行该用哪个由 session 决定（R3 之后）。
+     * 没有房间返回 {@code null} —— 调用方必须当成"场地未就绪"。
+     */
+    public static World worldOfTemplate(String templateKey) {
+        if (templateKey == null) {
+            return null;
+        }
+        for (Room room : ROOMS.values()) {
+            if (room.world != null && room.template.key().equals(templateKey)) {
+                return room.world;
+            }
+        }
+        return null;
+    }
+
+    /** 房间世界名 → 模板键；不是房间世界则返回 {@code null}。 */
+    public static String templateKeyOfRoomWorld(String worldName) {
+        if (worldName == null) {
+            return null;
+        }
+        Room room = ROOMS.get(worldName);
+        return room == null ? null : room.template.key();
+    }
+
     private static File worldDimDir() {
         for (World w : Bukkit.getWorlds()) {
             File folder = w.getWorldFolder();
