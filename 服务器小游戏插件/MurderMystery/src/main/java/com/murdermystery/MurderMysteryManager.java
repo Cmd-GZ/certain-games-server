@@ -3451,7 +3451,7 @@ public class MurderMysteryManager {
         }
         GoldScan scan = goldScans.get(a.getName());
         if (scan != null) {
-            return "&e正在扫描：&f" + scan.index + "&7/&f" + scan.columns.size() + "&e 列，暂时找到 &f"
+            return "&e正在扫描：&f" + scan.progressText() + "&e，暂时找到 &f"
                     + scan.found.size() + " &e个";
         }
         return "&7尚未扫描（开局、开服或 /mm reload 时自动扫）";
@@ -3499,15 +3499,28 @@ public class MurderMysteryManager {
     /** 按列（x,z）遍历场地范围内的方块找金块；每 tick 只走一部分列。 */
     private static final class GoldScan {
         private final World world;
-        private final List<int[]> columns;
+        /** 需要检查的区块坐标 {cx, cz} —— **只存坐标，不加载区块**（加载挪到 step 里分帧做）。 */
+        private final List<int[]> chunks;
         private final List<Location> found = new ArrayList<>();
+        private final int minX;
+        private final int maxX;
+        private final int minZ;
+        private final int maxZ;
         private final int minY;
         private final int maxY;
-        private int index;
+        /** 当前区块里待逐格检查的列。 */
+        private final List<int[]> pendingColumns = new ArrayList<>();
+        private int chunkIndex;
+        private int columnIndex;
 
-        private GoldScan(World world, List<int[]> columns, int minY, int maxY) {
+        private GoldScan(World world, List<int[]> chunks,
+                         int minX, int maxX, int minZ, int maxZ, int minY, int maxY) {
             this.world = world;
-            this.columns = columns;
+            this.chunks = chunks;
+            this.minX = minX;
+            this.maxX = maxX;
+            this.minZ = minZ;
+            this.maxZ = maxZ;
             this.minY = minY;
             this.maxY = maxY;
         }
@@ -3532,31 +3545,42 @@ public class MurderMysteryManager {
             int minY = Math.max(w.getMinHeight(), Math.min(p1.getBlockY(), p2.getBlockY()));
             int maxY = Math.min(w.getMaxHeight() - 1, Math.max(p1.getBlockY(), p2.getBlockY()));
 
-            org.bukkit.block.data.BlockData gold = Material.GOLD_BLOCK.createBlockData();
-            List<int[]> columns = new ArrayList<>();
+            // ⚠️ 这里**不能**调 w.getChunkAt()：它会**同步加载区块**（读 region 文件），
+            // 一个大场地几十个区块就是几秒钟的主线程阻塞 —— 正是"开局卡一下 / 开服卡四秒"的真凶。
+            // 现在只收集区块坐标，真正的加载 + 调色板检查都放到 step() 里分帧做。
+            List<int[]> chunks = new ArrayList<>();
             for (int cx = minX >> 4; cx <= maxX >> 4; cx++) {
                 for (int cz = minZ >> 4; cz <= maxZ >> 4; cz++) {
-                    if (!w.getChunkAt(cx, cz).contains(gold)) {
-                        continue; // 调色板里没有金块 → 这个区块不用逐格扫
-                    }
-                    int x0 = Math.max(minX, cx << 4);
-                    int x1 = Math.min(maxX, (cx << 4) + 15);
-                    int z0 = Math.max(minZ, cz << 4);
-                    int z1 = Math.min(maxZ, (cz << 4) + 15);
-                    for (int x = x0; x <= x1; x++) {
-                        for (int z = z0; z <= z1; z++) {
-                            columns.add(new int[]{x, z});
-                        }
-                    }
+                    chunks.add(new int[]{cx, cz});
                 }
             }
-            return new GoldScan(w, columns, minY, maxY);
+            return new GoldScan(w, chunks, minX, maxX, minZ, maxZ, minY, maxY);
         }
 
+        /**
+         * 推进扫描。**每 tick 最多加载 1 个区块**（这是最贵的操作），
+         * 然后把该区块的列按 {@code budgetColumns} 逐格检查。
+         */
         void step(int budgetColumns) {
             int done = 0;
-            while (done < budgetColumns && index < columns.size()) {
-                int[] c = columns.get(index++);
+            int chunkLoads = 0;
+            while (done < budgetColumns) {
+                if (columnIndex >= pendingColumns.size()) {
+                    pendingColumns.clear();
+                    columnIndex = 0;
+                    if (chunkIndex >= chunks.size()) {
+                        return;                        // 全部扫完
+                    }
+                    if (chunkLoads >= 1) {
+                        return;                        // 这一 tick 已经加载过一个区块了，剩下的下次再说
+                    }
+                    chunkLoads++;
+                    loadColumnsOf(chunks.get(chunkIndex++));
+                    if (pendingColumns.isEmpty()) {
+                        continue;                      // 该区块没有金块，接着看下一个（但受 chunkLoads 限制）
+                    }
+                }
+                int[] c = pendingColumns.get(columnIndex++);
                 for (int y = minY; y <= maxY; y++) {
                     if (world.getBlockAt(c[0], y, c[1]).getType() == Material.GOLD_BLOCK) {
                         found.add(new Location(world, c[0], y, c[1]));
@@ -3566,8 +3590,32 @@ public class MurderMysteryManager {
             }
         }
 
+        /** 加载一个区块并用调色板判定是否有金块；有则填出该区块内与选区相交的列。 */
+        private void loadColumnsOf(int[] chunkCoords) {
+            int cx = chunkCoords[0];
+            int cz = chunkCoords[1];
+            org.bukkit.Chunk chunk = world.getChunkAt(cx, cz);   // ← 唯一的同步加载点，已分帧
+            if (!chunk.contains(Material.GOLD_BLOCK.createBlockData())) {
+                return;                                          // 调色板里没有金块 → 不用逐格扫
+            }
+            int x0 = Math.max(minX, cx << 4);
+            int x1 = Math.min(maxX, (cx << 4) + 15);
+            int z0 = Math.max(minZ, cz << 4);
+            int z1 = Math.min(maxZ, (cz << 4) + 15);
+            for (int x = x0; x <= x1; x++) {
+                for (int z = z0; z <= z1; z++) {
+                    pendingColumns.add(new int[]{x, z});
+                }
+            }
+        }
+
         boolean finished() {
-            return index >= columns.size();
+            return chunkIndex >= chunks.size() && columnIndex >= pendingColumns.size();
+        }
+
+        /** 进度：已处理区块 / 总区块（比"列数"更能反映真实进度，因为区块数才是耗时大头）。 */
+        String progressText() {
+            return "区块 " + chunkIndex + "/" + chunks.size();
         }
     }
 

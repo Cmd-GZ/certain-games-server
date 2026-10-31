@@ -95,7 +95,8 @@ tools/region-report.py        # 生成《区域归属表》（只读）
 | **生产机文件系统** | **ext4**（无 reflink），内存 32GB |
 | 复制/加载成本 | 16MB 世界复制 50–115ms（冷）/ 7–12ms（页缓存热）；15 个世界启动时同一秒内加载完 → **IO 不是瓶颈** |
 | 房间创建耗时（实测） | 异步复制 **9–10ms** + 主线程加载 **24–61ms**（复制已移出主线程） |
-| **已知主线程阻塞** | 启动阶段 **4183–4435ms** + **969–1040ms**。**已归因**：`MurderMysteryManager$GoldScan#of`（密室杀手启动扫描金块，4 个场地逐块扫）与 `TNTBattleManager#loadLeaderboard`。`/hub doctor` 的 `[卡顿]` 段可实时看可疑帧 |
+| **主线程阻塞（已进展）** | ① `MurderMysteryManager$GoldScan#of` **已修**（原为同步 `getChunkAt` 加载整场区块；现每 tick 最多加载 1 个区块）→ 卡顿 4183+969ms 降为 **3706ms 单次**。② 剩余归因：`TNTBattleManager#loadLeaderboard`（`addPluginChunkTicket` 强制加载区块）+ `Unsafe#park`（主线程等待）。`/hub doctor` 的 `[卡顿]` 段可实时看可疑帧 |
+| **上游回退过的功能** | 「密室杀手开局打乱全员皮肤」——上游加了又回退（本快照里没有）。它是 `Unsafe#park` 型阻塞（逐个解析 `PlayerProfile`）。**要重做必须异步批量取档案，不能在主线程逐个解析** |
 | 服务端堆 | `-Xms1G -Xmx2G`（**物理 32GB 用不上**）；开服后实测 421–824MB（20–40%）。见 D13 |
 
 ### 0.7 已定决策（用户拍板，别再问一遍）
