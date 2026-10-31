@@ -544,6 +544,15 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
     }
 
     /** 管理权限：OP 或 plugin.yml 里声明的 hub.admin。 */
+    /** 把 {@code com.foo.Bar#baz:123} 缩成 {@code Bar#baz:123}，doctor 里好读。 */
+    private static String shortFrame(String frame) {
+        if (frame == null) {
+            return "?";
+        }
+        int slash = frame.lastIndexOf('.');
+        return slash < 0 ? frame : frame.substring(slash + 1);
+    }
+
     // ---------- /hub room：房间引擎的管理入口（R1 的验收入口，R3 之后保留给 OP 排障） ----------
 
     private void roomCommand(CommandSender sender, String[] args) {
@@ -756,7 +765,22 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             var recent = com.hub.diagnostics.TickWatchdog.recent();
             int shown = 0;
             for (int i = recent.size() - 1; i >= 0 && shown < 5; i--, shown++) {
-                out.add("  &7- &f" + recent.get(i).ms() + "ms");
+                var st2 = recent.get(i);
+                out.add("  &7- &f" + st2.ms() + "ms"
+                        + (st2.suspect() == null ? "" : " &7@ &f" + shortFrame(st2.suspect())));
+            }
+            var offenders = com.hub.diagnostics.TickWatchdog.offenders();
+            if (!offenders.isEmpty()) {
+                out.add("  &7可疑来源（采样命中）：");
+                int n = 0;
+                for (var o : offenders) {
+                    if (n++ >= 3) {
+                        break;
+                    }
+                    out.add("  &7- &c" + shortFrame(o.getKey()) + " &7× &f" + o.getValue());
+                }
+            } else {
+                out.add("  &7（还没采到可疑帧——卡顿可能发生在启动早期，或卡在纯 JVM 代码里）");
             }
         }
 

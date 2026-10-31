@@ -1,5 +1,5 @@
 name: HubCore
-version: '1.4.1'
+version: '1.4.2'
 main: com.hub.HubCorePlugin
 api-version: '1.21'
 description: 小游戏服主城插件：大厅、中央菜单、按游戏分区的统一 tab

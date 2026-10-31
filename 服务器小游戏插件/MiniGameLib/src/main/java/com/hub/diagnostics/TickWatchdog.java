@@ -30,9 +30,14 @@ public final class TickWatchdog {
     private static final long SEVERE_MS = 1000;
     private static final int KEEP = 20;
 
-    /** 一次卡顿记录。 */
-    public record Stall(long at, long ms) {
+    /** 一次卡顿记录。{@code suspect} = 采样到的可疑帧（谁在卡主线程）。 */
+    public record Stall(long at, long ms, String suspect) {
     }
+
+    /** 采样间隔：卡顿期间每隔这么久抓一次主线程栈。 */
+    private static final long SAMPLE_INTERVAL_MS = 50;
+    /** 归因：{@code 类名.方法名 -> 命中次数}。 */
+    private static final java.util.Map<String, Integer> OFFENDERS = new java.util.concurrent.ConcurrentHashMap<>();
 
     private static final Deque<Stall> RECENT = new ArrayDeque<>();
     private static long worstMs;
@@ -44,10 +49,86 @@ public final class TickWatchdog {
     }
 
     /** 在 MiniGameLib 的 onEnable 里调。 */
+    private static volatile Thread mainThread;
+    private static volatile boolean sampling;
+
+    /** 在 MiniGameLib 的 onEnable 里调（此时就在主线程，正好记下它）。 */
     public static void start(JavaPlugin plugin) {
         stop();
+        mainThread = Thread.currentThread();
         lastTickNanos = System.nanoTime();
         task = Bukkit.getScheduler().runTaskTimer(plugin, TickWatchdog::tick, 1L, 1L);
+        startSampler();
+    }
+
+    /**
+     * 起一个守护线程，在**主线程被卡住时**抓它的调用栈。
+     *
+     * <p>这是"谁卡了主线程"的唯一可靠答案：主线程自己被阻塞时无法自采样，
+     * 只能让另一个线程去问它"你现在在哪一行"。
+     */
+    private static void startSampler() {
+        if (sampling) {
+            return;
+        }
+        sampling = true;
+        Thread t = new Thread(() -> {
+            while (sampling) {
+                try {
+                    Thread.sleep(SAMPLE_INTERVAL_MS);
+                } catch (InterruptedException ex) {
+                    return;
+                }
+                Thread target = mainThread;
+                if (target == null) {
+                    continue;
+                }
+                long stuckMs = (System.nanoTime() - lastTickNanos) / 1_000_000L;
+                if (stuckMs <= WARN_MS) {
+                    continue;   // 主线程转得正常，不采样
+                }
+                StackTraceElement[] stack = target.getStackTrace();
+                String suspect = attribute(stack);
+                if (suspect != null) {
+                    OFFENDERS.merge(suspect, 1, Integer::sum);
+                }
+            }
+        }, "minigame-stall-sampler");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * 从栈里挑出"最像罪魁"的那一帧：跳过 JVM / Paper / NMS 的实现细节，
+     * 取第一个属于业务代码的帧（插件、公共库、HubCore 都算）。
+     */
+    private static String attribute(StackTraceElement[] stack) {
+        if (stack == null || stack.length == 0) {
+            return null;
+        }
+        for (StackTraceElement e : stack) {
+            String c = e.getClassName();
+            if (c.startsWith("java.") || c.startsWith("jdk.") || c.startsWith("sun.")
+                    || c.startsWith("com.sun.") || c.startsWith("net.minecraft.")
+                    || c.startsWith("org.bukkit.craftbukkit")
+                    || c.startsWith("io.papermc.paper")
+                    || c.startsWith("ca.spottedleaf")
+                    || c.startsWith("com.hub.diagnostics.TickWatchdog")
+                    || c.startsWith("org.bukkit.scheduler")) {
+                continue;
+            }
+            return c + "#" + e.getMethodName() + ":" + e.getLineNumber();
+        }
+        StackTraceElement e = stack[0];
+        return e.getClassName() + "#" + e.getMethodName();
+    }
+
+    /** 归因结果（命中次数降序）。 */
+    public static java.util.List<java.util.Map.Entry<String, Integer>> offenders() {
+        java.util.List<java.util.Map.Entry<String, Integer>> list =
+                new java.util.ArrayList<>(OFFENDERS.entrySet());
+        list.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+        return list;
     }
 
     public static void stop() {
@@ -55,6 +136,7 @@ public final class TickWatchdog {
             task.cancel();
             task = null;
         }
+        sampling = false;
     }
 
     private static void tick() {
@@ -69,7 +151,7 @@ public final class TickWatchdog {
             if (deltaMs > worstMs) {
                 worstMs = deltaMs;
             }
-            RECENT.addLast(new Stall(System.currentTimeMillis(), deltaMs));
+            RECENT.addLast(new Stall(System.currentTimeMillis(), deltaMs, latestSuspect()));
             while (RECENT.size() > KEEP) {
                 RECENT.removeFirst();
             }
@@ -85,6 +167,12 @@ public final class TickWatchdog {
         } catch (Throwable ignored) {
             // 还没进服务器上下文
         }
+    }
+
+    /** 最近一次采样到的可疑帧（可能为 null，例如卡在纯 JVM 代码里）。 */
+    private static String latestSuspect() {
+        var list = offenders();
+        return list.isEmpty() ? null : list.get(0).getKey();
     }
 
     public static long worstMs() {
@@ -105,6 +193,7 @@ public final class TickWatchdog {
     public static void reset() {
         synchronized (RECENT) {
             RECENT.clear();
+            OFFENDERS.clear();
             worstMs = 0;
             totalStalls = 0;
         }
