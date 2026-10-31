@@ -639,7 +639,7 @@ public class LuckyPillarArena {
     public void save(ConfigurationSection sec) {
         World w = getWorld();
         if (w != null) {
-            sec.set("world", w.getName());
+            sec.set("world", com.hub.world.Worlds.tokenOf(w));   // R2：房间实例 → tpl:模板键
         }
         if (center != null) {
             savePoint(sec, "center", center);
@@ -682,7 +682,7 @@ public class LuckyPillarArena {
             return null;
         }
         String wname = worldName != null ? worldName : s.getString("world");
-        World w = wname == null ? null : org.bukkit.Bukkit.getWorld(wname);
+        World w = wname == null ? null : com.hub.world.Worlds.resolve(wname);
         if (w == null) {
             return null;
         }

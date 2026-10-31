@@ -1,5 +1,5 @@
 name: JumpFill
-version: '1.0.15'
+version: '1.0.16'
 main: com.jumpfill.JumpFillPlugin
 api-version: '26.2'
 description: 跳水填格：从高台跳进水池，落点变成玩家颜色的玻璃

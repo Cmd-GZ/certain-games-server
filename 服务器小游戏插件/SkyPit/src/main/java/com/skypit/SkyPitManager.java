@@ -92,8 +92,8 @@ public class SkyPitManager {
         ConfigurationSection r = cfg.getConfigurationSection("region");
         if (r != null) {
             String w = r.getString("world", "");
-            if (!w.isEmpty() && Bukkit.getWorld(w) != null) {
-                World world = Bukkit.getWorld(w);
+            if (!w.isEmpty() && com.hub.world.Worlds.resolve(w) != null) {
+                World world = com.hub.world.Worlds.resolve(w);
                 pos1 = new Location(world, r.getDouble("x1"), r.getDouble("y1"), r.getDouble("z1"));
                 pos2 = new Location(world, r.getDouble("x2"), r.getDouble("y2"), r.getDouble("z2"));
             }
@@ -154,7 +154,7 @@ public class SkyPitManager {
         FileConfiguration cfg = plugin.getConfig();
         ConfigurationSection r = cfg.createSection("region");
         if (pos1 != null) {
-            r.set("world", pos1.getWorld().getName());
+            r.set("world", com.hub.world.Worlds.tokenOf(pos1.getWorld()));   // R2：房间实例 → tpl:模板键
             r.set("x1", pos1.getX());
             r.set("y1", pos1.getY());
             r.set("z1", pos1.getZ());
@@ -168,7 +168,7 @@ public class SkyPitManager {
         List<Map<String, Object>> lb = new ArrayList<>();
         for (LeaderBoard b : leaderboards) {
             Map<String, Object> m = new LinkedHashMap<>();
-            m.put("world", b.loc.getWorld().getName());
+            m.put("world", com.hub.world.Worlds.tokenOf(b.loc.getWorld()));
             m.put("x", b.loc.getX());
             m.put("y", b.loc.getY());
             m.put("z", b.loc.getZ());
@@ -311,10 +311,10 @@ public class SkyPitManager {
             return null;
         }
         String w = sec.getString("world", "");
-        if (w.isEmpty() || Bukkit.getWorld(w) == null) {
+        if (w.isEmpty() || com.hub.world.Worlds.resolve(w) == null) {
             return null;
         }
-        return new Location(Bukkit.getWorld(w), sec.getDouble("x"), sec.getDouble("y"), sec.getDouble("z"),
+        return new Location(com.hub.world.Worlds.resolve(w), sec.getDouble("x"), sec.getDouble("y"), sec.getDouble("z"),
                 (float) sec.getDouble("yaw"), (float) sec.getDouble("pitch"));
     }
 

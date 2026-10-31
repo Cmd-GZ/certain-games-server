@@ -90,9 +90,9 @@ public final class TNTBattleArena {
         buildHeightLimit = sec.getInt("build-height-limit", cfg.getInt("build-height-limit", -1));
         maxPlayers = Math.max(0, sec.getInt("max-players", 0));
         if (pos1 != null && pos1.getWorld() != null) {
-            worldName = pos1.getWorld().getName();
+            worldName = com.hub.world.Worlds.tokenOf(pos1.getWorld());
         } else if (!redSpawns.isEmpty() && redSpawns.get(0).getWorld() != null) {
-            worldName = redSpawns.get(0).getWorld().getName();
+            worldName = com.hub.world.Worlds.tokenOf(redSpawns.get(0).getWorld());
         }
     }
 
@@ -101,7 +101,9 @@ public final class TNTBattleArena {
         plugin.reloadConfig();
         FileConfiguration cfg = plugin.getConfig();
         String path = "arenas." + name;
-        cfg.set(path + ".world", worldName());
+        // R2：写世界 token（房间实例 → tpl:模板键），别把临时房间名写进配置
+        cfg.set(path + ".world",
+                world() == null ? worldName : com.hub.world.Worlds.tokenOf(world()));
         cfg.set(path + ".pos1", format(pos1));
         cfg.set(path + ".pos2", format(pos2));
         cfg.set(path + ".lobby", format(lobby));
@@ -129,7 +131,7 @@ public final class TNTBattleArena {
         } else {
             pos2 = location.getBlock().getLocation();
         }
-        worldName = location.getWorld().getName();
+        worldName = com.hub.world.Worlds.tokenOf(location.getWorld());
     }
 
     public void setSpawn(Team team, Location location) {
@@ -142,7 +144,7 @@ public final class TNTBattleArena {
         loc.setX(loc.getBlockX() + 0.5);
         loc.setZ(loc.getBlockZ() + 0.5);
         spawns(team).add(loc);
-        worldName = loc.getWorld().getName();
+        worldName = com.hub.world.Worlds.tokenOf(loc.getWorld());
     }
 
     public void clearSpawns(Team team) {
@@ -229,7 +231,7 @@ public final class TNTBattleArena {
         if (!redSpawns.isEmpty()) {
             return redSpawns.get(0).getWorld();
         }
-        return Bukkit.getWorld(worldName);
+        return com.hub.world.Worlds.resolve(worldName);
     }
 
     public String worldName() {

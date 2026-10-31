@@ -52,7 +52,7 @@ public final class JumpFillArena {
         water1 = parse(plugin.getConfig().getString("arena.water-pos1", null));
         water2 = parse(plugin.getConfig().getString("arena.water-pos2", null));
         if (water1 != null && water1.getWorld() != null) {
-            worldName = water1.getWorld().getName();
+            worldName = com.hub.world.Worlds.tokenOf(water1.getWorld());
         }
         lobby = parse(plugin.getConfig().getString("arena.lobby", null));
         starts.clear();
@@ -66,7 +66,9 @@ public final class JumpFillArena {
     }
 
     public void save() {
-        plugin.getConfig().set("arena.world", worldName());
+        // R2：写世界 token（房间实例 → tpl:模板键），别把临时房间名写进配置
+        plugin.getConfig().set("arena.world",
+                world() == null ? worldName : com.hub.world.Worlds.tokenOf(world()));
         plugin.getConfig().set("arena.water-pos1", format(water1));
         plugin.getConfig().set("arena.water-pos2", format(water2));
         plugin.getConfig().set("arena.lobby", format(lobby));
@@ -80,7 +82,7 @@ public final class JumpFillArena {
 
     public void setWaterCorner(int index, Location location) {
         Location block = location.getBlock().getLocation();
-        worldName = block.getWorld().getName();
+        worldName = com.hub.world.Worlds.tokenOf(block.getWorld());
         if (index == 1) {
             water1 = block;
         } else {
@@ -117,7 +119,7 @@ public final class JumpFillArena {
         if (water1 != null && water1.getWorld() != null) {
             return water1.getWorld();
         }
-        return Bukkit.getWorld(worldName);
+        return com.hub.world.Worlds.resolve(worldName);
     }
 
     public String worldName() {

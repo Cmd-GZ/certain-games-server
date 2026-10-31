@@ -38,7 +38,7 @@ public final class LandClaimArena {
         worldName = plugin.getConfig().getString("arena.world", "world");
         center = parse(plugin.getConfig().getString("arena.center", null));
         if (center != null && center.getWorld() != null) {
-            worldName = center.getWorld().getName();
+            worldName = com.hub.world.Worlds.tokenOf(center.getWorld());
         }
         radius = Math.max(0, plugin.getConfig().getInt("arena.radius", 0));
         lobby = parse(plugin.getConfig().getString("arena.lobby", null));
@@ -52,7 +52,10 @@ public final class LandClaimArena {
     }
 
     public void save() {
-        plugin.getConfig().set("arena.world", worldName());
+        // R2：写世界 token（房间实例 → tpl:模板键），别把临时房间名写进配置
+        com.hub.world.Worlds.tokenOf(world());
+        plugin.getConfig().set("arena.world",
+                world() == null ? worldName : com.hub.world.Worlds.tokenOf(world()));
         plugin.getConfig().set("arena.center", format(center));
         plugin.getConfig().set("arena.radius", radius);
         plugin.getConfig().set("arena.lobby", format(lobby));
@@ -66,7 +69,7 @@ public final class LandClaimArena {
 
     public void setCenter(Location location) {
         center = location.getBlock().getLocation();
-        worldName = location.getWorld().getName();
+        worldName = com.hub.world.Worlds.tokenOf(location.getWorld());
     }
 
     public void setRadius(int radius) {
@@ -153,7 +156,7 @@ public final class LandClaimArena {
 
     public World world() {
         return center != null && center.getWorld() != null
-                ? center.getWorld() : Bukkit.getWorld(worldName);
+                ? center.getWorld() : com.hub.world.Worlds.resolve(worldName);
     }
 
     public String worldName() {

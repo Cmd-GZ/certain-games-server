@@ -1,5 +1,5 @@
 name: SkyPit
-version: '1.0.5'
+version: '1.0.6'
 main: com.skypit.SkyPitPlugin
 api-version: '1.21'
 description: 天坑插件：OP 配置战斗区域，玩家进入自动发放装备并开启 PvP，记录击杀数，浮空文字展示前十名
