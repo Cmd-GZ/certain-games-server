@@ -1,5 +1,5 @@
 name: GuessTheBuild
-version: '2.8.4'
+version: '2.8.5'
 main: com.buildbattle.gtb.GuessBuildPlugin
 api-version: '26.2'
 depend: [MiniGameLib, HubCore]

@@ -88,7 +88,7 @@ public final class TickWatchdog {
                     continue;   // 主线程转得正常，不采样
                 }
                 StackTraceElement[] stack = target.getStackTrace();
-                String suspect = attribute(stack);
+                String suspect = traceLine(stack, 3);   // 记 3 层，便于判断在等什么
                 if (suspect != null) {
                     OFFENDERS.merge(suspect, 1, Integer::sum);
                 }
@@ -120,7 +120,47 @@ public final class TickWatchdog {
             return c + "#" + e.getMethodName() + ":" + e.getLineNumber();
         }
         StackTraceElement e = stack[0];
-        return e.getClassName() + "#" + e.getMethodName();
+        return e.getClassName() + "#" + e.getMethodName() + ":" + e.getLineNumber();
+    }
+
+    /** 调试点：把栈里前 N 个业务帧拼成一行（排查"到底卡在哪"时用）。 */
+    static String traceLine(StackTraceElement[] stack, int limit) {
+        if (stack == null) {
+            return "?";
+        }
+        StringBuilder sb = new StringBuilder();
+        int n = 0;
+        for (StackTraceElement e : stack) {
+            String c = e.getClassName();
+            if (c.startsWith("java.") || c.startsWith("jdk.") || c.startsWith("sun.")
+                    || c.startsWith("com.sun.") || c.startsWith("net.minecraft.")
+                    || c.startsWith("org.bukkit.craftbukkit")
+                    || c.startsWith("io.papermc.paper") || c.startsWith("ca.spottedleaf")
+                    || c.startsWith("org.bukkit.scheduler")) {
+                continue;
+            }
+            if (n++ > 0) {
+                sb.append(" ← ");
+            }
+            sb.append(c).append('#').append(e.getMethodName()).append(':').append(e.getLineNumber());
+            if (n >= limit) {
+                break;
+            }
+        }
+        if (sb.length() == 0) {
+            // 整条栈都在 JVM/Paper 内部（说明不是插件代码在卡，而是框架自己在等）
+            // → 把原始前三帧打出来，好判断到底是哪一段（区块 IO？世界加载？）
+            StringBuilder raw = new StringBuilder("[框架] ");   // 8 帧，够看到是谁调的 .get()/.join()
+            for (int i = 0; i < Math.min(8, stack.length); i++) {
+                if (i > 0) {
+                    raw.append(" ← ");
+                }
+                raw.append(stack[i].getClassName()).append('#').append(stack[i].getMethodName())
+                        .append(':').append(stack[i].getLineNumber());
+            }
+            return raw.toString();
+        }
+        return sb.toString();
     }
 
     /** 归因结果（命中次数降序）。 */

@@ -12,6 +12,7 @@ import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -57,6 +58,10 @@ public class Arena {
     private final Map<BlockPos, BlockData> snapshot = new HashMap<>();
     /** 当前地板方块；null = 使用默认（保存时的地板）。 */
     private Material floor = null;
+    /** 正在分帧铺地板的任务（换地板时先取消旧的，避免两个任务打架）。 */
+    private BukkitTask floorTask = null;
+    /** 每 tick 最多处理多少块地板：太少会很久，太多会掉 TPS。500 ≈ 2~3ms/tick。 */
+    private static final int FLOOR_BLOCKS_PER_TICK = 500;
 
     public Arena(GuessBuildPlugin plugin, String name) {
         this.plugin = plugin;
@@ -452,18 +457,54 @@ public class Arena {
         applyFloor(DEFAULT_FLOOR);
     }
 
-    /** 把目标方块铺到世界地板层（不触发物理更新）。 */
+    /**
+     * 把目标方块铺到世界地板层（不触发物理更新）。
+     *
+     * <p>⚠️ **必须分帧**：整块地板一次性铺（比如 100×100 = 1 万次 {@code setBlockData}）
+     * 会在主线程上同步加载一堆区块，实测卡 **4.1 秒**（{@code /hub doctor} 的 {@code [卡顿]} 段抓到过
+     * {@code Arena#applyFloor ← Arena#loadFromConfig}）。
+     *
+     * <p>另外加了快速路径：**已经是目标方块就跳过**，不再写。绝大多数情况下地板本来就是对的，
+     * 所以实际开销接近零（只读不写）。
+     */
     private void applyFloor(Material m) {
         if (!isReady() || m == null) {
             return;
         }
-        BlockData data = m.createBlockData();
-        int y = min.getBlockY();
-        for (int x = min.getBlockX(); x <= max.getBlockX(); x++) {
-            for (int z = min.getBlockZ(); z <= max.getBlockZ(); z++) {
-                world.getBlockAt(x, y, z).setBlockData(data, false);
-            }
+        if (floorTask != null) {
+            floorTask.cancel();     // 换地板：先停掉上一轮
+            floorTask = null;
         }
+        final BlockData data = m.createBlockData();
+        final int y = min.getBlockY();
+        final int x0 = min.getBlockX();
+        final int x1 = max.getBlockX();
+        final int z0 = min.getBlockZ();
+        final int z1 = max.getBlockZ();
+        final int[] cursor = {x0, z0};
+        floorTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            int done = 0;
+            while (done < FLOOR_BLOCKS_PER_TICK) {
+                int x = cursor[0];
+                int z = cursor[1];
+                if (x > x1) {
+                    if (floorTask != null) {
+                        floorTask.cancel();
+                        floorTask = null;
+                    }
+                    return;
+                }
+                org.bukkit.block.Block b = world.getBlockAt(x, y, z);
+                if (b.getType() != m) {
+                    b.setBlockData(data, false);   // 只在不一样时才写
+                }
+                done++;
+                if (++cursor[1] > z1) {
+                    cursor[1] = z0;
+                    cursor[0]++;
+                }
+            }
+        }, 1L, 1L);
     }
 
 

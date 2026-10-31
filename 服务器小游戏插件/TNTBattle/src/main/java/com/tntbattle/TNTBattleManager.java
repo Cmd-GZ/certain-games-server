@@ -167,24 +167,52 @@ public final class TNTBattleManager {
                 + specialCooldownSeconds() + " 秒。");
     }
 
-    /** 读取配置并重建大厅里的悬浮排行榜（先删旧的，避免重载后叠出多个）。 */
+    /**
+     * 读取配置并重建大厅里的悬浮排行榜（先删旧的，避免重载后叠出多个）。
+     *
+     * <p>⚠️ **不能用 {@code location.getChunk()}**：那是**同步**加载，区块若还没生成还会
+     * 触发整块地形生成 —— 几秒钟的主线程阻塞，正是"开服卡一下"的来源之一
+     * （`/hub doctor` 的 `[卡顿]` 段能抓到这里的 `Unsafe#park`）。
+     * 现在改成 {@code getChunkAtAsync}，加载完再回主线程挂 ticket + 生成实体。
+     */
     public void loadLeaderboard() {
-        Chunk previous = leaderboardChunk;
-        Location location = TNTBattleArena.parse(plugin.getConfig().getString("leaderboard.location", ""));
-        Chunk target = null;
-        if (location != null && location.getWorld() != null) {
-            // 先加载目标区块并把旧排行实体一起清掉，再挂常驻 ticket
-            target = location.getChunk();
-            target.addPluginChunkTicket(plugin);
-            leaderboardChunk = target;
+        if (!plugin.isEnabled()) {
+            return;
         }
+        Location location = TNTBattleArena.parse(plugin.getConfig().getString("leaderboard.location", ""));
+        World world = location == null ? null : location.getWorld();
+        if (location == null || world == null) {
+            Chunk previous = leaderboardChunk;
+            leaderboardChunk = null;
+            removeTaggedDisplays();
+            if (previous != null) {
+                previous.removePluginChunkTicket(plugin);
+            }
+            return;
+        }
+        int cx = location.getBlockX() >> 4;
+        int cz = location.getBlockZ() >> 4;
+        // 刻意不生成区块：为了一个排行榜去生成新地形不值当，直接跳过并提示
+        if (!world.isChunkGenerated(cx, cz)) {
+            plugin.getLogger().warning("排行榜所在的区块 (" + cx + "," + cz
+                    + ") 还没生成，跳过放置（避免生成区块卡主线程）。去那个位置走一圈再 /tntbattle reload。");
+            return;
+        }
+        world.getChunkAtAsync(cx, cz).thenAccept(chunk ->
+                Bukkit.getScheduler().runTask(plugin, () -> applyLeaderboard(chunk, location)));
+    }
+
+    /** 区块已在内存/已异步加载完之后的收尾：挂 ticket、清旧实体、生成 TextDisplay。 */
+    private void applyLeaderboard(Chunk target, Location location) {
+        if (!plugin.isEnabled()) {
+            return;
+        }
+        Chunk previous = leaderboardChunk;
+        target.addPluginChunkTicket(plugin);
+        leaderboardChunk = target;
         removeTaggedDisplays();
         if (previous != null && !previous.equals(target)) {
             previous.removePluginChunkTicket(plugin);
-        }
-        if (target == null) {
-            leaderboardChunk = null;
-            return;
         }
         if (!plugin.getConfig().getBoolean("leaderboard.enabled", true)) {
             return;

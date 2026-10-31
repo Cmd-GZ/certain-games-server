@@ -767,7 +767,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             for (int i = recent.size() - 1; i >= 0 && shown < 5; i--, shown++) {
                 var st2 = recent.get(i);
                 out.add("  &7- &f" + st2.ms() + "ms"
-                        + (st2.suspect() == null ? "" : " &7@ &f" + shortFrame(st2.suspect())));
+                        + (st2.suspect() == null ? "" : " &7@ &f" + st2.suspect()));
             }
             var offenders = com.hub.diagnostics.TickWatchdog.offenders();
             if (!offenders.isEmpty()) {
@@ -777,7 +777,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
                     if (n++ >= 3) {
                         break;
                     }
-                    out.add("  &7- &c" + shortFrame(o.getKey()) + " &7× &f" + o.getValue());
+                    out.add("  &7- &c" + o.getKey() + " &7× &f" + o.getValue());
                 }
             } else {
                 out.add("  &7（还没采到可疑帧——卡顿可能发生在启动早期，或卡在纯 JVM 代码里）");
