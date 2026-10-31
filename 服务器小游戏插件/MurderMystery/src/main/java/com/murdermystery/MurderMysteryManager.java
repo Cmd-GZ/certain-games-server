@@ -433,9 +433,20 @@ public class MurderMysteryManager {
             return;
         }
         invalidateGoldScan(); // 场地被改过，金块位置重新扫
-        ConfigurationSection sec = plugin.getConfig().createSection("arenas");
+        // ⚠️ 不能 createSection("arenas")：那会把整段**替换成空段**，
+        // 于是"某个场地没加载成功（比如模板作用域没有存活房间）"时它的坐标就被擦掉了
+        // —— 实测能把 4 个场地全写成 `{}`，配置彻底丢失。
+        // 正确做法：拿**已存在**的段，只往里写（写不出来的键由 MurderMysteryArena.save 跳过）。
+        ConfigurationSection sec = plugin.getConfig().getConfigurationSection("arenas");
+        if (sec == null) {
+            sec = plugin.getConfig().createSection("arenas");
+        }
         for (Map.Entry<String, MurderMysteryArena> e : arenas.entrySet()) {
-            e.getValue().save(sec.createSection(e.getKey()));
+            ConfigurationSection arenaSec = sec.getConfigurationSection(e.getKey());
+            if (arenaSec == null) {
+                arenaSec = sec.createSection(e.getKey());
+            }
+            e.getValue().save(arenaSec);
         }
         ConfigurationSection js = plugin.getConfig().createSection("join-signs");
         for (Map.Entry<String, List<Location>> e : joinSigns.entrySet()) {

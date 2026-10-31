@@ -198,18 +198,79 @@ public class MurderMysteryArena {
 
     /** 保存到配置段。 */
     public void save(ConfigurationSection sec) {
-        sec.set("pos1", pos1);
-        sec.set("pos2", pos2);
-        sec.set("center", center);
-        sec.set("lobby", lobbyPoint);
+        writeLoc(sec, "pos1", pos1);
+        writeLoc(sec, "pos2", pos2);
+        writeLoc(sec, "center", center);
+        writeLoc(sec, "lobby", lobbyPoint);
+    }
+
+    /**
+     * 写一个坐标（R2 坐标解耦）。
+     *
+     * <p>仍然用 Bukkit 原生 {@code Location} 序列化（YAML 结构不变），但把 {@code world} 字段
+     * 换成世界 token：如果当前在房间实例世界里，写 {@code tpl:<模板键>} 而不是临时房间名，
+     * 否则房间一删配置就指向不存在的世界。
+     */
+    private static void writeLoc(ConfigurationSection sec, String key, Location loc) {
+        if (loc == null) {
+            // ⚠️ **绝不写 null**。
+            // 场地没加载成功（比如模板作用域没有存活房间）时，pos1/pos2 是 null；
+            // 如果这里写 null，关服/重载时的 saveAll() 就会把磁盘上的坐标**擦掉** —— 实测会把
+            // 4 个场地全写成 `{}`，配置彻底丢失。"读不出来" 必须表现为"不动它"。
+            return;
+        }
+        sec.set(key, loc);
+        if (loc.getWorld() != null) {
+            String token = com.hub.world.Worlds.tokenOf(loc.getWorld());
+            if (!token.equals(loc.getWorld().getName())) {
+                // Paper 26.2（Moonrise）序列化成 world_key: minecraft:xxx；老版本是 world: xxx
+                // 哪个存在就改哪个，别凭空造字段。
+                if (sec.isSet(key + ".world_key")) {
+                    sec.set(key + ".world_key", token);
+                } else {
+                    sec.set(key + ".world", token);
+                }
+            }
+        }
+    }
+
+    /**
+     * 读一个坐标（R2 坐标解耦）。
+     *
+     * <p>Bukkit 反序列化 {@code Location} 时用的是 {@code world:} 里的字符串直接查世界；
+     * 若那里是 {@code tpl:<模板键>}，Bukkit 找不到世界会给回一个 world 为 null 的 Location。
+     * 这里再补一次解析：拿到真实世界就绑上，拿不到（模板没有存活房间）就返回 null，
+     * 让上层按"场地未就绪"处理。
+     */
+    private static Location readLoc(ConfigurationSection sec, String key) {
+        // 先看世界 token：如果是 tpl: 就自己按子键拼 Location，
+        // **绝不能** 走 sec.get(key) —— Paper 的 Location.deserialize 在找不到世界时会抛异常并刷 ERROR。
+        String token = sec.getString(key + ".world_key");
+        if (token == null) {
+            token = sec.getString(key + ".world");   // 老格式回落
+        }
+        if (token != null && com.hub.world.Worlds.isTemplateToken(token)) {
+            org.bukkit.World world = com.hub.world.Worlds.resolve(token);
+            if (world == null) {
+                return null;   // 模板还没有存活房间 → 场地未就绪
+            }
+            double x = sec.getDouble(key + ".x");
+            double y = sec.getDouble(key + ".y");
+            double z = sec.getDouble(key + ".z");
+            float yaw = (float) sec.getDouble(key + ".yaw");
+            float pitch = (float) sec.getDouble(key + ".pitch");
+            return new Location(world, x, y, z, yaw, pitch);
+        }
+        // 普通世界名：交给 Bukkit 正常反序列化
+        return (Location) sec.get(key);
     }
 
     public static MurderMysteryArena load(String name, ConfigurationSection sec) {
         MurderMysteryArena a = new MurderMysteryArena(name);
-        a.pos1 = (Location) sec.get("pos1");
-        a.pos2 = (Location) sec.get("pos2");
-        a.center = (Location) sec.get("center");
-        a.lobbyPoint = (Location) sec.get("lobby");
+        a.pos1 = readLoc(sec, "pos1");
+        a.pos2 = readLoc(sec, "pos2");
+        a.center = readLoc(sec, "center");
+        a.lobbyPoint = readLoc(sec, "lobby");
         return a;
     }
 }
