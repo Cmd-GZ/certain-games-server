@@ -784,7 +784,17 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             }
         }
 
-        // ---- 8. 世界规则 ----
+        // ---- 8. 堆内存（决定"还能不能再塞常驻房间世界"） ----
+        var rt = Runtime.getRuntime();
+        long usedMb = (rt.totalMemory() - rt.freeMemory()) / 1024 / 1024;
+        long maxMb = rt.maxMemory() / 1024 / 1024;
+        long pct = maxMb == 0 ? 0 : usedMb * 100 / maxMb;
+        out.add("&b[内存] &f" + usedMb + " / " + maxMb + " MB &7(" + pct + "%)"
+                + (pct >= 80 ? " &c堆快满了：要么调大 -Xmx，要么减少常驻世界/房间" : ""));
+        out.add("  &7注意：物理内存 ≠ 堆。服务端 -Xmx 限制的是上面的 MB，"
+                + "32GB 物理内存也用不上，除非改启动参数");
+
+        // ---- 9. 世界规则 ----
         List<World> worlds = Bukkit.getWorlds();
         out.add("&b[世界] &f" + worlds.size() + " 个");
         for (World w : worlds) {
@@ -793,7 +803,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             out.add("  &7- &f" + w.getName() + " &7pvp=&f" + pvp + " &7keepInventory=&f" + keep);
         }
 
-        // ---- 9. 指向文档（不在此处重复不变量状态，避免与文档不一致）----
+        // ---- 10. 指向文档（不在此处重复不变量状态，避免与文档不一致）----
         out.add("&b[不变量] &7状态见 &fdocs/框架不变量.md&7 第 6 节（本文档是唯一权威）");
         out.add("&8&m                                             ");
 
