@@ -1,0 +1,25 @@
+name: OneShot
+version: '1.0.8'
+main: com.oneshot.OneShotPlugin
+api-version: '1.21'
+description: One Shot：木剑 + 弓 + 一支箭，一箭秒杀，最后存活者获胜
+depend: [MiniGameLib, HubCore]
+softdepend: [GameWorlds]
+
+minigame-game: true
+minigame:
+  name: One Shot
+  icon: BOW
+  color: 'c'
+
+commands:
+  oneshot:
+    description: One Shot 小游戏
+    usage: /oneshot help
+    aliases: [os, one]
+
+permissions:
+  oneshot.use:
+    default: true
+  oneshot.admin:
+    default: op

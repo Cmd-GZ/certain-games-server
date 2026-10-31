@@ -90,17 +90,20 @@ public final class SnakePartyManager {
 
     private static final class Plate {
         final BlockData original;
-        final long expireAt;
+        /** 到期时间；玩家死亡后改成 Long.MAX_VALUE，整局结束才还原。 */
+        long expireAt;
         final int x;
         final int y;
         final int z;
+        final UUID owner;
 
-        Plate(BlockData original, long expireAt, int x, int y, int z) {
+        Plate(BlockData original, long expireAt, int x, int y, int z, UUID owner) {
             this.original = original;
             this.expireAt = expireAt;
             this.x = x;
             this.y = y;
             this.z = z;
+            this.owner = owner;
         }
     }
 
@@ -797,12 +800,31 @@ public final class SnakePartyManager {
         }
     }
 
-    /** 前方半格内的脚/头两格是否有本局的玻璃板。 */
+    /** 前方半格内是否有玻璃板：按玩家碰撞箱（0.6 宽）判定，贴边也不会穿过去。 */
     private boolean blockedByPlate(Location loc, Vector dir) {
-        int x = (int) Math.floor(loc.getX() + dir.getX() * 0.45);
-        int z = (int) Math.floor(loc.getZ() + dir.getZ() * 0.45);
+        Location ahead = loc.clone().add(dir.getX() * 0.35, 0, dir.getZ() * 0.35);
+        return hitsPlate(ahead);
+    }
+
+    /** 玩家碰撞箱覆盖到的格子里是否有本局的玻璃板（脚/头两层）。 */
+    private boolean hitsPlate(Location loc) {
+        if (loc == null || loc.getWorld() == null) {
+            return false;
+        }
+        double half = 0.3;
         int y = loc.getBlockY();
-        return plates.containsKey(key(x, y, z)) || plates.containsKey(key(x, y + 1, z));
+        int minX = (int) Math.floor(loc.getX() - half);
+        int maxX = (int) Math.floor(loc.getX() + half);
+        int minZ = (int) Math.floor(loc.getZ() - half);
+        int maxZ = (int) Math.floor(loc.getZ() + half);
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                if (plates.containsKey(key(x, y, z)) || plates.containsKey(key(x, y + 1, z))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** 视线前方半格内是否有实心方块（墙/障碍），撞上即淘汰。 */
@@ -998,7 +1020,7 @@ public final class SnakePartyManager {
         }
         Material color = colors.getOrDefault(id, Material.RED_STAINED_GLASS_PANE);
         Plate plate = new Plate(pane.getBlockData().clone(),
-                System.currentTimeMillis() + plateLifetimeMs(), q.x, q.y, q.z);
+                System.currentTimeMillis() + plateLifetimeMs(), q.x, q.y, q.z, id);
         plates.put(paneKey, plate);
         pane.setBlockData(color.createBlockData(), true);
     }
@@ -1082,12 +1104,8 @@ public final class SnakePartyManager {
                     to.getYaw(), to.getPitch()));
             return;
         }
-        if (state == State.RUNNING) {
-            int y = to.getBlockY();
-            if (plates.containsKey(key(to.getBlockX(), y, to.getBlockZ()))
-                    || plates.containsKey(key(to.getBlockX(), y + 1, to.getBlockZ()))) {
-                eliminate(player, "撞到了玻璃板");
-            }
+        if (state == State.RUNNING && hitsPlate(to)) {
+            eliminate(player, "撞到了玻璃板");
         }
     }
 
@@ -1100,6 +1118,12 @@ public final class SnakePartyManager {
         elimOrder.add(id);
         lastFloor.remove(id);
         stamina.remove(id);
+        // 死亡后保留该玩家已经铺下的玻璃板，直到本局结束
+        for (Plate plate : plates.values()) {
+            if (id.equals(plate.owner)) {
+                plate.expireAt = Long.MAX_VALUE;
+            }
+        }
         clearGameState(player);
         player.setGameMode(GameMode.SPECTATOR);
         player.setAllowFlight(true);

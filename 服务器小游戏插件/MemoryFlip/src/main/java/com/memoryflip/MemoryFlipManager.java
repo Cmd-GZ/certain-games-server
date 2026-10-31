@@ -14,6 +14,8 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.ItemFrame;
@@ -31,6 +33,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -501,20 +505,44 @@ public final class MemoryFlipManager {
         int total = boardRows() * boardCols();
         st.items = new Material[total];
         st.matched = new boolean[total];
+        // 按存档位置收集展示框；同一面框只认一次，缺失/重复的自动补一个。
+        // 之前旧场地残留的展示框会被重复认领，导致 16 个牌位里只有 9 个真正拿到地图。
+        if (new HashSet<>(board.frames).size() < board.frames.size()) {
+            plugin.getLogger().warning("翻牌墙 " + boardIndex
+                    + " 的存档位置有重复，请重新 /memory build 建场。");
+        }
+        Set<UUID> used = new HashSet<>();
+        int repaired = 0;
         for (Location loc : board.frames) {
-            List<ItemFrame> frames = arena.framesAt(loc);
-            if (frames.isEmpty()) {
-                plugin.getLogger().warning("翻牌墙缺少展示框：" + loc);
+            ItemFrame frame = null;
+            for (ItemFrame candidate : arena.framesAt(loc)) {
+                if (used.add(candidate.getUniqueId())) {
+                    frame = candidate;
+                    break;
+                }
+            }
+            if (frame == null) {
+                frame = spawnFrame(loc, board.stand);
+                if (frame != null) {
+                    used.add(frame.getUniqueId());
+                    repaired++;
+                }
+            }
+            if (frame == null) {
+                plugin.getLogger().warning("翻牌墙缺少展示框且无法补齐：" + loc);
                 continue;
             }
-            ItemFrame frame = frames.get(0);
             frame.setFixed(false);
             frame.setInvulnerable(true);
             frame.setItemDropChance(0f);
             st.frames.add(frame);
         }
+        if (repaired > 0) {
+            plugin.getLogger().info("翻牌墙 " + boardIndex + " 补齐了 " + repaired + " 个展示框。");
+        }
         if (st.frames.size() < total) {
-            plugin.getLogger().warning("翻牌墙牌位不足（" + st.frames.size() + "/" + total + "），跳过该玩家。");
+            plugin.getLogger().warning("翻牌墙牌位不足（" + st.frames.size() + "/" + total
+                    + "，墙上有 " + board.frames.size() + " 个位置），跳过该玩家。");
             return null;
         }
         List<Material> pool = new ArrayList<>();
@@ -548,6 +576,37 @@ public final class MemoryFlipManager {
             frame.setItem(questionItem);
         }
         return st;
+    }
+
+    /** 在存档位置补一个展示框，朝向玩家站位。 */
+    private ItemFrame spawnFrame(Location loc, Location stand) {
+        if (loc == null || loc.getWorld() == null) {
+            return null;
+        }
+        World world = loc.getWorld();
+        Block block = world.getBlockAt(loc);
+        if (!block.getType().isAir()) {
+            block.setType(Material.AIR, false);
+        }
+        ItemFrame frame = world.spawn(loc.clone().add(0.5, 0.5, 0.5), ItemFrame.class);
+        frame.setFacingDirection(facingToward(loc, stand));
+        frame.setInvulnerable(true);
+        frame.setItemDropChance(0f);
+        frame.setItem(new ItemStack(Material.AIR));
+        return frame;
+    }
+
+    /** 展示框要朝向玩家站位（玩家站在墙的内侧）。 */
+    private static BlockFace facingToward(Location frameBlock, Location stand) {
+        if (stand == null) {
+            return BlockFace.SOUTH;
+        }
+        double dx = stand.getX() - (frameBlock.getBlockX() + 0.5);
+        double dz = stand.getZ() - (frameBlock.getBlockZ() + 0.5);
+        if (Math.abs(dx) > Math.abs(dz)) {
+            return dx > 0 ? BlockFace.EAST : BlockFace.WEST;
+        }
+        return dz > 0 ? BlockFace.SOUTH : BlockFace.NORTH;
     }
 
     private void tickGame() {

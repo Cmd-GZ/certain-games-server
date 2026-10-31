@@ -55,3 +55,10 @@ foreach ($jar in $paperCp) {
         throw "Missing compile dependency: $jar`nRun a Maven build once to populate .m2, or copy the jar into toolchain\.m2\repository (same relative path)."
     }
 }
+
+
+# Optional third-party API jars shipped with the server (compile-only).
+$serverSkins = Join-Path $PSScriptRoot 'server\plugins\SkinsRestorer.jar'
+if (Test-Path $serverSkins) {
+    $paperCp = @($paperCp) + $serverSkins
+}

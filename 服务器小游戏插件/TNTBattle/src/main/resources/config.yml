@@ -63,7 +63,7 @@ wait-items:
 
 # ---------- 内部配置版本 ----------
 # 用于旧配置的一次性迁移，请不要手改
-config-version: 7
+config-version: 8
 
 # ---------- 普通 TNT ----------
 # TNT 补给冷却（秒）：冷却结束自动获得 TNT 弹药
@@ -254,7 +254,7 @@ wool-cooldown-seconds: 1
 # 每次获得多少个
 wool-amount: 1
 
-# ---------- 淘汰 / 建造限制 ----------
+# ---------- 淘汰 / 建造限制（各场未单独设置时的全局默认值） ----------
 # 掉到这个 Y 以下直接淘汰
 void-y: -64
 # 建筑高度上限（绝对 Y）：只能在这层及以下放羊毛；-1 = 不限制
@@ -274,16 +274,24 @@ leaderboard:
   view-range: 4.0
   location: ''
 
-# ---------- 场地 ----------
-# 用指令设置，不要手写坐标；设置完成后 /tntbattle save
-arena:
-  world: world
-  # 区域两个对角（只取 X/Z，Y 自动覆盖整个世界高度）
-  # TNT 只会破坏这个范围内的方块，范围外不会影响其他小游戏场地
-  pos1: ''
-  pos2: ''
-  # 等待点
-  lobby: ''
-  # 每队出生点，可多个；用 /tntbattle addspawn red|blue 添加
-  red-spawns: []
-  blue-spawns: []
+# ---------- 场地（可无限多个，每个场独立等待室/出生点/世界） ----------
+# 用 /tntbattle create <场名> 新建，再对该场执行 pos1/pos2/setspawn/setlobby/save。
+# 不同场可以放在不同世界，并同时开局互不影响。
+# 每个场下面的 void-y / build-height-limit 不写时回退到上面的全局值。
+arenas:
+  双岛:
+    world: world
+    # 区域两个对角（只取 X/Z，Y 自动覆盖整个世界高度）
+    pos1: ''
+    pos2: ''
+    # 等待点（本场独立）
+    lobby: ''
+    # 每队出生点，可多个；用 /tntbattle addspawn <场> red|blue 添加
+    red-spawns: []
+    blue-spawns: []
+    # 本场虚空淘汰高度
+    void-y: -64
+    # 本场建筑高度上限；-1 = 不限制
+    build-height-limit: -1
+    # 本场人数上限；0 = 使用全局 max-players
+    max-players: 0

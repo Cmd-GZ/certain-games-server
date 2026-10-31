@@ -52,6 +52,7 @@ public final class TNTBattleListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onInteract(PlayerInteractEvent event) {
+        // 道具只在主手生效：副手使用会导致 TNT/特殊道具不消耗，直接忽略
         if (event.getHand() != EquipmentSlot.HAND) {
             return;
         }
@@ -62,6 +63,9 @@ public final class TNTBattleListener implements Listener {
         }
         ItemStack item = event.getItem();
         Player player = event.getPlayer();
+        if (!manager.isPlaying(player)) {
+            return;
+        }
         if (!manager.isSpecialItem(item) && !manager.isTntItem(item)
                 && !manager.isStartItem(item) && !manager.isReturnItem(item)
                 && !manager.isMusicItem(item)) {
@@ -330,16 +334,12 @@ public final class TNTBattleListener implements Listener {
         }
     }
 
-    /** 这些道具只能在主手右键使用，禁止 F 换到副手（换手后 onInteract 不认，道具会“失灵”）。 */
+    /** 只有 TNT 弹药和队伍羊毛锁位置，禁止 F 换手；其它道具可以自由换到副手使用。 */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onSwapHands(PlayerSwapHandItemsEvent event) {
         ItemStack main = event.getMainHandItem();
         ItemStack off = event.getOffHandItem();
-        if (manager.isStartItem(main) || manager.isStartItem(off)
-                || manager.isReturnItem(main) || manager.isReturnItem(off)
-                || manager.isMusicItem(main) || manager.isMusicItem(off)
-                || manager.isSpecialItem(main) || manager.isSpecialItem(off)
-                || manager.isTntItem(main) || manager.isTntItem(off)) {
+        if (isFixedItem(main) || isFixedItem(off)) {
             event.setCancelled(true);
         }
     }

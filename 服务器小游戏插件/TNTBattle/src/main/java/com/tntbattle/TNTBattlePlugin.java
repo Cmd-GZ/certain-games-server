@@ -6,37 +6,35 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public final class TNTBattlePlugin extends JavaPlugin {
 
-    private TNTBattleManager manager;
+    private TNTBattleCore core;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        manager = new TNTBattleManager(this);
-        manager.load();
-        manager.publishRegions();   // 声明地盘（I2）
+        core = new TNTBattleCore(this);
+        core.load();
+        core.publishRegions();   // 声明地盘（I2）
 
-        getServer().getPluginManager().registerEvents(new TNTBattleListener(manager), this);
-        // 背景音乐录制：监听音符盒，把红石音乐录成音符序列
-        getServer().getPluginManager().registerEvents(manager.music(), this);
-        TNTBattleCommand command = new TNTBattleCommand(this, manager);
+        TNTBattleCommand command = new TNTBattleCommand(this, core);
         PluginCommand tntbattle = getCommand("tntbattle");
         if (tntbattle != null) {
             tntbattle.setExecutor(command);
             tntbattle.setTabCompleter(command);
         }
-        HubAPI.registerLobbyHandler(player -> manager.leave(player, true));
+        // 每场的监听器与音乐录制器由 Core 在加载场地时注册
+        HubAPI.registerLobbyHandler(player -> core.leave(player));
 
         getLogger().info("TNTBattle（TNT 对战）已启用。");
     }
 
     @Override
     public void onDisable() {
-        if (manager != null) {
-            manager.shutdown();
+        if (core != null) {
+            core.shutdown();
         }
     }
 
-    public TNTBattleManager manager() {
-        return manager;
+    public TNTBattleCore core() {
+        return core;
     }
 }

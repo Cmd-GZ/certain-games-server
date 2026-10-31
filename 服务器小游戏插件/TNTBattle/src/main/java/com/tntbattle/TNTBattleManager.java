@@ -70,18 +70,10 @@ import java.util.UUID;
 /** TNT 对战：双队、TNT 发射器、定时羊毛、淘汰与胜负。 */
 public final class TNTBattleManager {
 
-    /** 声明地盘（{@code docs/框架不变量.md} 的 I2）。单场游戏，场地名用空串。 */
-    public void publishRegions() {
-        com.hub.region.Regions.begin("tntbattle");
-        if (arena != null) {
-            com.hub.region.Regions.box("tntbattle", "", arena.getPos1(), arena.getPos2());
-        }
-    }
-
     public static final String GAME = "TNT 对战";
-    public static final String ARENA = "双岛";
 
     private final TNTBattlePlugin plugin;
+    private final TNTBattleCore core;
     private final LiveSidebar liveSidebar;
     private int boardTick;
     private final TNTBattleArena arena;
@@ -117,7 +109,8 @@ public final class TNTBattleManager {
     private Location pendingExplosionCenter;
 
     private WaitCountdown countdown;
-    private YamlConfiguration stats;
+    private static YamlConfiguration stats;
+    private boolean primary;
     private TextDisplay leaderboardDisplay;
     private Chunk leaderboardChunk;
     private final NamespacedKey leaderboardKey;
@@ -134,10 +127,11 @@ public final class TNTBattleManager {
     /** 背景音乐：录一次红石音乐，之后在对局里逐人循环播放。 */
     private final TNTBattleMusic music;
 
-    public TNTBattleManager(TNTBattlePlugin plugin) {
+    public TNTBattleManager(TNTBattlePlugin plugin, TNTBattleCore core, TNTBattleArena arena) {
         this.plugin = plugin;
+        this.core = core;
+        this.arena = arena;
         this.liveSidebar = new LiveSidebar(plugin);
-        this.arena = new TNTBattleArena(plugin);
         this.music = new TNTBattleMusic(plugin, this);
         this.tntKey = new NamespacedKey(plugin, "tnt_ammo");
         this.startKey = new NamespacedKey(plugin, "start_item");
@@ -148,18 +142,21 @@ public final class TNTBattleManager {
         this.leaderboardKey = new NamespacedKey(plugin, "leaderboard_display");
     }
 
-    public void load() {
-        startCountdown();
-        ensureDefaults();
+    public void load(boolean primary) {
+        this.primary = primary;
+        if (primary) {
+            ensureDefaults();
+        }
         loadSpecialPool();
         arena.load();
-        stats = PlayerStats.load("tntbattle", new File(plugin.getDataFolder(), "data.yml"));
-        loadLeaderboard();
-        startLeaderboardTask();
+        if (primary) {
+            loadLeaderboard();
+            startLeaderboardTask();
+        }
         createCountdown();
         music.load();
         reportArena();
-        plugin.getLogger().info("场地" + (arena.ready() ? "已配置" : "未配置") + "。");
+        plugin.getLogger().info("场地 " + arena.name() + (arena.ready() ? " 已配置" : " 未配置") + "。");
         plugin.getLogger().info("TNT 配置：冷却 " + plugin.getConfig().getInt("tnt-cooldown-seconds", 5)
                 + "s，引信 " + plugin.getConfig().getInt("tnt-fuse-ticks", 40)
                 + " tick，速度 " + plugin.getConfig().getDouble("tnt-velocity", 1.5)
@@ -218,6 +215,9 @@ public final class TNTBattleManager {
 
     /** 多世界托管下，排行榜所在世界加载完成后立刻补放（否则启动时世界还没加载会一直空着）。 */
     public void onWorldLoad(World world) {
+        if (!primary) {
+            return;
+        }
         Location location = TNTBattleArena.parse(plugin.getConfig().getString("leaderboard.location", ""));
         if (location != null && location.getWorld() != null && location.getWorld().equals(world)) {
             loadLeaderboard();
@@ -323,16 +323,24 @@ public final class TNTBattleManager {
     }
 
     /** 重载前先把当前场地（可能还没 /save）写回配置，再重新读取。 */
-    public void reload() {
-        if (arena.regionConfigured()
-                || !arena.spawns(TNTBattleArena.Team.RED).isEmpty()
-                || !arena.spawns(TNTBattleArena.Team.BLUE).isEmpty()) {
-            arena.save();
-        }
+    public void reload(boolean primary) {
+        this.primary = primary;
+        saveArena();
         if (countdown != null) {
             countdown.cancel();
         }
-        load();
+        if (primary) {
+            ensureDefaults();
+        }
+        loadSpecialPool();
+        arena.load();
+        if (primary) {
+            loadLeaderboard();
+            startLeaderboardTask();
+        }
+        createCountdown();
+        music.load();
+        reportArena();
     }
 
     private void createCountdown() {
@@ -390,7 +398,9 @@ public final class TNTBattleManager {
     }
 
     public int maxPlayers() {
-        return Math.max(2, Math.min(100, plugin.getConfig().getInt("max-players", 16)));
+        int global = Math.max(2, Math.min(100, plugin.getConfig().getInt("max-players", 16)));
+        int perArena = arena.maxPlayers();
+        return perArena > 0 ? Math.max(2, Math.min(100, perArena)) : global;
     }
 
     // ---------- 加入 / 离开 ----------
@@ -419,6 +429,7 @@ public final class TNTBattleManager {
         }
         states.put(id, PlayerState.capture(player));
         names.put(id, player.getName());
+        core.bind(id, this);
         // 背景音乐默认关闭：每次进等待室都按 music.default-on 重置，想听的人自己右键音符盒开启
         music.setEnabled(id, plugin.getConfig().getBoolean("music.default-on", false));
 
@@ -437,6 +448,7 @@ public final class TNTBattleManager {
         if (state == null) {
             return;
         }
+        core.unbind(id);
         names.remove(id);
         teams.remove(id);
         eliminated.remove(id);
@@ -501,7 +513,7 @@ public final class TNTBattleManager {
             return false;
         }
 
-        if (startCountdown().begin("main", new ArrayList<>(states.keySet()), () -> startGame(force))) {
+        if (startCountdown().begin(arena.name(), new ArrayList<>(states.keySet()), () -> startGame(force))) {
             return true;
         }
         if (countdown != null) {
@@ -613,14 +625,19 @@ public final class TNTBattleManager {
     private static final String GLOW_RED_TEAM = "tntbattle_red";
     private static final String GLOW_BLUE_TEAM = "tntbattle_blue";
 
-    /** 红队红光、蓝队蓝光：发光颜色由玩家所在计分板队伍的颜色决定。 */
+    /**
+     * 红队红光、蓝队蓝光：发光颜色由玩家**当前计分板**上的队伍颜色决定。
+     * 对局内用了 LiveSidebar（另一块计分板），所以必须挂到 player.getScoreboard()，
+     * 不能只挂主计分板，否则客户端看不到队伍颜色，只会发白光。
+     */
     private void applyTeamGlow(Player player, TNTBattleArena.Team team) {
-        glowTeam(team).addEntry(player.getName());
+        glowTeam(player.getScoreboard(), team).addEntry(player.getName());
+        // 主计分板也挂一份，回大厅/侧边栏关闭后颜色不会突然变白
+        glowTeam(Bukkit.getScoreboardManager().getMainScoreboard(), team).addEntry(player.getName());
         player.setGlowing(true);
     }
 
-    private Team glowTeam(TNTBattleArena.Team team) {
-        Scoreboard board = Bukkit.getScoreboardManager().getMainScoreboard();
+    private Team glowTeam(Scoreboard board, TNTBattleArena.Team team) {
         String name = team == TNTBattleArena.Team.RED ? GLOW_RED_TEAM : GLOW_BLUE_TEAM;
         Team scoreboardTeam = board.getTeam(name);
         if (scoreboardTeam == null) {
@@ -634,14 +651,23 @@ public final class TNTBattleManager {
         if (player == null) {
             return;
         }
-        Scoreboard board = Bukkit.getScoreboardManager().getMainScoreboard();
+        Scoreboard main = Bukkit.getScoreboardManager().getMainScoreboard();
         for (String name : List.of(GLOW_RED_TEAM, GLOW_BLUE_TEAM)) {
-            Team team = board.getTeam(name);
+            Team team = main.getTeam(name);
             if (team != null) {
                 team.removeEntry(player.getName());
             }
         }
         if (player.isOnline()) {
+            Scoreboard current = player.getScoreboard();
+            if (current != null && current != main) {
+                for (String name : List.of(GLOW_RED_TEAM, GLOW_BLUE_TEAM)) {
+                    Team team = current.getTeam(name);
+                    if (team != null) {
+                        team.removeEntry(player.getName());
+                    }
+                }
+            }
             player.setGlowing(false);
         }
     }
@@ -766,7 +792,7 @@ public final class TNTBattleManager {
     }
 
     /** 旧配置缺少的键自动补上，保证这些项能在面板里直接看到并修改。 */
-    private void ensureDefaults() {
+    public void ensureDefaults() {
         boolean changed = false;
         // 1.4.1 一次性迁移：引信 2 秒（40 tick）、初速度 1.50
         if (plugin.getConfig().getInt("config-version", 1) < 2) {
@@ -831,12 +857,6 @@ public final class TNTBattleManager {
         changed |= setDefault("steak.slot", 8);
         changed |= setDefault("steak.auto-refill", false);
         changed |= setDefault("steak.refill-cooldown-seconds", 30);
-        changed |= setDefault("arena.world", "world");
-        changed |= setDefault("arena.pos1", "");
-        changed |= setDefault("arena.pos2", "");
-        changed |= setDefault("arena.lobby", "");
-        changed |= setDefault("arena.red-spawns", List.of());
-        changed |= setDefault("arena.blue-spawns", List.of());
         changed |= setDefault("leaderboard.enabled", true);
         changed |= setDefault("leaderboard.limit", 10);
         changed |= setDefault("leaderboard.title", "&6&lTNT 对战 胜场排行榜");
@@ -1197,9 +1217,9 @@ public final class TNTBattleManager {
         return block != null && arena.contains(block.getLocation());
     }
 
-    /** 建筑高度上限（绝对 Y）；-1 = 不限制。 */
+    /** 建筑高度上限（绝对 Y，每场独立，未设置时回退全局）；-1 = 不限制。 */
     public int buildHeightLimit() {
-        return plugin.getConfig().getInt("build-height-limit", -1);
+        return arena.buildHeightLimit();
     }
 
     public boolean withinBuildHeight(Block block) {
@@ -2304,6 +2324,10 @@ public final class TNTBattleManager {
         return states.containsKey(player.getUniqueId());
     }
 
+    public boolean isInGame(UUID id) {
+        return states.containsKey(id);
+    }
+
     public TNTBattleArena.Team teamOf(Player player) {
         return teams.get(player.getUniqueId());
     }
@@ -2336,7 +2360,17 @@ public final class TNTBattleManager {
         List<LiveSidebar.Line> lines = new ArrayList<>();
         lines.add(new LiveSidebar.Line("§c红队存活", red));
         lines.add(new LiveSidebar.Line("§9蓝队存活", blue));
-        liveSidebar.update("tntbattle", "&c&lTNT 对战 · 存活", new ArrayList<>(teams.keySet()), lines);
+        liveSidebar.update(sidebarKey(), "&c&lTNT 对战 · 存活", new ArrayList<>(teams.keySet()), lines);
+        // LiveSidebar 会给玩家换计分板；换完再挂一次队伍，保证发光颜色还在
+        for (UUID id : teams.keySet()) {
+            if (eliminated.contains(id)) {
+                continue;
+            }
+            Player p = Bukkit.getPlayer(id);
+            if (p != null) {
+                applyTeamGlow(p, teams.get(id));
+            }
+        }
     }
 
     public void endGame(TNTBattleArena.Team winner) {
@@ -2346,7 +2380,7 @@ public final class TNTBattleManager {
         ending = true;
         running = false;
         music.stopPlayback();
-        liveSidebar.hide("tntbattle");
+        liveSidebar.hide(sidebarKey());
         cancelTasks();
         cancelEffects();
         removeFlames();
@@ -2387,6 +2421,7 @@ public final class TNTBattleManager {
                 HubAPI.teleportToLobby(player);
             }
             HubAPI.clearGame(id);
+            core.unbind(id);
         }
         states.clear();
         names.clear();
@@ -2403,6 +2438,66 @@ public final class TNTBattleManager {
         restoring = false;
         reportArena();
         countdown.update();
+    }
+
+    public boolean inUse() {
+        return running || ending || !states.isEmpty();
+    }
+
+    /** 原来承载排行榜的场被删除后，把排行榜交给新的主场地。 */
+    public void becomePrimary() {
+        primary = true;
+        loadLeaderboard();
+        startLeaderboardTask();
+    }
+
+    public void saveArena() {
+        if (arena.regionConfigured()
+                || !arena.spawns(TNTBattleArena.Team.RED).isEmpty()
+                || !arena.spawns(TNTBattleArena.Team.BLUE).isEmpty()) {
+            arena.save();
+        }
+    }
+
+    /** 删除场地时清理本场资源，但不写回 arena 配置（否则会把刚删掉的场又写回来）。 */
+    public void dispose() {
+        liveSidebar.hideAll();
+        music.shutdown();
+        music.clearEnabled();
+        if (countdown != null) {
+            countdown.cancel();
+        }
+        if (startCountdown != null) {
+            startCountdown.cancelAll();
+        }
+        cancelTasks();
+        cancelEffects();
+        removeFlames();
+        removeSpecialProjectiles();
+        removeBridgeEggs();
+        removeTnt();
+        restoreChangedBlocks();
+        if (leaderboardTask != null) {
+            leaderboardTask.cancel();
+            leaderboardTask = null;
+        }
+        removeTaggedDisplays();
+        if (leaderboardChunk != null) {
+            leaderboardChunk.removePluginChunkTicket(plugin);
+            leaderboardChunk = null;
+        }
+        for (UUID id : new ArrayList<>(states.keySet())) {
+            core.unbind(id);
+        }
+        states.clear();
+        teams.clear();
+        eliminated.clear();
+        running = false;
+        ending = false;
+    }
+
+    private String sidebarKey() {
+        return "tntbattle:" + arena.name();
     }
 
     public void shutdown() {
@@ -2431,6 +2526,7 @@ public final class TNTBattleManager {
                 refreshTitle(player);
             }
             HubAPI.clearGame(id);
+            core.unbind(id);
         }
         states.clear();
         teams.clear();
@@ -2446,11 +2542,7 @@ public final class TNTBattleManager {
         leaderboardDisplay = null;
         running = false;
         ending = false;
-        if (arena.regionConfigured()
-                || !arena.spawns(TNTBattleArena.Team.RED).isEmpty()
-                || !arena.spawns(TNTBattleArena.Team.BLUE).isEmpty()) {
-            arena.save();
-        }
+        saveArena();
     }
 
     private void removeTnt() {
@@ -2471,9 +2563,9 @@ public final class TNTBattleManager {
         }
         String extra = running ? "红 " + aliveCount(TNTBattleArena.Team.RED)
                 + " vs 蓝 " + aliveCount(TNTBattleArena.Team.BLUE) : null;
-        HubAPI.setArena(GAME, ARENA, (running || ending) ? GameState.PLAYING : GameState.WAITING,
+        HubAPI.setArena(GAME, arena.name(), (running || ending) ? GameState.PLAYING : GameState.WAITING,
                 states.size(), extra);
-        HubAPI.setArenaSpectator(GAME, ARENA, arena().spectatorLocation());
+        HubAPI.setArenaSpectator(GAME, arena.name(), arena().spectatorLocation());
     }
 
     private void broadcastWaiting(String message) {
@@ -2496,13 +2588,27 @@ public final class TNTBattleManager {
     }
 
     private void recordFirst(UUID id) {
+        if (stats == null) {
+            return;
+        }
         stats.set("firsts." + id, stats.getInt("firsts." + id, 0) + 1);
+        saveSharedStats(plugin);
+        core.refreshLeaderboard();
+    }
+
+    public static void loadSharedStats(TNTBattlePlugin plugin) {
+        stats = PlayerStats.load("tntbattle", new File(plugin.getDataFolder(), "data.yml"));
+    }
+
+    public static void saveSharedStats(TNTBattlePlugin plugin) {
+        if (stats == null) {
+            return;
+        }
         try {
             PlayerStats.save("tntbattle", stats);
         } catch (IOException exception) {
             plugin.getLogger().warning("保存玩家记录失败: " + exception.getMessage());
         }
-        refreshLeaderboard();
     }
 
     public int firsts(UUID id) {

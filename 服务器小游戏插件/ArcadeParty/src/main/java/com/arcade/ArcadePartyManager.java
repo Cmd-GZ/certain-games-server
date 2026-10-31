@@ -88,6 +88,7 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
     private BukkitTask transitionTask;
     private BukkitTask timeoutTask;
     private BukkitTask podiumTask;
+    private BukkitTask endTask;
     private BukkitTask guardTask;
     private int guardTicks;
     private int guardIdleTicks;
@@ -98,6 +99,8 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
     private final Map<UUID, String> sidebarEntries = new HashMap<>();
     /** 颁奖时逐个揭晓的名次行，全部揭晓后一起发到聊天栏。 */
     private final List<String> podiumLines = new ArrayList<>();
+    /** 颁奖台上还没被揭晓的玩家：在揭晓前锁住移动。 */
+    private final Set<UUID> podiumFrozen = new LinkedHashSet<>();
 
     public ArcadePartyManager(ArcadePartyPlugin plugin) {
         this.plugin = plugin;
@@ -260,10 +263,12 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         changed |= setDefault("podium.first", "");
         changed |= setDefault("podium.second", "");
         changed |= setDefault("podium.third", "");
+        changed |= setDefault("podium.end-delay-seconds", 10);
         changed |= setDefault("fireworks.enabled", true);
         changed |= setDefault("fireworks.count", 3);
         changed |= setDefault("fireworks.interval-ticks", 10);
         changed |= setDefault("fireworks.flight-ticks", 30);
+        changed |= setDefault("fireworks.spots", List.of());
         changed |= setDefault("fireworks.types", List.of("BALL", "BALL_LARGE", "STAR", "CREEPER", "BURST"));
         changed |= setDefault("scoreboard.enabled", true);
         changed |= setDefault("scoreboard.title", "&e&l街机派对 · 星星");
@@ -346,6 +351,12 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         changed |= setDefault("games.hillking.max-players", 16);
         changed |= setDefault("games.hillking.join-command", "hill join");
         changed |= setDefault("games.hillking.start-command", "hill start");
+        changed |= setDefault("games.oneshot.display", "One Shot");
+        changed |= setDefault("games.oneshot.enabled", true);
+        changed |= setDefault("games.oneshot.arena-aware", false);
+        changed |= setDefault("games.oneshot.max-players", 16);
+        changed |= setDefault("games.oneshot.join-command", "oneshot join");
+        changed |= setDefault("games.oneshot.start-command", "oneshot start");
         // 1.0.3：多场地游戏改用带 {arena} 的命令；旧配置一次性迁移
         if (plugin.getConfig().getInt("config-version", 0) < 1) {
             plugin.getConfig().set("games.digtobottom.arena-aware", true);
@@ -922,6 +933,7 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         state = State.PODIUM;
         currentGameKey = "";
         podiumLines.clear();
+        podiumFrozen.clear();
         teleportPartyToAudience();
         setupSidebar();
 
@@ -938,6 +950,8 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             }
             int place = i + 1;
             Location spot = podiumSpot(place);
+            // 揭晓前锁住移动：站上颁奖台后不能走，等轮到自己的名次才解锁
+            podiumFrozen.add(top.get(i));
             p.setGameMode(GameMode.ADVENTURE);
             p.setInvisible(true);
             p.setInvulnerable(true);
@@ -965,7 +979,16 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
                     reveal(1);
                     stage = 3;
                 } else if (stage == 3 && tick >= 420) {
-                    endParty();
+                    // 三个人都揭晓完：先公布结果，再留一段时间让观众看前三名
+                    announcePodiumResults();
+                    int delay = endDelaySeconds();
+                    if (delay > 0) {
+                        endTask = Bukkit.getScheduler().runTaskLater(plugin,
+                                ArcadePartyManager.this::endParty, delay * 20L);
+                    } else {
+                        endParty();
+                    }
+                    stage = 4;
                 }
             }
         }, 1L, 1L);
@@ -980,13 +1003,15 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         Player p = Bukkit.getPlayer(id);
         String label = place == 1 ? "第 一 名" : (place == 2 ? "第 二 名" : "第 三 名");
         // 名次只用 title 播报，聊天栏留到三个人都揭晓后一次性公布
-        podiumLines.add("&e" + label.replace(" ", "") + "：&f" + nameOf(id) + " &6★ " + starsOf(id));
+        // 揭晓顺序是第三名→第二名→第一名，聊天栏要正序（一/二/三），所以插到最前面
+        podiumLines.add(0, "&e" + label.replace(" ", "") + "：&f" + nameOf(id) + " &6★ " + starsOf(id));
         for (UUID other : playing) {
             Player op = Bukkit.getPlayer(other);
             if (op != null) {
                 Chat.title(op, "&6&l" + label, "&f" + nameOf(id) + " &6★ " + starsOf(id), 3);
             }
         }
+        podiumFrozen.remove(id);
         if (p != null) {
             p.setInvisible(false);
             launchFireworks(p.getLocation());
@@ -995,11 +1020,25 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         }
     }
 
-    private void endParty() {
-        // 三个人都揭晓完，才在聊天栏一次性公布
+    /** 颁奖结果公布；随后按 podium.end-delay-seconds 留一段时间展示前三名。 */
+    private void announcePodiumResults() {
         broadcast("&6&l✦  ✦  ✦   颁 奖 结 果   ✦  ✦  ✦");
         for (String line : podiumLines) {
             broadcast(line);
+        }
+        int delay = endDelaySeconds();
+        if (delay > 0) {
+            broadcast("&e&l颁奖典礼结束！&f" + delay + " 秒后返回大厅，可以先看看前三名。");
+        }
+    }
+
+    private int endDelaySeconds() {
+        return Math.max(0, Math.min(300, cfgInt("podium.end-delay-seconds", 10)));
+    }
+
+    private void endParty() {
+        if (state != State.PODIUM) {
+            return;
         }
         broadcast("&6&l派对结束！");
         List<UUID> everyone = new ArrayList<>(playing);
@@ -1021,6 +1060,8 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         playing.clear();
         stars.clear();
         selected.clear();
+        podiumFrozen.clear();
+        endTask = null;
         roundIndex = 0;
         cancelTasks();
         StartCountdown.setGloballySuppressed(false);
@@ -1054,6 +1095,7 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         waiting.clear();
         stars.clear();
         selected.clear();
+        podiumFrozen.clear();
         roundIndex = 0;
         cancelTasks();
         StartCountdown.setGloballySuppressed(false);
@@ -1156,6 +1198,11 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
 
     // ---------- 场地 / 传送 ----------
 
+    /** 颁奖台上还没揭晓的玩家不能移动。 */
+    public boolean isPodiumFrozen(Player player) {
+        return player != null && podiumFrozen.contains(player.getUniqueId());
+    }
+
     private void teleportPartyToLobby() {
         if (lobby == null) {
             return;
@@ -1189,20 +1236,64 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
 
     // ---------- 烟花 ----------
 
-    private void launchFireworks(Location base) {
-        if (base == null || base.getWorld() == null) {
+    /** 已配置的固定烟花发射点（/arcade addfirework）。 */
+    public List<Location> fireworkSpots() {
+        List<Location> out = new ArrayList<>();
+        for (String raw : plugin.getConfig().getStringList("fireworks.spots")) {
+            Location loc = parse(raw);
+            if (loc != null) {
+                out.add(loc);
+            }
+        }
+        return out;
+    }
+
+    /** 把玩家脚下这一格记为烟花发射点（方块中心）。 */
+    public void addFireworkSpot(Location loc) {
+        if (loc == null || loc.getWorld() == null) {
             return;
         }
+        Location spot = new Location(loc.getWorld(),
+                loc.getBlockX() + 0.5, loc.getBlockY(), loc.getBlockZ() + 0.5);
+        List<String> spots = new ArrayList<>(plugin.getConfig().getStringList("fireworks.spots"));
+        spots.add(encode(spot));
+        plugin.getConfig().set("fireworks.spots", spots);
+        plugin.saveConfig();
+    }
+
+    public void clearFireworkSpots() {
+        plugin.getConfig().set("fireworks.spots", new ArrayList<String>());
+        plugin.saveConfig();
+    }
+
+    private void launchFireworks(Location base) {
         if (!plugin.getConfig().getBoolean("fireworks.enabled", true)) {
             return;
         }
-        int count = Math.max(1, Math.min(30, cfgInt("fireworks.count", 3)));
-        int interval = Math.max(1, Math.min(100, cfgInt("fireworks.interval-ticks", 10)));
-        int flight = Math.max(0, Math.min(200, cfgInt("fireworks.flight-ticks", 30)));
         List<String> types = plugin.getConfig().getStringList("fireworks.types");
         if (types.isEmpty()) {
             types = List.of("BALL");
         }
+        int flight = Math.max(0, Math.min(200, cfgInt("fireworks.flight-ticks", 30)));
+        List<Location> spots = fireworkSpots();
+        if (!spots.isEmpty()) {
+            // 配了固定发射点：每个点都放一颗，在 spread-ticks 内依次点燃
+            int spread = Math.max(1, Math.min(400, cfgInt("fireworks.spread-ticks", 40)));
+            long step = Math.max(1L, spread / spots.size());
+            for (int i = 0; i < spots.size(); i++) {
+                final Location spot = spots.get(i).clone();
+                final String typeName = types.get(i % types.size());
+                BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin,
+                        () -> spawnFirework(spot, typeName, flight), i * step);
+                fireworkTasks.add(task);
+            }
+            return;
+        }
+        if (base == null || base.getWorld() == null) {
+            return;
+        }
+        int count = Math.max(1, Math.min(30, cfgInt("fireworks.count", 3)));
+        int interval = Math.max(1, Math.min(100, cfgInt("fireworks.interval-ticks", 10)));
         for (int i = 0; i < count; i++) {
             final Location spot = base.clone().add(
                     random.nextDouble() * 4 - 2, 1.0, random.nextDouble() * 4 - 2);
@@ -1313,6 +1404,10 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         cancelTransition();
         cancelTimeout();
         cancelGuard();
+        if (endTask != null) {
+            endTask.cancel();
+            endTask = null;
+        }
         if (podiumTask != null) {
             podiumTask.cancel();
             podiumTask = null;

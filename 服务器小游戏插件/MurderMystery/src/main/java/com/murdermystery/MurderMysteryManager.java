@@ -1638,19 +1638,24 @@ public class MurderMysteryManager {
                         + "&f（右键商店购买武器）｜ 剩余无辜者 &e" + innocentsLeft + "&f ｜ 时间 &e" + time);
             }
         }
-        updateLiveBoard(a);
+        updateLiveBoard(a, left);
     }
 
-    private void updateLiveBoard(MurderMysteryArena a) {
+    /** 右侧只显示局面信息（存活/无辜者/时间），不显示任何人头数。 */
+    private void updateLiveBoard(MurderMysteryArena a, long secondsLeft) {
         List<UUID> online = new ArrayList<>(a.getPlayers());
-        online.sort(Comparator.comparingInt((UUID id) -> a.getKills().getOrDefault(id, 0)).reversed()
-                .thenComparing(this::nameOf, String.CASE_INSENSITIVE_ORDER));
         List<LiveSidebar.Line> lines = new ArrayList<>();
+        lines.add(new LiveSidebar.Line("§7存活", online.size()));
+        lines.add(new LiveSidebar.Line("§7剩余无辜者", a.innocentsLeft()));
+        lines.add(new LiveSidebar.Line("§7时间", (int) Math.max(0, secondsLeft)));
+        liveSidebar.update("mm:" + a.getName(), "&8&l密室杀手", online, lines);
+        // LiveSidebar 会给玩家换计分板；换完重新挂匿名队伍，否则头顶名字会重新出现
         for (UUID id : online) {
-            lines.add(new LiveSidebar.Line("§e" + nameOf(id), a.getKills().getOrDefault(id, 0)));
+            Player p = Bukkit.getPlayer(id);
+            if (p != null) {
+                hideNameTag(p);
+            }
         }
-        lines.add(new LiveSidebar.Line("§7存活 §f" + online.size(), -1));
-        liveSidebar.update("mm:" + a.getName(), "&8&l密室杀手 · 击杀", online, lines);
     }
 
     /** 给侦探发一颗真理之石（背包满就掉在脚下），并记录时间戳。 */
@@ -3582,13 +3587,18 @@ public class MurderMysteryManager {
         if (p == null) {
             return;
         }
-        Scoreboard sb = Bukkit.getScoreboardManager().getMainScoreboard();
-        Team team = sb.getTeam(NAME_TAG_TEAM);
+        // 对局中用了 LiveSidebar（另一块计分板），必须同时挂当前计分板和主计分板
+        nameTagTeam(p.getScoreboard()).addEntry(p.getName());
+        nameTagTeam(Bukkit.getScoreboardManager().getMainScoreboard()).addEntry(p.getName());
+    }
+
+    private Team nameTagTeam(Scoreboard board) {
+        Team team = board.getTeam(NAME_TAG_TEAM);
         if (team == null) {
-            team = sb.registerNewTeam(NAME_TAG_TEAM);
+            team = board.registerNewTeam(NAME_TAG_TEAM);
             team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
         }
-        team.addEntry(p.getName());
+        return team;
     }
 
     private void hideNameTags(MurderMysteryArena a) {
@@ -3600,13 +3610,20 @@ public class MurderMysteryManager {
         }
     }
 
-    /** 恢复玩家名字标签（未在隐藏队伍中则无操作）。 */
+    /** 恢复玩家名字标签（当前计分板和主计分板都清掉）。 */
     private void showNameTag(Player p) {
         if (p == null) {
             return;
         }
-        Scoreboard sb = Bukkit.getScoreboardManager().getMainScoreboard();
-        Team team = sb.getTeam(NAME_TAG_TEAM);
+        showNameTag(p, p.getScoreboard());
+        showNameTag(p, Bukkit.getScoreboardManager().getMainScoreboard());
+    }
+
+    private void showNameTag(Player p, Scoreboard board) {
+        if (board == null) {
+            return;
+        }
+        Team team = board.getTeam(NAME_TAG_TEAM);
         if (team == null) {
             return;
         }

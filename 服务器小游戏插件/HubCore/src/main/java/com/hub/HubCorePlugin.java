@@ -242,8 +242,9 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             }
             case "arena" -> arenaCommand(sender, args);
             case "doctor" -> doctor(sender);
+            case "room" -> roomCommand(sender, args);
             default -> sender.sendMessage(LEGACY.deserialize(
-                    "&c用法：/hub [menu|set|reload|lock|item|games|arena|doctor] &7，菜单编辑见 &f/hub menu help"));
+                    "&c用法：/hub [menu|set|reload|lock|item|games|arena|doctor|room] &7，菜单编辑见 &f/hub menu help"));
         }
         return true;
     }
@@ -480,7 +481,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return startsWith(Arrays.asList("menu", "set", "reload", "lock", "item", "games", "arena", "doctor"), args[0]);
+            return startsWith(Arrays.asList("menu", "set", "reload", "lock", "item", "games", "arena", "doctor", "room"), args[0]);
         }
         if (args[0].equalsIgnoreCase("arena")) {
             if (args.length == 2) {
@@ -543,6 +544,92 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
     }
 
     /** 管理权限：OP 或 plugin.yml 里声明的 hub.admin。 */
+    // ---------- /hub room：房间引擎的管理入口（R1 的验收入口，R3 之后保留给 OP 排障） ----------
+
+    private void roomCommand(CommandSender sender, String[] args) {
+        if (!isAdmin(sender)) {
+            sender.sendMessage(LEGACY.deserialize("&c只有 OP 或拥有 hub.admin 权限的玩家可以执行。"));
+            return;
+        }
+        String sub = args.length < 2 ? "list" : args[1].toLowerCase();
+        switch (sub) {
+            case "templates" -> {
+                var tpls = com.hub.room.RoomManager.templates();
+                if (tpls.isEmpty()) {
+                    sender.sendMessage(LEGACY.deserialize("&7没有登记任何模板。"
+                            + "把设计好的世界目录改名成 &ftmpl_xxx &7放进 "
+                            + "&fworld/dimensions/minecraft/&7，再在 "
+                            + "&fplugins/MiniGameLib/templates.yml &7里登记。"));
+                    return;
+                }
+                sender.sendMessage(LEGACY.deserialize("&7模板 " + tpls.size() + " 个："));
+                for (var t : tpls) {
+                    sender.sendMessage(LEGACY.deserialize(" &7- &f" + t.key()
+                            + " &7游戏=&f" + t.gameKey()
+                            + " &7目录=&f" + t.folder()
+                            + " &7体积=&f" + (t.bytes() / 1024 / 1024) + "MB"
+                            + (t.dir().isDirectory() ? "" : " &c(目录缺失)")));
+                }
+            }
+            case "create" -> {
+                if (args.length < 3) {
+                    sender.sendMessage(LEGACY.deserialize("&c用法：/hub room create <模板键> [房间名]"));
+                    return;
+                }
+                String tpl = args[2];
+                String name = args.length >= 4 ? args[3] : null;
+                sender.sendMessage(LEGACY.deserialize("&7正在从模板 &f" + tpl + " &7创建房间…"));
+                var room = com.hub.room.RoomManager.create(tpl, name);
+                if (room == null) {
+                    sender.sendMessage(LEGACY.deserialize("&c创建失败，原因见控制台/d octor 的被吞异常段。"));
+                } else {
+                    sender.sendMessage(LEGACY.deserialize("&a已创建房间 &f" + room.roomId
+                            + " &7（世界 &f" + room.world.getName() + "&7）。"
+                            + "用 &f/gw tp " + room.roomId + " &7进去看。"));
+                }
+            }
+            case "delete", "del" -> {
+                if (args.length < 3) {
+                    sender.sendMessage(LEGACY.deserialize("&c用法：/hub room delete <房间名>"));
+                    return;
+                }
+                boolean ok = com.hub.room.RoomManager.delete(args[2]);
+                sender.sendMessage(LEGACY.deserialize(ok
+                        ? "&a已删除房间 &f" + args[2]
+                        : "&c没有这个房间：&f" + args[2]));
+            }
+            case "info" -> {
+                if (args.length < 3) {
+                    sender.sendMessage(LEGACY.deserialize("&c用法：/hub room info <房间名>"));
+                    return;
+                }
+                var room = com.hub.room.RoomManager.room(args[2]);
+                if (room == null) {
+                    sender.sendMessage(LEGACY.deserialize("&c没有这个房间：&f" + args[2]));
+                    return;
+                }
+                sender.sendMessage(LEGACY.deserialize("&7房间 &f" + room.roomId));
+                sender.sendMessage(LEGACY.deserialize(" &7模板 &f" + room.template.key()
+                        + " &7游戏 &f" + room.template.gameKey()));
+                sender.sendMessage(LEGACY.deserialize(" &7世界 &f"
+                        + (room.world == null ? "未加载" : room.world.getName())
+                        + " &7人数 &f" + room.playerCount()
+                        + " &7年龄 &f" + room.ageSeconds() + "s"
+                        + " &7空置 &f" + room.idleSeconds() + "s"));
+            }
+            default -> {
+                var rooms = com.hub.room.RoomManager.rooms();
+                sender.sendMessage(LEGACY.deserialize("&7房间 " + rooms.size() + " 个："));
+                for (var r : rooms) {
+                    sender.sendMessage(LEGACY.deserialize(" &7- &f" + r.describe()));
+                }
+                if (rooms.isEmpty()) {
+                    sender.sendMessage(LEGACY.deserialize(" &7（空）用 &f/hub room templates &7看可用模板"));
+                }
+            }
+        }
+    }
+
     // ---------- /hub doctor：体检面板 ----------
 
     /**
@@ -656,7 +743,31 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             }
         }
 
-        // ---- 6. 世界规则 ----
+        // ---- 6. 房间（模板 → 实例世界） ----
+        var tpls = com.hub.room.RoomManager.templates();
+        var rooms = com.hub.room.RoomManager.rooms();
+        if (!com.hub.room.RoomManager.isReady()) {
+            out.add("&b[房间] &70 个房间 &7（引擎未就绪，见 MiniGameLib/templates.yml）");
+        } else {
+            out.add("&b[房间] &f" + rooms.size() + " 个在用，模板 &f" + tpls.size() + " 个");
+            for (var t : tpls) {
+                out.add("  &7模板 &f" + t.describe()
+                        + (t.dir().isDirectory() ? "" : " &c(目录缺失)"));
+            }
+            int shown = 0;
+            for (var r : rooms) {
+                if (shown++ >= 6) {
+                    out.add("  &7… 还有 " + (rooms.size() - 6) + " 个");
+                    break;
+                }
+                out.add("  &7- &f" + r.describe());
+            }
+            if (rooms.isEmpty() && !tpls.isEmpty()) {
+                out.add("  &7提示：/hub room create <模板> 建一个试试");
+            }
+        }
+
+        // ---- 7. 世界规则 ----
         List<World> worlds = Bukkit.getWorlds();
         out.add("&b[世界] &f" + worlds.size() + " 个");
         for (World w : worlds) {
@@ -665,7 +776,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             out.add("  &7- &f" + w.getName() + " &7pvp=&f" + pvp + " &7keepInventory=&f" + keep);
         }
 
-        // ---- 7. 指向文档（不在此处重复不变量状态，避免与文档不一致）----
+        // ---- 8. 指向文档（不在此处重复不变量状态，避免与文档不一致）----
         out.add("&b[不变量] &7状态见 &fdocs/框架不变量.md&7 第 6 节（本文档是唯一权威）");
         out.add("&8&m                                             ");
 

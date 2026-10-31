@@ -1,0 +1,84 @@
+# ============================================================
+# One Shot 配置文件
+# 修改后在非对局状态执行 /oneshot reload，或重启服务器
+# 注意：YAML 的冒号后面必须有空格，缩进必须用空格（不能用 Tab）
+# ============================================================
+
+# ---------- 人数 ----------
+# 最少开局人数（至少 2）
+min-players: 2
+# 最多人数
+max-players: 16
+
+# ---------- 对局 ----------
+# 一局最长时长（秒）；时间到仍有多人存活则一起获胜
+game-seconds: 600
+# 被击杀后多久内摔死仍算最后攻击者的人头（秒）
+kill-credit-seconds: 10
+# 剩余多少秒时所有存活玩家开始发光（0 = 关闭）
+glow-at-seconds: 60
+# 开局给存活玩家永久夜视（淘汰后旁观保留，对局结束统一移除）
+night-vision: true
+
+# ---------- 对局道具 ----------
+items:
+  sword:
+    material: WOODEN_SWORD
+    name: '&6&l木剑 &7(无限耐久)'
+    lore:
+    - '&7砍死对手可以补回一支箭'
+  bow:
+    material: BOW
+    name: '&a&l弓 &7(无限耐久)'
+    lore:
+    - '&7射中玩家直接秒杀'
+    - '&7箭用掉后击杀任意玩家可补回'
+  arrow:
+    material: ARROW
+    name: '&e&l箭 &7(只有一支)'
+
+# ---------- 等待室道具 ----------
+wait-items:
+  return:
+    material: RED_BED
+    name: '&a&l返回大厅 &7(右键)'
+    lore:
+    - '&7点击返回大厅'
+    slot: 8
+  start:
+    material: PAPER
+    name: '&a&l开始游戏 &7(右键)'
+    lore:
+    - '&7点击立刻开始本局'
+    slot: 4
+
+# ---------- 右侧计分板 ----------
+sidebar:
+  enabled: true
+  title: '&c&lOne Shot · 存活'
+
+# ---------- 场地 ----------
+# 用指令设置，不要手写坐标；/oneshot build 会自动建台并生成出生点
+arena:
+  # 场地中心（台面中心；/oneshot build 会自动写入）
+  center: ''
+  # 圆形场地半径（格）
+  radius: 20
+  # 台面比执行建场指令时站立的方块高几格（0 = 与脚下齐平）
+  height: 3
+  # 台面下方再铺几层石头（底座厚度）
+  depth: 3
+  # 台面方块 / 底座方块
+  platform-material: STONE
+  base-material: STONE
+  # 离开台面后，掉到台面以下这么多格判定为摔死（击杀算最后打你的人）
+  fall-kill-below: 1.5
+  # 手动建场：自己搭好场地后，站到两个对角执行 /oneshot pos1、/oneshot pos2
+  # 只取 XZ 范围；Y 轴自动扫描矩形内最低/最高的非空气方块（立体地图整块选中）
+  # 低于最低点、或走出 XZ 范围即判定摔死
+  pos1: ''
+  pos2: ''
+  # 等待点（/oneshot setlobby 写）
+  lobby: ''
+  # 出生点（/oneshot build 自动生成；也可 /oneshot genspawns 重新生成）
+  spawns: []

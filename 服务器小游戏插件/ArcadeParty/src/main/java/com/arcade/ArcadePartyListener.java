@@ -60,9 +60,20 @@ public final class ArcadePartyListener implements Listener {
         }
     }
 
-    /** 过渡阶段可配置冻结移动（仍可转头）。 */
+    /** 过渡阶段可配置冻结移动（仍可转头）；颁奖台上未揭晓的前三名也不能动。 */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onMove(PlayerMoveEvent event) {
+        if (event.getTo() == null) {
+            return;
+        }
+        if (manager.state() == ArcadePartyManager.State.PODIUM
+                && manager.isPodiumFrozen(event.getPlayer())) {
+            Location from = event.getFrom();
+            Location to = event.getTo();
+            event.setTo(new Location(from.getWorld(), from.getX(), from.getY(), from.getZ(),
+                    to.getYaw(), to.getPitch()));
+            return;
+        }
         if (manager.state() != ArcadePartyManager.State.TRANSITION || !manager.transitionFreeze()) {
             return;
         }

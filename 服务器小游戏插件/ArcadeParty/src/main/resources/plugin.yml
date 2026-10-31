@@ -1,5 +1,5 @@
 name: ArcadeParty
-version: '1.3.3'
+version: '1.3.7'
 main: com.arcade.ArcadePartyPlugin
 api-version: '1.21'
 description: 街机派对：随机顺序串烧多个迷你小游戏

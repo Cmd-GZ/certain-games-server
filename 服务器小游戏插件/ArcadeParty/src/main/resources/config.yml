@@ -40,11 +40,13 @@ podium:
   first: ''
   second: ''
   third: ''
+  # 颁奖结果公布后，再停留多少秒让玩家看前三名，然后才送回大厅（0 = 立刻返回）
+  end-delay-seconds: 10
 
 # ---------- 颁奖烟花 ----------
 fireworks:
   enabled: true
-  # 每次放几颗
+  # 未配置固定发射点时，每次放几颗
   count: 3
   # 每颗之间隔多少 tick
   interval-ticks: 10
@@ -57,6 +59,12 @@ fireworks:
     - STAR
     - CREEPER
     - BURST
+  # 固定发射点（/arcade addfirework 把脚下这格加进来，可加多个）
+  # 配了固定点后：每个点各放一颗；count 失效
+  # 为空 = 旧行为：在获奖者脚下随机位置发射 count 颗
+  spots: []
+  # 配了固定点时，所有点在多少 tick 内依次放完（20 tick = 1 秒）
+  spread-ticks: 40
 
 # ---------- 右侧计分板（准备阶段的星星榜） ----------
 scoreboard:
@@ -165,6 +173,14 @@ games:
     max-players: 16
     join-command: 'hill join'
     start-command: 'hill start'
+
+  oneshot:
+    display: One Shot
+    enabled: true
+    arena-aware: false
+    max-players: 16
+    join-command: 'oneshot join'
+    start-command: 'oneshot start'
 
 # 配置版本（迁移用，不要手改）
 config-version: 1

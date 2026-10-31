@@ -3,15 +3,18 @@ package com.tntbattle;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/** 双岛场地：区域范围、每队多个出生点、等待点、虚空高度。 */
+/** 一个 TNT 对战场地：区域范围、每队多个出生点、等待点、虚空/建筑高度。 */
 public final class TNTBattleArena {
 
     private final TNTBattlePlugin plugin;
+    private final String name;
     private String worldName = "world";
     private Location pos1;
     private Location pos2;
@@ -28,25 +31,43 @@ public final class TNTBattleArena {
     private Location lobby;
     private final List<Location> redSpawns = new ArrayList<>();
     private final List<Location> blueSpawns = new ArrayList<>();
+    private int voidY = -64;
+    private int buildHeightLimit = -1;
+    /** 0 = 用全局 max-players。 */
+    private int maxPlayers;
 
-    public TNTBattleArena(TNTBattlePlugin plugin) {
+    public TNTBattleArena(TNTBattlePlugin plugin, String name) {
         this.plugin = plugin;
+        this.name = name;
+    }
+
+    public String name() {
+        return name;
+    }
+
+    private ConfigurationSection section() {
+        return plugin.getConfig().getConfigurationSection("arenas." + name);
     }
 
     public void load() {
-        worldName = plugin.getConfig().getString("arena.world", "world");
-        pos1 = parse(plugin.getConfig().getString("arena.pos1", null));
-        pos2 = parse(plugin.getConfig().getString("arena.pos2", null));
-        lobby = parse(plugin.getConfig().getString("arena.lobby", null));
+        ConfigurationSection sec = section();
+        if (sec == null) {
+            return;
+        }
+        FileConfiguration cfg = plugin.getConfig();
+        worldName = sec.getString("world", cfg.getString("arena.world", "world"));
+        pos1 = parse(sec.getString("pos1", ""));
+        pos2 = parse(sec.getString("pos2", ""));
+        lobby = parse(sec.getString("lobby", ""));
         redSpawns.clear();
         blueSpawns.clear();
-        for (String raw : plugin.getConfig().getStringList("arena.red-spawns")) {
+        for (String raw : sec.getStringList("red-spawns")) {
             Location loc = parse(raw);
             if (loc != null) {
                 redSpawns.add(loc);
             }
         }
-        for (String raw : plugin.getConfig().getStringList("arena.blue-spawns")) {
+        for (String raw : sec.getStringList("blue-spawns")) {
             Location loc = parse(raw);
             if (loc != null) {
                 blueSpawns.add(loc);
@@ -54,17 +75,20 @@ public final class TNTBattleArena {
         }
         // 兼容旧版单出生点配置
         if (redSpawns.isEmpty()) {
-            Location legacy = parse(plugin.getConfig().getString("arena.red-spawn", null));
+            Location legacy = parse(sec.getString("red-spawn", ""));
             if (legacy != null) {
                 redSpawns.add(legacy);
             }
         }
         if (blueSpawns.isEmpty()) {
-            Location legacy = parse(plugin.getConfig().getString("arena.blue-spawn", null));
+            Location legacy = parse(sec.getString("blue-spawn", ""));
             if (legacy != null) {
                 blueSpawns.add(legacy);
             }
         }
+        voidY = sec.getInt("void-y", cfg.getInt("void-y", -64));
+        buildHeightLimit = sec.getInt("build-height-limit", cfg.getInt("build-height-limit", -1));
+        maxPlayers = Math.max(0, sec.getInt("max-players", 0));
         if (pos1 != null && pos1.getWorld() != null) {
             worldName = pos1.getWorld().getName();
         } else if (!redSpawns.isEmpty() && redSpawns.get(0).getWorld() != null) {
@@ -73,16 +97,21 @@ public final class TNTBattleArena {
     }
 
     public void save() {
-        // 先读回磁盘上的配置，避免用手里的旧内存值把玩家手动改过的键（如 debug-damage）覆盖掉
+        // 先读回磁盘配置，只改本场 section，避免多场之间互相覆盖
         plugin.reloadConfig();
-        plugin.getConfig().set("arena.world", worldName());
-        plugin.getConfig().set("arena.pos1", format(pos1));
-        plugin.getConfig().set("arena.pos2", format(pos2));
-        plugin.getConfig().set("arena.lobby", format(lobby));
-        plugin.getConfig().set("arena.red-spawn", null);
-        plugin.getConfig().set("arena.blue-spawn", null);
-        plugin.getConfig().set("arena.red-spawns", strings(redSpawns));
-        plugin.getConfig().set("arena.blue-spawns", strings(blueSpawns));
+        FileConfiguration cfg = plugin.getConfig();
+        String path = "arenas." + name;
+        cfg.set(path + ".world", worldName());
+        cfg.set(path + ".pos1", format(pos1));
+        cfg.set(path + ".pos2", format(pos2));
+        cfg.set(path + ".lobby", format(lobby));
+        cfg.set(path + ".red-spawn", null);
+        cfg.set(path + ".blue-spawn", null);
+        cfg.set(path + ".red-spawns", strings(redSpawns));
+        cfg.set(path + ".blue-spawns", strings(blueSpawns));
+        cfg.set(path + ".void-y", voidY);
+        cfg.set(path + ".build-height-limit", buildHeightLimit);
+        cfg.set(path + ".max-players", maxPlayers);
         plugin.saveConfig();
     }
 
@@ -125,12 +154,29 @@ public final class TNTBattleArena {
     }
 
     public void setVoidY(int y) {
-        plugin.getConfig().set("void-y", y);
-        plugin.saveConfig();
+        voidY = y;
     }
 
     public int voidY() {
-        return plugin.getConfig().getInt("void-y", -64);
+        return voidY;
+    }
+
+    public void setBuildHeightLimit(int y) {
+        buildHeightLimit = y;
+    }
+
+    /** -1 = 不限制。 */
+    public int buildHeightLimit() {
+        return buildHeightLimit;
+    }
+
+    public void setMaxPlayers(int value) {
+        maxPlayers = Math.max(0, value);
+    }
+
+    /** 0 = 用全局 max-players。 */
+    public int maxPlayers() {
+        return maxPlayers;
     }
 
     public boolean regionConfigured() {
@@ -140,17 +186,17 @@ public final class TNTBattleArena {
     }
 
     public boolean ready() {
-        if (!regionConfigured() || redSpawns.isEmpty() || blueSpawns.isEmpty()) {
+        if (!regionConfigured() || lobby == null || redSpawns.isEmpty() || blueSpawns.isEmpty()) {
             return false;
         }
         String world = pos1.getWorld().getName();
         for (Location spawn : redSpawns) {
-            if (!world.equals(spawn.getWorld().getName())) {
+            if (spawn.getWorld() == null || !world.equals(spawn.getWorld().getName())) {
                 return false;
             }
         }
         for (Location spawn : blueSpawns) {
-            if (!world.equals(spawn.getWorld().getName())) {
+            if (spawn.getWorld() == null || !world.equals(spawn.getWorld().getName())) {
                 return false;
             }
         }

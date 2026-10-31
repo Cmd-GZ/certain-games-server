@@ -35,6 +35,9 @@ public class MiniGameLibPlugin extends JavaPlugin implements Listener {
         // 区域声明汇总必须等到「所有插件都 onEnable 完」才打印，否则会漏掉后加载的游戏。
         // ServerLoadEvent 正好在那个时点触发（晚于全部插件 enable、早于玩家进服）。
         getServer().getPluginManager().registerEvents(this, this);
+
+        // 房间引擎（模板 → 实例世界 → 回收），设计见 docs/房间引擎设计.md
+        com.hub.room.RoomManager.init(this);
     }
 
     /**
@@ -53,6 +56,7 @@ public class MiniGameLibPlugin extends JavaPlugin implements Listener {
     public void onDisable() {
         // 关服兜底：把还停在建场模式里的 OP 背包还原回去
         SetupMode.exitAllRegistered();
+        com.hub.room.RoomManager.shutdown();
         RegionRegistry.clear();
         com.hub.session.Sessions.clear();
         com.hub.session.PlayerSessions.clear();

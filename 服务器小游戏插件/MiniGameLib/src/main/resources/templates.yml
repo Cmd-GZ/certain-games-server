@@ -1,0 +1,34 @@
+# ================= 房间引擎：模板登记 =================
+# 设计见 docs/房间引擎设计.md
+#
+# 模板 = 一个「只读的世界目录」，放在  world/dimensions/minecraft/  下（Paper Moonrise 布局）。
+# 房间 = 模板的一份实例拷贝（room_<游戏>_<序号>），玩家真正玩的是房间；用完即删。
+#
+# 约定：
+#   - 模板目录名以 tmpl_ 开头，房间目录名以 room_ 开头
+#   - 设计者编辑模板，玩家永远不直接进模板
+#   - 区域的坐标是「模板内坐标」，实例化时自动把世界名换成房间名
+
+limits:
+  max-rooms: 10          # 全服同时存在的房间上限
+  max-per-game: 3        # 单个游戏的房间上限
+  idle-seconds: 300      # 空置多少秒后回收（60s 扫一次）
+
+# 模板登记。键 = 模板标识，下面各字段按需填。
+# 目前仓库里没有真实模板，先在服务器上放一个目录再登记；示例：
+#
+# templates:
+#   hillking_test:
+#     game: hillking
+#     folder: tmpl_hillking_test
+#     rules:
+#       pvp: true
+#       difficulty: NORMAL
+#       mob-spawning: false
+#       keep-inventory: false
+#       fixed-time: 6000
+#     regions:
+#       - name: ""
+#         x1: 620   y1: 40   z1: 300
+#         x2: 700   y2: 90   z2: 380
+templates: {}

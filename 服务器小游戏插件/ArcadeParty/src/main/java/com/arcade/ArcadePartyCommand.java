@@ -114,6 +114,39 @@ public final class ArcadePartyCommand implements CommandExecutor, TabCompleter {
                 manager.setPodium(place, p.getLocation());
                 Chat.send(sender, "&a颁奖台 " + place + " 已设置：" + describe(p.getLocation()));
             }
+            case "addfirework" -> {
+                if (!admin(sender)) {
+                    return true;
+                }
+                Player p = player(sender);
+                if (p == null) {
+                    return true;
+                }
+                manager.addFireworkSpot(p.getLocation());
+                Chat.send(sender, "&a已添加烟花发射点 " + describe(p.getLocation())
+                        + "（共 " + manager.fireworkSpots().size() + " 个）。");
+            }
+            case "clearfireworks" -> {
+                if (!admin(sender)) {
+                    return true;
+                }
+                manager.clearFireworkSpots();
+                Chat.send(sender, "&a已清空所有固定烟花发射点，改回在获奖者脚下发射。");
+            }
+            case "fireworks" -> {
+                if (!admin(sender)) {
+                    return true;
+                }
+                List<Location> spots = manager.fireworkSpots();
+                Chat.send(sender, "&6固定烟花发射点：&e" + spots.size() + " &7个");
+                if (spots.isEmpty()) {
+                    Chat.send(sender, "&7未配置时会在获奖者脚下随机发射；用 &f/arcade addfirework&7 添加。");
+                } else {
+                    for (int i = 0; i < spots.size(); i++) {
+                        Chat.send(sender, "&e" + (i + 1) + ". &f" + describe(spots.get(i)));
+                    }
+                }
+            }
             case "save" -> {
                 if (!admin(sender)) {
                     return true;
@@ -180,6 +213,7 @@ public final class ArcadePartyCommand implements CommandExecutor, TabCompleter {
             Chat.send(sender, "&e/arcade start&f 开始  &e/arcade stop&f 结束");
             Chat.send(sender, "&e/arcade setlobby&f 等待区  &e/arcade setaudience&f 颁奖观众席");
             Chat.send(sender, "&e/arcade setpodium <first|second|third>&f 前三名站位");
+            Chat.send(sender, "&e/arcade addfirework&f 把脚下这格设为烟花发射点  &e/arcade clearfireworks&f 清空  &e/arcade fireworks&f 查看");
             Chat.send(sender, "&e/arcade save&f 保存  &e/arcade reload&f 重载");
         }
     }
@@ -216,7 +250,7 @@ public final class ArcadePartyCommand implements CommandExecutor, TabCompleter {
             boolean admin = !(sender instanceof Player player) || manager.isAdmin(player);
             if (admin) {
                 subs.addAll(List.of("menu", "start", "stop", "setlobby", "setaudience",
-                        "setpodium", "save", "reload"));
+                        "setpodium", "addfirework", "clearfireworks", "fireworks", "save", "reload"));
             }
             subs.stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).forEach(out::add);
         } else if (args.length == 2 && args[0].equalsIgnoreCase("setpodium")) {
