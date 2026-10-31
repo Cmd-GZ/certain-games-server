@@ -122,7 +122,7 @@ public final class RoomManager {
                     String folder = t.getString("folder", TEMPLATE_PREFIX + key);
                     File dir = new File(base, folder);
                     ConfigurationSection r = t.getConfigurationSection("rules");
-                    WorldTemplate.Rules rules = r == null ? WorldTemplate.Rules.defaults()
+                    WorldTemplate.Rules rules = r == null ? null
                             : new WorldTemplate.Rules(
                             r.getBoolean("pvp", false),
                             r.getString("difficulty", "NORMAL"),
@@ -315,8 +315,12 @@ public final class RoomManager {
             return fail("世界加载失败（已回滚目录）：" + roomId);
         }
 
-        // 5) 套规则
-        applyRules(room.world, tpl.rules());
+        // 5) 套规则 —— 只有模板显式声明了 rules 才覆盖。
+        //    模板文件里的 data/minecraft/game_rules.dat 本身就有规则，拷贝时已经带过来；
+        //    无条件再套一遍等于让配置盖掉设计者的 /gamerule（违反"模板即事实"）。
+        if (tpl.rules() != null) {
+            applyRules(room.world, tpl.rules());
+        }
 
         // 6) 注册区域（模板内坐标 + 房间世界名）
         for (WorldTemplate.Box box : tpl.regions()) {
@@ -333,6 +337,102 @@ public final class RoomManager {
         log("已创建房间 " + room.describe()
                 + String.format("（复制 %dms / 加载 %dms / 总计 %dms）",
                 (tCopy - t0) / 1_000_000, (tLoad - tCopy) / 1_000_000, (tLoad - t0) / 1_000_000));
+        return room;
+    }
+
+    /**
+     * 异步创建：**复制在异步线程，{@code createWorld} 回主线程**。
+     *
+     * <p>为什么要这样：Bukkit 的 tick 循环是单线程的，主线程上一次几十毫秒的同步文件操作
+     * 就会让所有玩家一起卡。复制模板是 8–11ms（冷缓存可达上百毫秒），挪走它能让主线程只承担
+     * {@code createWorld} 的约 24ms。
+     *
+     * @param done 创建完成（成功返回 Room，失败返回 null）后**在主线程**回调
+     */
+    public static void createAsync(String templateKey, String desiredRoomId,
+                                   java.util.function.Consumer<Room> done) {
+        if (!ready || plugin == null) {
+            Failures.record("RoomManager.createAsync", new IllegalStateException("房间引擎未就绪"));
+            done.accept(null);
+            return;
+        }
+        WorldTemplate tpl = TEMPLATES.get(templateKey);
+        if (tpl == null || !tpl.dir().isDirectory()) {
+            log("[房间] 创建失败：模板不存在或目录缺失 " + templateKey);
+            done.accept(null);
+            return;
+        }
+        final String roomId;
+        synchronized (RoomManager.class) {
+            if (roomCountOf(tpl.gameKey()) >= maxPerGame) {
+                log("[房间] 创建失败：游戏 " + tpl.gameKey() + " 房间数已达上限 " + maxPerGame);
+                done.accept(null);
+                return;
+            }
+            roomId = desiredRoomId == null || desiredRoomId.isBlank()
+                    ? nextRoomId(tpl.gameKey()) : sanitize(desiredRoomId);
+            if (Bukkit.getWorld(roomId) != null || ROOMS.containsKey(roomId)) {
+                log("[房间] 创建失败：房间名已被占用 " + roomId);
+                done.accept(null);
+                return;
+            }
+        }
+
+        // ---- 异步：复制 + 删世界身份 ----
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            long t0 = System.nanoTime();
+            File dest = new File(worldDimDir(), roomId);
+            try {
+                copyDirectory(tpl.dir(), dest);
+                deleteQuietly(new File(dest, "data/paper/metadata.dat"));
+                deleteQuietly(new File(dest, "session.lock"));
+                deleteQuietly(new File(dest, "level.dat_old"));
+            } catch (Exception ex) {
+                Failures.recordAndWarn("RoomManager.copyAsync/" + roomId, ex);
+                deleteDir(dest);
+                Bukkit.getScheduler().runTask(plugin, () -> done.accept(null));
+                return;
+            }
+            long tCopy = System.nanoTime();
+            // ---- 回主线程：加载世界 + 后续 ----
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                Room room = finishCreate(roomId, tpl, tCopy - t0);
+                done.accept(room);
+            });
+        });
+    }
+
+    /** 主线程侧的收尾：createWorld → 套规则 → 注册区域 → 记账。 */
+    private static Room finishCreate(String roomId, WorldTemplate tpl, long copyNanos) {
+        long t1 = System.nanoTime();
+        File dest = new File(worldDimDir(), roomId);
+        Room room = new Room(roomId, tpl);
+        try {
+            room.world = Bukkit.createWorld(new WorldCreator(roomId));
+        } catch (RuntimeException ex) {
+            Failures.recordAndWarn("RoomManager.load/" + roomId, ex);
+        }
+        if (room.world == null) {
+            deleteDir(dest);
+            log("[房间] 世界加载失败（已回滚目录）：" + roomId);
+            return null;
+        }
+        if (tpl.rules() != null) {
+            applyRules(room.world, tpl.rules());
+        }
+        for (WorldTemplate.Box box : tpl.regions()) {
+            try {
+                RegionRegistry.register(new ArenaRegion(tpl.gameKey(), box.arenaName(), roomId,
+                        box.x1(), box.y1(), box.z1(), box.x2(), box.y2(), box.z2()));
+            } catch (RuntimeException ex) {
+                Failures.recordAndWarn("RoomManager.region/" + roomId, ex);
+            }
+        }
+        long t2 = System.nanoTime();
+        ROOMS.put(roomId, room);
+        log("已创建房间 " + room.describe()
+                + String.format("（异步复制 %dms / 主线程加载 %dms）",
+                copyNanos / 1_000_000, (t2 - t1) / 1_000_000));
         return room;
     }
 

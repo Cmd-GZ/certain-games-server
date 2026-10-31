@@ -38,6 +38,9 @@ public class MiniGameLibPlugin extends JavaPlugin implements Listener {
 
         // 房间引擎（模板 → 实例世界 → 回收），设计见 docs/房间引擎设计.md
         com.hub.room.RoomManager.init(this);
+
+        // 主线程卡顿检测：回答"服务器为什么会突然卡一段"
+        com.hub.diagnostics.TickWatchdog.start(this);
     }
 
     /**
@@ -56,6 +59,7 @@ public class MiniGameLibPlugin extends JavaPlugin implements Listener {
     public void onDisable() {
         // 关服兜底：把还停在建场模式里的 OP 背包还原回去
         SetupMode.exitAllRegistered();
+        com.hub.diagnostics.TickWatchdog.stop();
         com.hub.room.RoomManager.shutdown();
         RegionRegistry.clear();
         com.hub.session.Sessions.clear();

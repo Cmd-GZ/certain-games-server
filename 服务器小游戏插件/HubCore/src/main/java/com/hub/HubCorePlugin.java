@@ -578,15 +578,18 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
                 }
                 String tpl = args[2];
                 String name = args.length >= 4 ? args[3] : null;
+                final CommandSender replyTo = sender;
                 sender.sendMessage(LEGACY.deserialize("&7正在从模板 &f" + tpl + " &7创建房间…"));
-                var room = com.hub.room.RoomManager.create(tpl, name);
-                if (room == null) {
-                    sender.sendMessage(LEGACY.deserialize("&c创建失败，原因见控制台/d octor 的被吞异常段。"));
-                } else {
-                    sender.sendMessage(LEGACY.deserialize("&a已创建房间 &f" + room.roomId
-                            + " &7（世界 &f" + room.world.getName() + "&7）。"
-                            + "用 &f/gw tp " + room.roomId + " &7进去看。"));
-                }
+                // 异步创建：复制在异步线程，createWorld 回主线程（避免卡主线程 → 全服卡顿）
+                com.hub.room.RoomManager.createAsync(tpl, name, room -> {
+                    if (room == null) {
+                        replyTo.sendMessage(LEGACY.deserialize("&c创建失败，原因见控制台与 /hub doctor。"));
+                    } else {
+                        replyTo.sendMessage(LEGACY.deserialize("&a已创建房间 &f" + room.roomId
+                                + " &7（世界 &f" + room.world.getName() + "&7）。"
+                                + "用 &f/gw tp " + room.roomId + " &7进去看。"));
+                    }
+                });
             }
             case "delete", "del" -> {
                 if (args.length < 3) {
@@ -743,7 +746,21 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             }
         }
 
-        // ---- 6. 房间（模板 → 实例世界） ----
+        // ---- 6. 主线程卡顿（回答"为什么会突然卡一段"） ----
+        long stalls = com.hub.diagnostics.TickWatchdog.totalStalls();
+        if (stalls == 0) {
+            out.add("&b[卡顿] &a未检测到异常阻塞 &7（阈值 " + 200 + "ms/次）");
+        } else {
+            out.add("&b[卡顿] &c" + stalls + " 次 &7，最严重 &c"
+                    + com.hub.diagnostics.TickWatchdog.worstMs() + "ms");
+            var recent = com.hub.diagnostics.TickWatchdog.recent();
+            int shown = 0;
+            for (int i = recent.size() - 1; i >= 0 && shown < 5; i--, shown++) {
+                out.add("  &7- &f" + recent.get(i).ms() + "ms");
+            }
+        }
+
+        // ---- 7. 房间（模板 → 实例世界） ----
         var tpls = com.hub.room.RoomManager.templates();
         var rooms = com.hub.room.RoomManager.rooms();
         if (!com.hub.room.RoomManager.isReady()) {
@@ -767,7 +784,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             }
         }
 
-        // ---- 7. 世界规则 ----
+        // ---- 8. 世界规则 ----
         List<World> worlds = Bukkit.getWorlds();
         out.add("&b[世界] &f" + worlds.size() + " 个");
         for (World w : worlds) {
@@ -776,7 +793,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             out.add("  &7- &f" + w.getName() + " &7pvp=&f" + pvp + " &7keepInventory=&f" + keep);
         }
 
-        // ---- 8. 指向文档（不在此处重复不变量状态，避免与文档不一致）----
+        // ---- 9. 指向文档（不在此处重复不变量状态，避免与文档不一致）----
         out.add("&b[不变量] &7状态见 &fdocs/框架不变量.md&7 第 6 节（本文档是唯一权威）");
         out.add("&8&m                                             ");
 
