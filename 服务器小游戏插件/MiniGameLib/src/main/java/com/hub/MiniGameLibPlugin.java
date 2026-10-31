@@ -54,5 +54,7 @@ public class MiniGameLibPlugin extends JavaPlugin implements Listener {
         // 关服兜底：把还停在建场模式里的 OP 背包还原回去
         SetupMode.exitAllRegistered();
         RegionRegistry.clear();
+        com.hub.session.Sessions.clear();
+        com.hub.session.PlayerSessions.clear();
     }
 }

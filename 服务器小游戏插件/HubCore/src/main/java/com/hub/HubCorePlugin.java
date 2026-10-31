@@ -628,7 +628,35 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
         }
         out.add("  &7提示：未声明地盘的游戏，别在它附近给别的游戏建场（会互相踩）");
 
-        // ---- 5. 世界规则 ----
+        // ---- 5. 对局与会话（I1 / I4 / I5） ----
+        var activeSessions = com.hub.session.Sessions.active();
+        var byGame = com.hub.session.Sessions.activeByGame();
+        if (activeSessions.isEmpty()) {
+            out.add("&b[对局] &70 个活动对局 &7（会话模型已就绪，暂无游戏接入）");
+        } else {
+            out.add("&b[对局] &f" + activeSessions.size() + " 个活动对局：&7" + byGame);
+            int shown = 0;
+            for (var ses : activeSessions) {
+                if (shown++ >= 6) {
+                    out.add("  &7… 还有 " + (activeSessions.size() - 6) + " 个");
+                    break;
+                }
+                out.add("  &7- &f" + ses.describe());
+            }
+        }
+        out.add("&b[归属] &f" + com.hub.session.PlayerSessions.size() + " 人有归属"
+                + " &7（在某个对局里；其余在大厅）");
+        var i1Problems = com.hub.session.PlayerSessions.audit();
+        if (i1Problems.isEmpty()) {
+            out.add("  &a归属链自检通过 &7（I1：没有并列归属）");
+        } else {
+            out.add("  &c归属链自检发现 " + i1Problems.size() + " 个问题：");
+            for (String problem : i1Problems) {
+                out.add("  &7- &c" + problem);
+            }
+        }
+
+        // ---- 6. 世界规则 ----
         List<World> worlds = Bukkit.getWorlds();
         out.add("&b[世界] &f" + worlds.size() + " 个");
         for (World w : worlds) {
@@ -637,7 +665,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             out.add("  &7- &f" + w.getName() + " &7pvp=&f" + pvp + " &7keepInventory=&f" + keep);
         }
 
-        // ---- 6. 指向文档（不在此处重复不变量状态，避免与文档不一致）----
+        // ---- 7. 指向文档（不在此处重复不变量状态，避免与文档不一致）----
         out.add("&b[不变量] &7状态见 &fdocs/框架不变量.md&7 第 6 节（本文档是唯一权威）");
         out.add("&8&m                                             ");
 
