@@ -3,7 +3,101 @@
 本文件管整个 monorepo。各子工程自己的规则见其目录下的 `README.md` / `AGENTS.md`
 （BuildBattle 的入口是 [服务器小游戏插件/AGENTS.md](服务器小游戏插件/AGENTS.md)）。
 
-## 子仓库（git submodule）改动规矩
+---
+
+## 0. 当前状态：**正在做框架重构（2026-10-31 起）** ⚠️
+
+上游（不懂代码、只是向 AI 许愿出了这套服务器）把重构交给了我们。
+**干活前必读这一节**，否则会重复已经踩过的坑。
+
+### 0.1 分支与交付
+
+| 项 | 值 |
+| --- | --- |
+| 工作分支 | **`restruction`**（不是 `main`） |
+| 交付方式 | 我方与上游**并行开发**，做完再合并；不需要保持线上不停服 |
+| 验收人 | **代码/逻辑层 = 用户本人**；功能层等交付后由上游拍板 |
+| 推送注意 | 默认 `ssh` 会被 `/etc/ssh/ssh_config.d/` 的权限问题打死，用<br>`GIT_SSH_COMMAND="ssh -F /dev/null -o StrictHostKeyChecking=no" git push` |
+
+### 0.2 重构的验收基线：`docs/框架不变量.md`
+
+**这份文档是唯一的验收标准**，任何改动都要能对上它。要点：
+
+| # | 不变量 | 一句话 |
+| --- | --- | --- |
+| I1 | 玩家归属是一条链 | 不能同时属于两个**并列**对局；允许嵌套（派对 ⊃ 当前小游戏） |
+| I2 | 区域归属单射 | 一块区域（整个世界或世界内一块）同时只归一个对局；没认领的是公共区 |
+| I3 | 事件裁决唯一 | 一条事件只有一个"说了算的人"；**游戏模块里不许出现 `@EventHandler`** |
+| I4 | 生命周期唯一出口 | 对局只能由 `end(reason)` 结束，并向子对局递归 |
+| I5 | 状态转移封闭 | 状态只能按写死的转移表变化，非法转移抛异常 |
+| R1 | 单一事实源 | 一个游戏的定义只存在一处（`GameKey`），菜单/观战/tab 全部派生 |
+| R2 | 单一写者 | 每份持久化数据只有一个写入者；**禁止 `onDisable` 整份回写配置** |
+| R3 | 失败可见 | 不许 `catch (Exception ignored)`；被吞的异常进 `Failures`，`/hub doctor` 能查 |
+| R4 | 契约一致 | `pom.xml` 版本 == `plugin.yml` 版本，`tools/version-check.py` 强制 |
+
+进度表在该文档**第 6 节**，每次改代码都要同步更新——**没写进进度表的改动等于没做**。
+
+### 0.3 文档地图（按需只读一份）
+
+| 想知道什么 | 读这个 |
+| --- | --- |
+| 重构的规矩与进度 | [服务器小游戏插件/docs/框架不变量.md](服务器小游戏插件/docs/框架不变量.md) |
+| 会话模型（GameSession / 归属链）设计 | [服务器小游戏插件/docs/会话模型草案.md](服务器小游戏插件/docs/会话模型草案.md) |
+| 「模板世界 / 游玩世界」方案评估（含实测数据） | [服务器小游戏插件/docs/模板世界方案评估.md](服务器小游戏插件/docs/模板世界方案评估.md) |
+| 哪块世界归谁（I2 取证） | [服务器小游戏插件/docs/区域归属表.md](服务器小游戏插件/docs/区域归属表.md) |
+| 每一步改了什么、验了没 | [服务器小游戏插件/docs/改动记录.md](服务器小游戏插件/docs/改动记录.md) |
+| 接一个新小游戏（含声明地盘） | [服务器小游戏插件/HubCore/docs/游戏插件接入指南.md](服务器小游戏插件/HubCore/docs/游戏插件接入指南.md) |
+| 历史踩过的坑（上传/面板/事件顺序） | [服务器小游戏插件/docs/已知坑.md](服务器小游戏插件/docs/已知坑.md) |
+
+### 0.4 Linux 工具链（`tools/`）
+
+上游的 `build.ps1` / `verify.ps1` / `pack-upload.ps1` 是 **Windows 专用**，Linux 服务器跑不了。
+重构期用这一套，**两者并存**，细节见 [tools/README.md](tools/README.md)：
+
+```bash
+tools/fetch-maven.sh          # 装 Maven 到 .server/tools/（不污染系统）
+tools/build.sh --deploy       # 全量构建 → .server/deploy/plugins/
+tools/serve.sh --deploy       # 部署进服务器 → 启动（前台，Ctrl-C 或 echo stop > .server/.serve.fifo）
+tools/smoke.sh --deploy       # 冒烟台：真起服 → 断言日志 → 干净关服
+tools/version-check.py        # pom/plugin.yml 版本一致性（R4），不一致 exit 1
+tools/region-report.py        # 生成《区域归属表》（只读）
+```
+
+### 0.5 五条硬规则（不遵守会浪费一整轮）
+
+1. **`build.sh` 必须 clean。** 增量构建会复用 `target/classes` 留下半成品 jar
+   （类里带 ECJ 的 `Unresolved compilation problems`，插件一启用就 `java.lang.Error`）。
+   已经踩过：构建"成功"但只注册了 1 个区域。
+2. **`smoke.sh` 的 ERROR 正则是 ` (ERROR|SEVERE)]:`**，不是 `\\[ERROR\\]`。
+   Paper 的格式是 `[06:09:08 ERROR]:`。旧写法永远匹配不到，等于断言形同虚设。
+3. **`cp` 复制世界目录必须用 `--reflink=auto`，绝不能用 `always`。**
+   开发机是 btrfs（能白拿 0 拷贝），**生产是 ext4**（`always` 会直接失败）。
+4. **复制世界后必须删掉世界身份**，否则 Paper 拒绝加载并报
+   `is a duplicate of another world ... duplicated Paper world metadata`：
+   ```
+   <房间>/data/paper/metadata.dat
+   <房间>/session.lock
+   <房间>/level.dat_old
+   ```
+5. **机制不确定就去读字节码**（`javap -c`），别凭 javadoc 印象下结论。
+   真实教训：我曾误判 `createSection` 会保留旧键 → 编出一个不存在的"删场地复活"bug。
+
+### 0.6 环境事实（省得每次重新测）
+
+| 项 | 值 |
+| --- | --- |
+| 上游服务器包 | `.server/small_games.zip`（已解压到 `.server/server/`；`.server/` 全部 gitignore） |
+| 可直接开服的副本 | `.server/run/small_games/b064ede…/` |
+| JDK | `/usr/lib/jvm/java-25-openjdk`（Paper 26.2 最低 25） |
+| Paper | 26.2-126，31 个插件，端口 25560，`online-mode=false` |
+| 世界布局 | Paper Moonrise 布局：**`world/dimensions/minecraft/<名字>/`**，每个"世界"是一个维度目录 |
+| 开发机文件系统 | btrfs（支持 reflink） |
+| **生产机文件系统** | **ext4**（无 reflink），内存 32GB |
+| 复制/加载成本 | 16MB 世界复制 50–115ms；15 个世界启动时同一秒内加载完 → **IO 不是瓶颈** |
+
+---
+
+## 1. 子仓库（git submodule）改动规矩
 
 `paper-hold-the-fort/` 是独立仓库，以 submodule 引入；以后新增的 submodule 同样适用。
 
@@ -27,3 +121,7 @@
    让子仓库的改动停留在本地未推送状态。
 5. 主仓库的主分支上不要直接改子仓库里的文件——那样既不在子仓库的分支流程里，
    也很容易在别人拉取时丢失。
+
+> 注意：工作区里的 `paper-hold-the-fort/` 是**空目录**（子模块未 init）。
+> 真正的 checkout 在 `/home/user/MyProject/paper-hold-the-fort`（工作区外，写入需额外授权），
+> 它的 `master` 比主仓库指针新。改它之前先按上面的规矩拉取 + 建 `restruction` 分支。
