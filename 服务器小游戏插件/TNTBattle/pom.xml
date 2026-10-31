@@ -6,7 +6,7 @@
 
     <groupId>com.tntbattle</groupId>
     <artifactId>tnt-battle</artifactId>
-    <version>1.11.14</version>
+    <version>1.11.15</version>
     <packaging>jar</packaging>
 
     <name>TNTBattle</name>

@@ -13,6 +13,7 @@ public final class TNTBattlePlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new TNTBattleManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         getServer().getPluginManager().registerEvents(new TNTBattleListener(manager), this);
         // 背景音乐录制：监听音符盒，把红石音乐录成音符序列

@@ -70,6 +70,14 @@ import java.util.UUID;
 /** TNT 对战：双队、TNT 发射器、定时羊毛、淘汰与胜负。 */
 public final class TNTBattleManager {
 
+    /** 声明地盘（{@code docs/框架不变量.md} 的 I2）。单场游戏，场地名用空串。 */
+    public void publishRegions() {
+        com.hub.region.Regions.begin("tntbattle");
+        if (arena != null) {
+            com.hub.region.Regions.box("tntbattle", "", arena.getPos1(), arena.getPos2());
+        }
+    }
+
     public static final String GAME = "TNT 对战";
     public static final String ARENA = "双岛";
 

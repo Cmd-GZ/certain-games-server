@@ -133,7 +133,15 @@ public class DuelManager {
         }, 40L);
     }
 
+    /** 声明地盘（{@code docs/框架不变量.md} 的 I2）。多场地，每个场地一块 AABB。 */
+    public void publishRegions() {
+        com.hub.region.Regions.begin("duel");
+        arenas.forEach((name, a) ->
+                com.hub.region.Regions.box("duel", name, a.getPos1(), a.getPos2()));
+    }
+
     public void saveAll() {
+        publishRegions();   // 场地可能刚被改过，重新声明（I2）
         // R2 单一写者（docs/框架不变量.md）：先把磁盘上的当前值读进内存，再只重写自己负责的段。
         // 否则关服时（onDisable -> saveAll -> saveConfig）会用内存里的旧值整份覆盖 config.yml：
         // 线上手改了别的键，传上去又被旧值写回去，表现为"改了配置没生效"（和 BuildRun 同一个坑）。

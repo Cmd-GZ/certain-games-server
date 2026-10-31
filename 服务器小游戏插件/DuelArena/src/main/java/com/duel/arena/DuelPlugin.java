@@ -16,6 +16,7 @@ public class DuelPlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new DuelManager(this);
         manager.load();
+        manager.publishRegions();   // 声明地盘（I2）
 
         DuelCommand cmd = new DuelCommand(this);
         org.bukkit.command.PluginCommand duel = getCommand("duel");

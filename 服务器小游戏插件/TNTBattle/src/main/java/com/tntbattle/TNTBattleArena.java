@@ -15,6 +15,16 @@ public final class TNTBattleArena {
     private String worldName = "world";
     private Location pos1;
     private Location pos2;
+
+    /** 场地边界角 1（供区域声明用，{@code docs/框架不变量.md} I2）。 */
+    public Location getPos1() {
+        return pos1;
+    }
+
+    /** 场地边界角 2。 */
+    public Location getPos2() {
+        return pos2;
+    }
     private Location lobby;
     private final List<Location> redSpawns = new ArrayList<>();
     private final List<Location> blueSpawns = new ArrayList<>();
