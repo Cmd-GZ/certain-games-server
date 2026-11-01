@@ -166,6 +166,24 @@ public class TntRunArena {
         return ++round;
     }
 
+    /** D21：加入时的 tick 与同 tick 内的随机名次（用来在同时进入时随机决出主持人）。 */
+    private final java.util.Map<UUID, Long> joinTicks = new java.util.HashMap<>();
+    private final java.util.Map<UUID, Long> joinSeeds = new java.util.HashMap<>();
+
+    /** 记下这次加入的 tick 与随机名次（由 manager 在入队时调用）。 */
+    public void recordJoin(UUID id) {
+        joinTicks.put(id, (long) org.bukkit.Bukkit.getCurrentTick());
+        joinSeeds.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
+    }
+
+    public long joinTickOf(UUID id) {
+        return joinTicks.getOrDefault(id, 0L);
+    }
+
+    public long joinSeedOf(UUID id) {
+        return joinSeeds.getOrDefault(id, 0L);
+    }
+
     public List<UUID> getPlayers() {
         return players;
     }
