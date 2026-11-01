@@ -124,29 +124,31 @@ public final class Worlds {
 
     // ---------- 配置里的 Location 读写（R2） ----------
     //
-    // 很多游戏的场地是直接用 Bukkit 原生 `Location` 序列化存的，YAML 里长这样：
-    //   pos1:
-    //     ==: org.bukkit.Location
-    //     world_key: minecraft:world_mm     ← Paper 26.2；老版本是 world: xxx
-    //     x: 1.0  y: 64.0  z: 2.0
+    // 两种磁盘形态，都要能读：
     //
-    // 一旦把 world_key 换成 tpl:<模板键>，Bukkit 的 Location.deserialize 找不到世界会**抛异常并刷 ERROR**
-    // （不是返回 null）。所以这里自己读写，绕开它。
-
-    /** 是否是 "可能是 Location 的配置键"（用子键判断，避免触发反序列化）。 */
-    private static String rawWorldToken(ConfigurationSection sec, String key) {
-        if (sec == null) {
-            return null;
-        }
-        String token = sec.getString(key + ".world_key");
-        if (token == null) {
-            token = sec.getString(key + ".world");
-        }
-        return token;
-    }
+    // ① 旧格式：Bukkit 原生 `Location` 序列化（**只用于固定世界**）
+    //      pos1:
+    //        ==: org.bukkit.Location
+    //        world_key: minecraft:world_mm     ← Paper 26.2；老版本是 world: xxx
+    //        x: 1.0  y: 64.0  z: 2.0
+    //
+    // ② 新格式：本类的字符串 token（**房间实例世界只能用这个**）
+    //      pos1: 'tpl:mm_test,-80.73,151.0,-59.72,-42.3,30.1'
+    //
+    // ⚠️ 为什么房间世界不能塞进 ①：`==: org.bukkit.Location` 在 **YAML 解析阶段**就被
+    // SnakeYAML 的 ConstructCustomObject 还原成 Location（`Location.deserialize` 直接
+    // `Bukkit.getWorld(world_key)`），`world_key` 写成 `tpl:xxx` 时那个世界还不存在，于是
+    // `IllegalArgumentException: unknown world` → 每个坐标一行 ERROR，节点被置成 null，
+    // 随后 `convertMapsToSections` 的 `set(key, null)` 把键**整个删掉** → 关服 save 写出 `{}`，
+    // 坐标"凭空消失"（MurderMystery 实测丢过）。这不是读代码能绕开的：错误发生在读代码之前。
+    //
+    // ⚠️ 另一个坑：`sec.set(key + ".world_key", token)` 这种"打补丁"写法会**毁掉坐标**。
+    // 值的类型是 Location（不是 ConfigurationSection），`getConfigurationSection(key)` 返回 null，
+    // 于是 MemorySection#set 走 `createSection(key)` —— 把 Location **替换成**一个只有
+    // `world_key` 的空段。（读字节码确认：get/set 的路径遍历都靠 getConfigurationSection。）
 
     /**
-     * 读一个坐标；支持 {@code tpl:} token。
+     * 读一个坐标；支持字符串 token 与 {@code tpl:}（含内存里的旧式 map）。
      *
      * @return 读不出来 / 模板没有存活房间 → {@code null}（上层按"未配置"处理）
      */
@@ -154,9 +156,14 @@ public final class Worlds {
         if (sec == null) {
             return null;
         }
-        // 注意：**不能**用 sec.isConfigurationSection(key) 作为前置条件 ——
-        // 坐标在 YAML 里是带 `==: org.bukkit.Location` 的序列化 Map，
-        // 不同 Bukkit 版本/加载方式下不一定被当成 section，加了会误判成"没配置"。
+        // ① 字符串形态：`tpl:模板, x, y, z[, yaw, pitch]` 或 `世界名, x, y, z`
+        if (sec.isString(key)) {
+            return parse(sec.getString(key));
+        }
+        // ② 序列化 Location。**不能**用 sec.isConfigurationSection(key) 当前置条件 ——
+        // 坐标在 YAML 里是带 `==: org.bukkit.Location` 的序列化 Map，加了会误判成"没配置"。
+        // 若里面的世界 token 是 tpl:（只可能来自内存构造，磁盘上这种文件根本解析不出来），
+        // 自己按子键拼 Location。
         String token = rawWorldToken(sec, key);
         if (token != null && isTemplateToken(token)) {
             World world = resolve(token);
@@ -172,30 +179,36 @@ public final class Worlds {
         return raw instanceof Location loc ? loc : null;
     }
 
+    /** 取序列化 Location 里写的世界 token（字符串/内存 section 才读得到；Location 对象上取不到）。 */
+    private static String rawWorldToken(ConfigurationSection sec, String key) {
+        String token = sec.getString(key + ".world_key");
+        if (token == null) {
+            token = sec.getString(key + ".world");
+        }
+        return token;
+    }
+
     /**
      * 写一个坐标。
      *
-     * <p>房间实例世界会写成 {@code tpl:<模板键>}；**{@code loc == null} 时什么都不做**
-     * —— 绝不能把磁盘上已有的坐标擦掉（"读不出来"必须表现为"不动它"）。
+     * <p>固定世界 → 照旧写 Bukkit 原生 {@link Location}（存量配置一个字节都不变）；
+     * 房间实例世界 → 写字符串 token（{@link #encode}），因为把 {@code tpl:} 塞进
+     * 序列化 Location 里会让整份 YAML **在加载阶段**报错并丢数据（见上面的说明）。
+     *
+     * <p>**{@code loc == null} 时什么都不做** —— 绝不能把磁盘上已有的坐标擦掉
+     * （"读不出来"必须表现为"不动它"）。
      */
     public static void writeLocation(ConfigurationSection sec, String key, Location loc) {
-        if (sec == null || loc == null) {
-            return;
-        }
-        sec.set(key, loc);
-        if (loc.getWorld() == null) {
+        if (sec == null || loc == null || loc.getWorld() == null) {
             return;
         }
         String token = tokenOf(loc.getWorld());
         if (token.equals(loc.getWorld().getName())) {
-            return;   // 普通世界，照 Bukkit 默认写法即可
+            sec.set(key, loc);   // 普通世界，照 Bukkit 默认写法即可
+            return;
         }
-        // 房间实例：把世界字段换成 token（哪个字段存在就改哪个）
-        if (sec.isSet(key + ".world_key")) {
-            sec.set(key + ".world_key", token);
-        } else {
-            sec.set(key + ".world", token);
-        }
+        // 房间实例世界：写字符串 token，绝不改写序列化 Location 的 world 字段
+        sec.set(key, encode(loc));
     }
 
     // ---------- 配置段安全写入（R2 单一写者） ----------

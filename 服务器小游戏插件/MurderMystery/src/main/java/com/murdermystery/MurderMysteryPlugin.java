@@ -12,8 +12,9 @@ public class MurderMysteryPlugin extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
         manager = new MurderMysteryManager(this);
+        // load() 读完场地后会自己声明地盘（I2）。`/mm reload` 走的是同一条 load()，
+        // 所以这里不再单独调 publishRegions()：两个入口会让"重载后地盘补不上"永远查不清。
         manager.load();
-        manager.publishRegions();   // 声明地盘（I2）
 
         MurderMysteryCommand cmd = new MurderMysteryCommand(this);
         PluginCommand mm = getCommand("murdermystery");

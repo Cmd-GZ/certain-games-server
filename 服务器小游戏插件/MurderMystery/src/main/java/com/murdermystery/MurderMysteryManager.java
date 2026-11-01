@@ -408,6 +408,11 @@ public class MurderMysteryManager {
         roleConfig.clear();
         roleOdds.clear();
         startWaitingTask();
+        // 场地每次重读都要重新声明地盘（I2）：`tpl:` 场地的世界是**运行时**才解析出来的
+        // （模板没有存活房间 → pos1 是 null → 那块地盘当时根本声明不出来），
+        // 所以 `/mm reload` 之后必须再声明一次，否则建好房间也不会补上。
+        // Regions.begin() 会先撤掉本游戏上一轮的全部声明，不会累积幽灵区域。
+        publishRegions();
     }
 
     /** 声明地盘（{@code docs/框架不变量.md} 的 I2）。 */
@@ -448,7 +453,9 @@ public class MurderMysteryManager {
             }
             e.getValue().save(arenaSec);
         }
-        ConfigurationSection js = plugin.getConfig().createSection("join-signs");
+        // 同理不能 createSection("join-signs")：那是"新建+覆盖"。告示牌的世界读不出来（世界没加载）时
+        // 内存里是空的，覆盖回去就把磁盘上的一整段擦了 —— 用"已有段就复用"。
+        ConfigurationSection js = com.hub.world.Worlds.getOrCreate(plugin.getConfig(), "join-signs");
         for (Map.Entry<String, List<Location>> e : joinSigns.entrySet()) {
             js.set(e.getKey(), e.getValue());
         }

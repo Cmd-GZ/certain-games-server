@@ -6,7 +6,7 @@
 
     <groupId>com.murdermystery</groupId>
     <artifactId>murder-mystery</artifactId>
-    <version>1.1.0</version>
+    <version>1.1.1</version>
     <packaging>jar</packaging>
 
     <name>MurderMystery</name>
@@ -34,7 +34,7 @@
         <dependency>
             <groupId>com.hub</groupId>
             <artifactId>minigame-lib</artifactId>
-            <version>1.7.2</version>
+            <version>1.7.3</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
