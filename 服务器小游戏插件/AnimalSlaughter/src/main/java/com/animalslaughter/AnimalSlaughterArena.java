@@ -282,7 +282,7 @@ public final class AnimalSlaughterArena {
             return "";
         }
         return String.format(Locale.ROOT, "%s,%.2f,%.2f,%.2f,%.1f,%.1f",
-                loc.getWorld().getName(), loc.getX(), loc.getY(), loc.getZ(),
+                com.hub.world.Worlds.tokenOf(loc.getWorld()), loc.getX(), loc.getY(), loc.getZ(),
                 loc.getYaw(), loc.getPitch());
     }
 
@@ -294,7 +294,8 @@ public final class AnimalSlaughterArena {
         if (parts.length < 4) {
             return null;
         }
-        World world = Bukkit.getWorld(parts[0].trim());
+        // 房间化（R2）：坐标里的世界段可能是 tpl: 令牌，交给 Worlds 解析成实际房间世界
+        World world = com.hub.world.Worlds.resolve(parts[0].trim());
         if (world == null) {
             return null;
         }
