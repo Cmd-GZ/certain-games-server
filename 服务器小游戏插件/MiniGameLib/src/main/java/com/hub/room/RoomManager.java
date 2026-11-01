@@ -2,6 +2,7 @@ package com.hub.room;
 
 import com.hub.diagnostics.Failures;
 import com.hub.region.ArenaRegion;
+import com.hub.world.WorldNames;
 import com.hub.region.RegionRegistry;
 import org.bukkit.Bukkit;
 import org.bukkit.Difficulty;
@@ -72,8 +73,6 @@ public final class RoomManager {
     }
 
     private static final String TEMPLATE_DIR_NAME = "dimensions/minecraft";
-    private static final String ROOM_PREFIX = "room_";
-    private static final String TEMPLATE_PREFIX = "tmpl_";
 
     private static final Map<String, WorldTemplate> TEMPLATES = new LinkedHashMap<>();
     private static final Map<String, Room> ROOMS = new LinkedHashMap<>();
@@ -119,7 +118,7 @@ public final class RoomManager {
                     if (t == null) {
                         continue;
                     }
-                    String folder = t.getString("folder", TEMPLATE_PREFIX + key);
+                    String folder = t.getString("folder", WorldNames.TEMPLATE + WorldNames.sanitize(key));
                     File dir = new File(base, folder);
                     ConfigurationSection r = t.getConfigurationSection("rules");
                     WorldTemplate.Rules rules = r == null ? null
@@ -602,17 +601,17 @@ public final class RoomManager {
 
     private static String nextRoomId(String gameKey) {
         for (int i = 1; i < 1000; i++) {
-            String id = ROOM_PREFIX + gameKey + "_" + i;
+            String id = WorldNames.roomName(gameKey, i);
             if (!ROOMS.containsKey(id) && Bukkit.getWorld(id) == null) {
                 return id;
             }
         }
-        return ROOM_PREFIX + gameKey + "_" + Long.toHexString(System.currentTimeMillis());
+        return WorldNames.roomName(gameKey, (int) (System.currentTimeMillis() % 100000));
     }
 
     private static String sanitize(String s) {
-        String t = s.trim().replaceAll("[^A-Za-z0-9_\\-]", "_");
-        return t.startsWith(ROOM_PREFIX) ? t : ROOM_PREFIX + t;
+        String t = WorldNames.sanitize(s);
+        return WorldNames.isRoom(t) ? t : WorldNames.ROOM + t;
     }
 
     private static Room fail(String why) {

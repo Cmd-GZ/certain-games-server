@@ -31,25 +31,18 @@ import java.util.Map;
 public final class GameWorldsPlugin extends JavaPlugin implements CommandExecutor, TabCompleter {
 
     /** 本插件托管的世界（world_xxx）。 */
-    // ---------- 世界命名前缀（docs/世界命名与前缀.md，决策 D19） ----------
-    /** 模板世界：设计者编辑的地图源，**永不当场地加载**（需要时 /gw load 手动加载）。 */
-    static final String PREFIX_TEMPLATE = "tmpl_";
-    /** 房间实例：**房间引擎独占**（会自动回收），不接受手工创建。 */
-    static final String PREFIX_ROOM = "room_";
-    /** 历史遗留的持久游玩世界前缀（只用于识别，新世界不再自动补它）。 */
-    static final String PREFIX_LEGACY = "world_";
+    // ---------- 世界命名：**统一走 com.hub.world.WorldNames**（决策 D19） ----------
+    // 规则只有一份实现（MiniGameLib），这里不再自己判前缀 —— 之前就是两处实现、迟早漂移。
+    static final String PREFIX_TEMPLATE = com.hub.world.WorldNames.TEMPLATE;
+    static final String PREFIX_ROOM = com.hub.world.WorldNames.ROOM;
+    static final String PREFIX_LEGACY = com.hub.world.WorldNames.LEGACY;
 
-    /** 名字是否已经带了已知前缀（含裸名 {@code world}）。 */
     static boolean hasKnownPrefix(String name) {
-        return name.startsWith(PREFIX_TEMPLATE)
-                || name.startsWith(PREFIX_ROOM)
-                || name.startsWith(PREFIX_LEGACY)
-                || name.equals("world");
+        return com.hub.world.WorldNames.hasKnownPrefix(name);
     }
 
-    /** 模板世界不自动加载。 */
     static boolean isTemplate(String name) {
-        return name.startsWith(PREFIX_TEMPLATE);
+        return com.hub.world.WorldNames.isTemplate(name);
     }
 
     private final Map<String, World> managed = new LinkedHashMap<>();
