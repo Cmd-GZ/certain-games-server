@@ -1,5 +1,7 @@
 package com.anvilbattle;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.ArcadeBridge;
 import com.hub.api.GameState;
 import com.hub.api.HubAPI;
@@ -73,6 +75,23 @@ public final class AnvilBattleManager {
     private final LiveSidebar liveSidebar;
 
     private State state = State.WAITING;
+    /** D22：会话层统一按场地键索引（单图游戏只有一个键）。 */
+    private final java.util.Map<String, AnvilBattleSession> sessions = new java.util.LinkedHashMap<>();
+    private String pendingEndReason;
+    private String pendingEndMessage;
+    private AnvilBattleSession session;
+
+    private AnvilBattleSession ensureSession() {
+        String key = "main";
+        AnvilBattleSession s = sessions.get(key);
+        if (s == null || s.state().isFinal()) {
+            s = new AnvilBattleSession(this, key);
+            sessions.put(key, s);
+        }
+        session = s;
+        return s;
+    }
+
     private final Set<UUID> waiting = new LinkedHashSet<>();
     private final Set<UUID> playing = new LinkedHashSet<>();
     private final Set<UUID> eliminated = new LinkedHashSet<>();
@@ -471,6 +490,10 @@ public final class AnvilBattleManager {
             return;
         }
         waiting.add(id);
+        ensureSession();
+        if (session != null && !session.join(player)) {
+            plugin.getLogger().warning("[AnvilBattle] " + player.getName() + " 加入归属链失败（见 [被吞异常]）");
+        }
         player.getInventory().clear();
         player.setGameMode(GameMode.SURVIVAL);
         resetPlayer(player);
@@ -582,6 +605,9 @@ public final class AnvilBattleManager {
         }
         countdown.cancel();
         state = State.RUNNING;
+        if (session != null) {
+            session.start();
+        }
         playing.clear();
         playing.addAll(ready);
         eliminated.clear();
@@ -644,7 +670,26 @@ public final class AnvilBattleManager {
         endGame(new LinkedHashSet<>(playing), "&e管理员结束了本局。");
     }
 
+    /** 收场入口（I4）：先让会话 end()，再由 onEnd 回到 doEndGame 干活。 */
     private void endGame(Set<UUID> winners, String reason) {
+        pendingWinners = winners;
+        pendingEndMessage = reason;
+        if (session == null || session.state().isFinal()) {
+            doEndGame();
+            return;
+        }
+        session.end(EndReason.ROUND_END);
+    }
+
+    /** endGame 与 doEndGame 之间传递赢家与文案（玩家看到的结算不能变）。 */
+    private Set<UUID> pendingWinners;
+
+    /** 真正的收场逻辑（由 session.onEnd 回调）。 */
+    void doEndGame() {
+        Set<UUID> winners = pendingWinners;
+        String reason = pendingEndMessage != null ? pendingEndMessage : "&7对局结束。";
+        pendingWinners = null;
+        pendingEndMessage = null;
         if (state != State.RUNNING) {
             return;
         }
