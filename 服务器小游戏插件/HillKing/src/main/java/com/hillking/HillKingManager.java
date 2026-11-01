@@ -343,6 +343,10 @@ public final class HillKingManager {
             return;
         }
         waiting.add(id);
+        // I1：把玩家挂到会话的归属链上（否则 doctor 的 [归属] 永远是 0 人、I1 只是名义成立）
+        if (session != null && !session.join(player)) {
+            plugin.getLogger().warning("[HillKing] " + player.getName() + " 加入归属链失败（见 [被吞异常]）");
+        }
         clearGameState(player);
         player.setGameMode(GameMode.SURVIVAL);
         resetPlayer(player);
@@ -376,7 +380,16 @@ public final class HillKingManager {
         }
         if (isRunningState() && playing.isEmpty()) {
             endGame(EndReason.ABORT, "&7所有人都离开了，本局结束。");
+            // 已收场：只摘归属链（会话已 ENDED，不会再触发一次 end）
+            if (session != null) {
+                session.leave(player);
+            }
             return;
+        }
+        if (session != null) {
+            // 顺序很重要：先让上面的收场逻辑跑完，再摘归属链。
+            // 否则 session.leave 的"最后一人走了自动 end(ABORT)"会和这里撞车。
+            session.leave(player);
         }
         if (isWaitingState()) {
             updateCountdown();
@@ -397,7 +410,13 @@ public final class HillKingManager {
         HubAPI.clearGame(id);
         if (isRunningState() && playing.isEmpty()) {
             endGame(EndReason.ABORT, "&7所有人都离开了，本局结束。");
+            if (session != null) {
+                session.leave(player);
+            }
             return;
+        }
+        if (session != null) {
+            session.leave(player);   // 下线也要摘归属链
         }
         if (isWaitingState()) {
             updateCountdown();
