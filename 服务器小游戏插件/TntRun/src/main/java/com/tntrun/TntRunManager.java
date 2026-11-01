@@ -1,5 +1,7 @@
 package com.tntrun;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.GameState;
 import com.hub.data.PlayerStats;
 import com.hub.api.HubAPI;
@@ -47,6 +49,22 @@ public class TntRunManager {
     private final TntRunPlugin plugin;
     private final LiveSidebar liveSidebar;
     private final Map<String, TntRunArena> arenas = new LinkedHashMap<>();
+
+    /**
+     * 每个场地一个会话（多场地游戏：不同场地可以同时各开一局）。
+     *
+     * <p>会话是**一次性**的：end() 之后必须换新的，所以取值时用 ensureSession 保证可用。
+     */
+    private final Map<String, TntRunSession> sessions = new LinkedHashMap<>();
+
+    private TntRunSession ensureSession(String arenaName) {
+        TntRunSession s = sessions.get(arenaName);
+        if (s == null || s.state().isFinal()) {
+            s = new TntRunSession(this, arenaName);
+            sessions.put(arenaName, s);
+        }
+        return s;
+    }
     private final Map<UUID, String> playerArena = new LinkedHashMap<>();
     /** 每个场一个等待倒计时实例（公共库 com.hub.util.WaitCountdown）。 */
     private final Map<String, WaitCountdown> waits = new LinkedHashMap<>();
@@ -430,6 +448,10 @@ public class TntRunManager {
         }
         playerArena.put(id, arenaName);
         a.getPlayers().add(id);
+        TntRunSession sess = ensureSession(arenaName);
+        if (!sess.join(p)) {
+            plugin.getLogger().warning("[TntRun] " + p.getName() + " 加入归属链失败（场 " + arenaName + "）");
+        }
         p.getInventory().clear();
         p.setGameMode(GameMode.SURVIVAL);
         p.setHealth(20);
@@ -471,6 +493,12 @@ public class TntRunManager {
         if (a != null) {
             a.getPlayers().remove(id);
             a.getEliminated().remove(id);
+            // I1：摘掉该场的会话归属（注意要放在下面"人走空自动收场"之前，
+            // 否则 session.leave 的自动 end(ABORT) 会和那套逻辑撞车）
+            TntRunSession sess = sessions.get(name);
+            if (sess != null && !sess.state().isFinal()) {
+                sess.leave(p);
+            }
             HubAPI.clearGame(id);
             broadcast(a, "&e" + p.getName() + "&f 离开了（剩 &e" + a.getPlayers().size() + "&f 人）");
             if (a.getState() == TntRunArena.State.RUNNING && a.getPlayers().size() <= 1) {
@@ -832,7 +860,28 @@ public class TntRunManager {
         liveSidebar.update("tntrun:" + a.getName(), "&b&l雪塔大作战 · 存活", online, lines);
     }
 
+    /** 收场入口（I4）：先让该场地的会话 end()，再由 onEnd 回到 {@link #doEndGame} 干活。 */
     private void endGame(TntRunArena a, UUID winner) {
+        TntRunSession sess = sessions.get(a.getName());
+        if (sess == null || sess.state().isFinal()) {
+            pendingWinner.put(a.getName(), winner);
+            doEndGame(a.getName());
+            return;
+        }
+        pendingWinner.put(a.getName(), winner);
+        sess.end(EndReason.ROUND_END);
+    }
+
+    /** 各场地的"赢家"暂存，供 doEndGame 使用（endGame 与 onEnd 之间传递）。 */
+    private final Map<String, UUID> pendingWinner = new java.util.LinkedHashMap<>();
+
+    /** 真正的收场逻辑（由 session.onEnd 回调，也可在没有会话时直接调用）。 */
+    void doEndGame(String arenaName) {
+        TntRunArena a = arenas.get(arenaName);
+        if (a == null) {
+            return;
+        }
+        UUID winner = pendingWinner.remove(arenaName);
         liveSidebar.hide("tntrun:" + a.getName());
         a.setState(TntRunArena.State.WAITING);
         reportArena(a);
