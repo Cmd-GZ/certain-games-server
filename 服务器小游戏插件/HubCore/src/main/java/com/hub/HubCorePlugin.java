@@ -243,8 +243,10 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             case "arena" -> arenaCommand(sender, args);
             case "doctor" -> doctor(sender);
             case "room" -> roomCommand(sender, args);
+            case "start" -> startOrStop(sender, args, true);
+            case "stop" -> startOrStop(sender, args, false);
             default -> sender.sendMessage(LEGACY.deserialize(
-                    "&c用法：/hub [menu|set|reload|lock|item|games|arena|doctor|room] &7，菜单编辑见 &f/hub menu help"));
+                    "&c用法：/hub [menu|set|reload|lock|item|games|arena|doctor|room|start|stop] &7，菜单编辑见 &f/hub menu help"));
         }
         return true;
     }
@@ -481,7 +483,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return startsWith(Arrays.asList("menu", "set", "reload", "lock", "item", "games", "arena", "doctor", "room"), args[0]);
+            return startsWith(Arrays.asList("menu", "set", "reload", "lock", "item", "games", "arena", "doctor", "room", "start", "stop"), args[0]);
         }
         if (args[0].equalsIgnoreCase("arena")) {
             if (args.length == 2) {
@@ -551,6 +553,75 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
         }
         int slash = frame.lastIndexOf('.');
         return slash < 0 ? frame : frame.substring(slash + 1);
+    }
+
+    // ---------- /hub start|stop：统一控制面（D18「先配置转发，后真接口」） ----------
+
+    /**
+     * 统一的"开一局 / 停一局"。
+     *
+     * <p>为什么要有：25 个游戏各有一套 {@code /hill start}、{@code /tntrun start {arena}}……
+     * 运维要记 25 套。这里把它们收成一套 {@code /hub start <房间>}，映射放在
+     * {@code plugins/HubCore/games.yml}。
+     *
+     * <p>顺序：先让房间里的玩家各自执行 {@code join-command}（多数游戏的 join 是玩家命令），
+     * 再由控制台执行 {@code start-command}（多数游戏的 start 是管理命令）。
+     */
+    private void startOrStop(CommandSender sender, String[] args, boolean start) {
+        if (!isAdmin(sender)) {
+            sender.sendMessage(LEGACY.deserialize("&c只有 OP 或拥有 hub.admin 权限的玩家可以执行。"));
+            return;
+        }
+        if (args.length < 2) {
+            sender.sendMessage(LEGACY.deserialize("&c用法：/hub " + (start ? "start" : "stop") + " <房间名>"));
+            sender.sendMessage(LEGACY.deserialize("&7房间列表：&f/hub room list"));
+            return;
+        }
+        String roomId = args[1];
+        var room = com.hub.room.RoomManager.room(roomId);
+        if (room == null) {
+            sender.sendMessage(LEGACY.deserialize("&c没有这个房间：&f" + roomId + " &7（用 &f/hub room list&7 看）"));
+            return;
+        }
+        String gameKey = room.template.gameKey();
+        var cfg = gamesConfig();
+        String path = "games." + gameKey + "." + (start ? "start" : "stop") + "-command";
+        String cmd = cfg.getString(path);
+        if (cmd == null || cmd.isBlank()) {
+            sender.sendMessage(LEGACY.deserialize("&c游戏 &f" + gameKey + " &c没有配置 "
+                    + (start ? "start" : "stop") + "-command。"));
+            sender.sendMessage(LEGACY.deserialize("&7在 &fplugins/HubCore/games.yml &7里加一行："
+                    + "&f" + path + ": \"<命令>\""));
+            return;
+        }
+        cmd = cmd.replace("{arena}", "").trim();
+
+        if (start) {
+            String join = cfg.getString("games." + gameKey + ".join-command");
+            if (join != null && !join.isBlank()) {
+                join = join.replace("{arena}", "").trim();
+                int n = 0;
+                for (org.bukkit.entity.Player p : new java.util.ArrayList<>(room.world.getPlayers())) {
+                    p.performCommand(join);
+                    n++;
+                }
+                sender.sendMessage(LEGACY.deserialize("&7已让 &f" + n + " &7名玩家执行 &f/" + join));
+            }
+        }
+        org.bukkit.Bukkit.dispatchCommand(org.bukkit.Bukkit.getConsoleSender(), cmd);
+        sender.sendMessage(LEGACY.deserialize("&a已执行 &f/" + cmd + " &7（房间 &f" + roomId
+                + "&7，游戏 &f" + gameKey + "&7）"));
+        getLogger().info("[/hub " + (start ? "start" : "stop") + "] " + sender.getName()
+                + " -> 房间 " + roomId + "（" + gameKey + "）：/" + cmd);
+    }
+
+    /** 读（并按需生成）plugins/HubCore/games.yml。 */
+    private org.bukkit.configuration.file.FileConfiguration gamesConfig() {
+        java.io.File f = new java.io.File(getDataFolder(), "games.yml");
+        if (!f.isFile()) {
+            saveResource("games.yml", false);
+        }
+        return org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(f);
     }
 
     // ---------- /hub room：房间引擎的管理入口（R1 的验收入口，R3 之后保留给 OP 排障） ----------
