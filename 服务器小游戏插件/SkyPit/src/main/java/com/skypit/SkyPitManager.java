@@ -152,7 +152,7 @@ public class SkyPitManager {
         plugin.reloadConfig();
 
         FileConfiguration cfg = plugin.getConfig();
-        ConfigurationSection r = cfg.createSection("region");
+        ConfigurationSection r = com.hub.world.Worlds.getOrCreate(cfg, "region");
         if (pos1 != null) {
             r.set("world", com.hub.world.Worlds.tokenOf(pos1.getWorld()));   // R2：房间实例 → tpl:模板键
             r.set("x1", pos1.getX());

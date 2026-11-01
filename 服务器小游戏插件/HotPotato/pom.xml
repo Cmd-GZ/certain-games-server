@@ -6,7 +6,7 @@
 
     <groupId>com.hotpotato</groupId>
     <artifactId>hot-potato</artifactId>
-    <version>1.0.3</version>
+    <version>1.0.4</version>
     <packaging>jar</packaging>
 
     <name>HotPotato</name>
@@ -34,7 +34,7 @@
         <dependency>
             <groupId>com.hub</groupId>
             <artifactId>minigame-lib</artifactId>
-            <version>1.7.1</version>
+            <version>1.7.2</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

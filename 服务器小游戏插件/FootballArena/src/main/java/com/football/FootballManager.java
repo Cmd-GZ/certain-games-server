@@ -139,11 +139,11 @@ public class FootballManager {
 
     public void saveAll() {
         publishRegions();   // 场地可能刚被改过，重新声明（I2）
-        ConfigurationSection sec = plugin.getConfig().createSection("arenas");
+        ConfigurationSection sec = com.hub.world.Worlds.getOrCreate(plugin.getConfig(), "arenas");
         for (Map.Entry<String, FootballArena> e : arenas.entrySet()) {
-            e.getValue().save(sec.createSection(e.getKey()));
+            e.getValue().save(com.hub.world.Worlds.getOrCreate(sec, e.getKey()));
         }
-        ConfigurationSection js = plugin.getConfig().createSection("join-signs");
+        ConfigurationSection js = com.hub.world.Worlds.getOrCreate(plugin.getConfig(), "join-signs");
         for (Map.Entry<String, List<Location>> e : joinSigns.entrySet()) {
             js.set(e.getKey(), e.getValue());
         }

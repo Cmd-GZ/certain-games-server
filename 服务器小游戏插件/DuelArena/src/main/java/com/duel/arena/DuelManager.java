@@ -147,23 +147,23 @@ public class DuelManager {
         // 线上手改了别的键，传上去又被旧值写回去，表现为"改了配置没生效"（和 BuildRun 同一个坑）。
         plugin.reloadConfig();
 
-        ConfigurationSection sec = plugin.getConfig().createSection("arenas");
+        ConfigurationSection sec = com.hub.world.Worlds.getOrCreate(plugin.getConfig(), "arenas");
         for (Map.Entry<String, DuelArena> e : arenas.entrySet()) {
-            e.getValue().save(sec.createSection(e.getKey()));
+            e.getValue().save(com.hub.world.Worlds.getOrCreate(sec, e.getKey()));
         }
-        ConfigurationSection signSec = plugin.getConfig().createSection("signs");
+        ConfigurationSection signSec = com.hub.world.Worlds.getOrCreate(plugin.getConfig(), "signs");
         for (Map.Entry<String, List<Location>> e : signLocations.entrySet()) {
             for (Location loc : e.getValue()) {
                 signSec.set(locKey(loc), e.getKey());
             }
         }
-        ConfigurationSection joinSec = plugin.getConfig().createSection("joinsigns");
+        ConfigurationSection joinSec = com.hub.world.Worlds.getOrCreate(plugin.getConfig(), "joinsigns");
         for (Map.Entry<String, List<Location>> e : joinSigns.entrySet()) {
             for (Location loc : e.getValue()) {
                 joinSec.set(locKey(loc), e.getKey());
             }
         }
-        ConfigurationSection topSec = plugin.getConfig().createSection("topsigns");
+        ConfigurationSection topSec = com.hub.world.Worlds.getOrCreate(plugin.getConfig(), "topsigns");
         for (Location loc : topSigns) {
             topSec.set(locKey(loc), true);
         }

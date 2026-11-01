@@ -151,11 +151,11 @@ public class HotPotatoManager {
         // 线上手改了别的键，传上去又被旧值写回去，表现为"改了配置没生效"（和 BuildRun 同一个坑）。
         plugin.reloadConfig();
 
-        ConfigurationSection sec = plugin.getConfig().createSection("arenas");
+        ConfigurationSection sec = com.hub.world.Worlds.getOrCreate(plugin.getConfig(), "arenas");
         for (Map.Entry<String, HotPotatoArena> e : arenas.entrySet()) {
-            e.getValue().save(sec.createSection(e.getKey()));
+            e.getValue().save(com.hub.world.Worlds.getOrCreate(sec, e.getKey()));
         }
-        ConfigurationSection js = plugin.getConfig().createSection("join-signs");
+        ConfigurationSection js = com.hub.world.Worlds.getOrCreate(plugin.getConfig(), "join-signs");
         for (Map.Entry<String, List<Location>> e : joinSigns.entrySet()) {
             js.set(e.getKey(), e.getValue());
         }

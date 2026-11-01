@@ -186,7 +186,7 @@ public class DuelArena {
         sec.set("spawn1", spawn1);
         sec.set("manual-lobby", manualLobby);
         sec.set("spawn2", spawn2);
-        kit.save(sec.createSection("kit"));
+        kit.save(com.hub.world.Worlds.getOrCreate(sec, "kit"));
     }
 
     /** 从配置段读取。 */

@@ -6,7 +6,7 @@
 
     <groupId>com.skypit</groupId>
     <artifactId>sky-pit</artifactId>
-    <version>1.0.6</version>
+    <version>1.0.7</version>
     <packaging>jar</packaging>
 
     <name>SkyPit</name>
@@ -34,7 +34,7 @@
         <dependency>
             <groupId>com.hub</groupId>
             <artifactId>minigame-lib</artifactId>
-            <version>1.7.1</version>
+            <version>1.7.2</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

@@ -313,9 +313,9 @@ public class BuildRunManager {
         // 否则关服时（onDisable -> saveAll -> saveConfig）会用内存里的旧值覆盖 config.yml：
         // 线上手改了 build-seconds 之类的键，传上去又被旧值写回去，表现为"改了配置没生效"。
         plugin.reloadConfig();
-        ConfigurationSection sec = plugin.getConfig().createSection("arenas");
+        ConfigurationSection sec = com.hub.world.Worlds.getOrCreate(plugin.getConfig(), "arenas");
         for (Map.Entry<String, BuildRunArena> e : arenas.entrySet()) {
-            e.getValue().save(sec.createSection(e.getKey()));
+            e.getValue().save(com.hub.world.Worlds.getOrCreate(sec, e.getKey()));
         }
         plugin.saveConfig();
         plugin.getLogger().info("config.yml 已写回（只重写 arenas 段；build-seconds 等键保持磁盘上的值）");

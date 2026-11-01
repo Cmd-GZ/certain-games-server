@@ -653,7 +653,7 @@ public class LuckyPillarArena {
         if (loc == null) {
             return;
         }
-        ConfigurationSection s = sec.createSection(key);
+        ConfigurationSection s = com.hub.world.Worlds.getOrCreate(sec, key);
         s.set("x", round(loc.getX()));
         s.set("y", round(loc.getY()));
         s.set("z", round(loc.getZ()));

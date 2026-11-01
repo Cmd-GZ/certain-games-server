@@ -139,9 +139,9 @@ public class DigToBottomManager {
     public void saveAll() {
         publishRegions();   // 场地可能刚被改过，重新声明（I2）
         plugin.getConfig().set("arenas", null);
-        ConfigurationSection sec = plugin.getConfig().createSection("arenas");
+        ConfigurationSection sec = com.hub.world.Worlds.getOrCreate(plugin.getConfig(), "arenas");
         for (DigToBottomArena a : arenas.values()) {
-            a.save(sec.createSection(a.getName()));
+            a.save(com.hub.world.Worlds.getOrCreate(sec, a.getName()));
         }
         plugin.saveConfig();
     }

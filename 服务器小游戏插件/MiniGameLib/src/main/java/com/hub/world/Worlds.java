@@ -5,6 +5,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
 
 /**
  * 世界解析器 —— {@code docs/框架不变量.md} 里「模板世界 / 游玩世界」（R2 坐标解耦）的核心。
@@ -195,5 +196,26 @@ public final class Worlds {
         } else {
             sec.set(key + ".world", token);
         }
+    }
+
+    // ---------- 配置段安全写入（R2 单一写者） ----------
+
+    /**
+     * 取一个配置段；**不存在才创建**。
+     *
+     * <p>⚠️ 直接用 {@code ConfigurationSection#createSection} 是**危险的**：
+     * 它是"新建 + 覆盖"，不是"获取或创建"。用它保存场地时，会把磁盘上已有的键整段清掉
+     * —— 实测把 4 个场地的坐标写成了 `{}`（`MurderMystery` 就这么丢过一次数据）。
+     *
+     * <p>凡是"保存时遍历内存里的场地，逐个写回配置"的地方，都应该走这个方法。
+     */
+    public static ConfigurationSection getOrCreate(ConfigurationSection parent, String path) {
+        ConfigurationSection sec = parent.getConfigurationSection(path);
+        return sec != null ? sec : parent.createSection(path);
+    }
+
+    /** 同上，但入参是插件的 config 根。 */
+    public static ConfigurationSection getOrCreate(FileConfiguration cfg, String path) {
+        return getOrCreate((ConfigurationSection) cfg, path);
     }
 }
