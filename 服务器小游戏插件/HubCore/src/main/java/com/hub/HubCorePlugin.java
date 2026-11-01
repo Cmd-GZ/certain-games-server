@@ -633,6 +633,20 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
         }
         String sub = args.length < 2 ? "list" : args[1].toLowerCase();
         switch (sub) {
+            case "gui", "ui" -> {
+                // 选房 UI：玩家打开箱子界面；控制台输出同样的文本版（无客户端也能验证）
+                String game = args.length >= 3 ? args[2] : null;
+                if (sender instanceof org.bukkit.entity.Player p) {
+                    com.hub.gui.RoomGui.open(p, game, com.hub.gui.RoomGui.Mode.ROOMS);
+                } else {
+                    for (String line : com.hub.gui.RoomGui.describe(game, com.hub.gui.RoomGui.Mode.ROOMS)) {
+                        sender.sendMessage(LEGACY.deserialize(line));
+                    }
+                    for (String line : com.hub.gui.RoomGui.describe(game, com.hub.gui.RoomGui.Mode.TEMPLATES)) {
+                        sender.sendMessage(LEGACY.deserialize(line));
+                    }
+                }
+            }
             case "templates" -> {
                 var tpls = com.hub.room.RoomManager.templates();
                 if (tpls.isEmpty()) {

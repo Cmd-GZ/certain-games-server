@@ -116,6 +116,15 @@ public class HubListener implements Listener {
     @EventHandler
     public void onMenuClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player)) return;
+        // 选房 UI 的点击（R3）
+        if (event.getView().getTopInventory().getHolder() instanceof com.hub.gui.RoomGui.Holder rh) {
+            event.setCancelled(true);
+            if (event.getClickedInventory() != null
+                    && event.getClickedInventory().equals(event.getView().getTopInventory())) {
+                com.hub.gui.RoomGui.onClick((Player) event.getWhoClicked(), rh, event.getRawSlot());
+            }
+            return;
+        }
         // 菜单 GUI / 编辑 GUI 的点击由 MenuEditor 处理，这里不插手
         if (event.getView().getTopInventory().getHolder() instanceof com.hub.menu.MenuHolder) return;
         if (plugin.getManager().isMenuItem(event.getCurrentItem())
