@@ -1,5 +1,7 @@
 package com.tntbattle;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.GameState;
 import com.hub.api.HubAPI;
 import com.hub.data.PlayerStats;
@@ -69,6 +71,24 @@ import java.util.UUID;
 
 /** TNT 对战：双队、TNT 发射器、定时羊毛、淘汰与胜负。 */
 public final class TNTBattleManager {
+
+    /** D22：会话层统一按场地键索引（本游戏目前单场地）。 */
+    private final java.util.Map<String, TNTBattleSession> sessions = new java.util.LinkedHashMap<>();
+    private TNTBattleArena.Team pendingWinner;
+    private boolean pendingHasWinner;
+    private TNTBattleSession session;
+
+    private TNTBattleSession ensureSession() {
+        String key = "main";
+        TNTBattleSession s = sessions.get(key);
+        if (s == null || s.state().isFinal()) {
+            s = new TNTBattleSession(this, key);
+            sessions.put(key, s);
+        }
+        session = s;
+        return s;
+    }
+
 
     public static final String GAME = "TNT 对战";
 
@@ -455,6 +475,13 @@ public final class TNTBattleManager {
             Chat.send(player, "&c场地还没配置好：请管理员设置红蓝出生点和等待点。");
             return false;
         }
+        TNTBattleSession sess = ensureSession();
+        if (!sess.join(player)) {
+            if (sess.players().isEmpty()) {
+                sessions.remove("main");
+            }
+            return false;
+        }
         states.put(id, PlayerState.capture(player));
         names.put(id, player.getName());
         core.bind(id, this);
@@ -557,6 +584,9 @@ public final class TNTBattleManager {
         specialReadyAt.clear();
         teams.clear();
         running = true;
+        if (session != null && !session.state().isFinal()) {
+            session.start();
+        }
         ending = false;
         gameStartedAt = System.currentTimeMillis();
         lastRampAmount = 1;
@@ -2401,7 +2431,22 @@ public final class TNTBattleManager {
         }
     }
 
+    /** 收场入口（I4）：先让会话 end()，再由 onEnd 回到 doEndGame。 */
     public void endGame(TNTBattleArena.Team winner) {
+        pendingWinner = winner;
+        pendingHasWinner = winner != null;
+        if (session == null || session.state().isFinal()) {
+            doEndGame();
+            return;
+        }
+        session.end(EndReason.ROUND_END);
+    }
+
+    /** 真正的收场逻辑。赢家透传，玩家看到的结算不变。 */
+    void doEndGame() {
+        TNTBattleArena.Team winner = pendingHasWinner ? pendingWinner : null;
+        pendingWinner = null;
+        pendingHasWinner = false;
         if (ending) {
             return;
         }

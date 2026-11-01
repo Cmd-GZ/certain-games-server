@@ -1,5 +1,7 @@
 package com.duel.arena;
 
+import com.hub.session.EndReason;
+
 import com.hub.data.PlayerStats;
 import com.hub.util.Chat;
 import com.hub.util.LiveSidebar;
@@ -42,6 +44,21 @@ import java.util.UUID;
 
 /** 单挑场核心管理：场配置、对战流程、战绩、告示牌。 */
 public class DuelManager {
+
+    /** D22：每个场地一个会话（多图游戏）。 */
+    private final java.util.Map<String, DuelSession> sessions = new java.util.LinkedHashMap<>();
+    private java.util.UUID pendingWinner;
+    private boolean pendingHasWinner;
+
+    private DuelSession ensureSession(String arenaName) {
+        DuelSession s = sessions.get(arenaName);
+        if (s == null || s.state().isFinal()) {
+            s = new DuelSession(this, arenaName);
+            sessions.put(arenaName, s);
+        }
+        return s;
+    }
+
 
     public static final int KIT_GUI_SIZE = 54;
     public static final int BTN_SAVE = 41;
@@ -508,6 +525,13 @@ public class DuelManager {
             Chat.send(p, "&c该决斗场尚未配置完成（需要范围与两个出生点）。");
             return false;
         }
+        DuelSession sess = ensureSession(arenaName);
+        if (!sess.join(p)) {
+            if (sess.players().isEmpty()) {
+                sessions.remove(arenaName);
+            }
+            return false;
+        }
         playerArena.put(id, arenaName);
         a.getQueue().add(id);
 
@@ -835,7 +859,27 @@ public class DuelManager {
         liveSidebar.update("duel:" + a.getName(), "&c&l单挑 · 血量", players, lines);
     }
 
+    /** 收场入口（I4）：先让会话 end()，再由 onEnd 回到 doEndFight。 */
     private void endFight(DuelArena a, UUID winnerId) {
+        pendingWinner = winnerId;
+        pendingHasWinner = winnerId != null;
+        DuelSession sess = sessions.get(a.getName());
+        if (sess == null || sess.state().isFinal()) {
+            doEndFight(a.getName());
+            return;
+        }
+        sess.end(EndReason.ROUND_END);
+    }
+
+    /** 真正的收场逻辑。赢家透传，玩家看到的结算不变。 */
+    void doEndFight(String arenaName) {
+        DuelArena a = arenas.get(arenaName);
+        if (a == null) {
+            return;
+        }
+        UUID winnerId = pendingHasWinner ? pendingWinner : null;
+        pendingWinner = null;
+        pendingHasWinner = false;
         liveSidebar.hide("duel:" + a.getName());
         UUID f1 = a.getFighter1();
         UUID f2 = a.getFighter2();

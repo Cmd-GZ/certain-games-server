@@ -25,10 +25,20 @@ public final class Sessions {
     }
 
     /** 还没结束的会话。 */
+    /**
+     * 还没结束、**并且确实有人**的会话。
+     *
+     * <p>为什么要求"有人"：会话对象在构造时就自动登记（这样忘不了），
+     * 但"为了尝试加入而临时建出来、结果被 I1 拒绝"的空会话也会被登记进来。
+     * 那种会话没有玩家、也不会有人再进来，若照样列进 doctor，就会显示成
+     * `某场地 [WAITING] 0 人`，看起来像"场地被占了"，其实谁也没进去。
+     *
+     * <p>空会话本身不销毁（销毁要跑收场逻辑，反而危险），只是**不再当作活动曝光**。
+     */
     public static List<GameSession> active() {
         List<GameSession> out = new ArrayList<>();
         for (GameSession s : ALL) {
-            if (s.isActive()) {
+            if (s.isActive() && !s.players().isEmpty()) {
                 out.add(s);
             }
         }
