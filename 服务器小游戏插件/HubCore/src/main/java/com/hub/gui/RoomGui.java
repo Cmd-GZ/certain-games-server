@@ -330,24 +330,10 @@ public final class RoomGui {
      * <p>只传送是不够的：玩家站在房间里但游戏不知道他来了，什么都不会发生。
      * 这一步才是 R3 与 N2 的接缝。
      */
+    /** 进入房间 —— 与 `/hub join` **同一套实现**（{@link com.hub.RoomActions#join}）。 */
     private static void joinRoom(Player p, String roomId) {
-        var room = RoomManager.room(roomId);
-        if (room == null || room.world == null) {
+        if (!com.hub.RoomActions.join(p, roomId)) {
             p.sendMessage(LEGACY.deserialize("&c房间 &f" + roomId + " &c不存在或未加载。"));
-            return;
-        }
-        p.closeInventory();
-        p.teleport(room.world.getSpawnLocation());
-        String join = games().getString("games." + room.template.gameKey() + ".join-command");
-        if (join != null && !join.isBlank()) {
-            join = join.replace("{arena}", "").trim();
-            p.performCommand(join);
-            p.sendMessage(LEGACY.deserialize("&a已进入房间 &f" + roomId
-                    + " &7并加入 &f/" + join + "&7（模板 &f" + room.template.key() + "&7）"));
-        } else {
-            p.sendMessage(LEGACY.deserialize("&a已进入房间 &f" + roomId
-                    + " &7（游戏 &f" + room.template.gameKey() + "&7 没配 join-command，"
-                    + "见 plugins/HubCore/games.yml）"));
         }
     }
 

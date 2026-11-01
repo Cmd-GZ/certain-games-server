@@ -92,6 +92,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
         getServer().getScheduler().runTaskTimer(this, manager::tickSpectate, 20L, 20L);
 
         com.hub.gui.RoomGui.init(this);
+        com.hub.RoomActions.init(this);
         getLogger().info("HubCore 已启用。大厅：" + manager.getLobby());
     }
 
@@ -575,27 +576,8 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             sender.sendMessage(LEGACY.deserialize("&7房间列表：&f/hub room list"));
             return;
         }
-        var room = com.hub.room.RoomManager.room(args[1]);
-        if (room == null) {
-            sender.sendMessage(LEGACY.deserialize("&c没有这个房间：&f" + args[1]));
-            return;
-        }
-        if (room.world == null) {
-            sender.sendMessage(LEGACY.deserialize("&c房间世界还没加载好，稍等再试。"));
-            return;
-        }
-        p.closeInventory();
-        p.teleport(room.world.getSpawnLocation());
-        String gameKey = room.template.gameKey();
-        getLogger().info("[/hub join] " + p.getName() + " -> " + room.roomId + "（" + gameKey + "）");
-        String join = gamesConfig().getString("games." + gameKey + ".join-command");
-        if (join != null && !join.isBlank()) {
-            p.performCommand(join.replace("{arena}", "").trim());
-            p.sendMessage(LEGACY.deserialize("&a已进入房间 &f" + room.roomId
-                    + " &7并加入 &f/" + join + "&7（模板 &f" + room.template.key() + "&7）"));
-        } else {
-            p.sendMessage(LEGACY.deserialize("&a已进入房间 &f" + room.roomId
-                    + "&7（游戏 &f" + gameKey + "&7 没配 join-command）"));
+        if (!com.hub.RoomActions.join(p, args[1])) {
+            sender.sendMessage(LEGACY.deserialize("&c没有这个房间，或房间世界还没加载好：&f" + args[1]));
         }
     }
 
