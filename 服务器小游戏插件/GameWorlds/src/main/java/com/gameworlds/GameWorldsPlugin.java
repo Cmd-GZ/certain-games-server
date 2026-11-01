@@ -659,6 +659,43 @@ public final class GameWorldsPlugin extends JavaPlugin implements CommandExecuto
                 send(sender, "&a世界 &e" + name + "&a 已删除（文件夹与配置已清除）。");
                 return true;
             }
+            case "close" -> {
+                // /gw close [template] <名字> —— 保存并卸载模板世界（设计者改完图收工用）。
+                // 为什么只对模板：持久世界（主城）不能关；房间归房间引擎管（有 /hub room）。
+                if (!admin(sender)) return true;
+                String nm = args.length >= 2 && args[1].equalsIgnoreCase("template") && args.length >= 3
+                        ? args[2] : (args.length >= 2 ? args[1] : "");
+                if (nm.isBlank()) {
+                    send(sender, "&c用法：/gw close <模板名>（保存并卸载；模板未加载时说一声就好）");
+                    return true;
+                }
+                nm = nm.toLowerCase(java.util.Locale.ROOT);
+                if (!com.hub.world.WorldNames.isTemplate(nm)) {
+                    send(sender, "&c/gw close 只用于**模板**世界（" + PREFIX_TEMPLATE + " 前缀）。");
+                    send(sender, "&7持久世界（主城这类）不能关；房间用 &f/gw delete room <房间>&7。");
+                    return true;
+                }
+                World w = Bukkit.getWorld(nm);
+                if (w == null) {
+                    send(sender, "&7模板 &e" + nm + "&7 本来就没加载（不用关）。");
+                    return true;
+                }
+                if (!w.getPlayers().isEmpty()) {
+                    send(sender, "&c模板 &e" + nm + "&c 里还有 &e" + w.getPlayers().size()
+                            + " &c名玩家，先让他们离开再关（避免正在编辑的内容被截断）。");
+                    return true;
+                }
+                // unloadWorld(name, true) 会先把区块存盘再卸载
+                if (!Bukkit.unloadWorld(nm, true)) {
+                    send(sender, "&c模板 &e" + nm + "&c 卸载失败（可能有实体/ticket 占着），详见控制台。");
+                    return true;
+                }
+                managed.remove(nm);
+                send(sender, "&a模板 &e" + nm + "&a 已保存并卸载。"
+                        + "&7（配置里的登记保留，下次 &f/gw tp " + nm + "&7 会自动加载）");
+                getLogger().info("[/gw close] " + sender.getName() + " 保存并卸载模板 " + nm);
+                return true;
+            }
             case "global" -> {
                 if (!admin(sender)) return true;
                 if (args.length < 3) {
