@@ -508,6 +508,11 @@ public final class AnvilBattleManager {
     }
 
     public void leave(Player player, boolean silent) {
+        // I1：从归属链上摘掉自己 —— 漏了这行，玩家会卡在"已在等待中"，
+        // 之后点任何别的游戏都会被拒绝（只剩重启服务器能救）。
+        if (session != null && !session.state().isFinal()) {
+            session.leave(player);
+        }
         UUID id = player.getUniqueId();
         boolean wasWaiting = waiting.remove(id);
         boolean wasPlaying = playing.remove(id);

@@ -561,6 +561,14 @@ public class DuelManager {
     /** 玩家离开场（等待中或结束后手动离开）。 */
     public boolean leaveArena(UUID id) {
         String name = playerArena.remove(id);
+        // I1：从该场地的会话上摘掉自己（漏了会让玩家卡在"已在等待中"）
+        if (name != null) {
+            DuelSession sess = sessions.get(name);
+            org.bukkit.entity.Player quitter = org.bukkit.Bukkit.getPlayer(id);
+            if (sess != null && quitter != null && !sess.state().isFinal()) {
+                sess.leave(quitter);
+            }
+        }
         if (name == null) {
             return false;
         }

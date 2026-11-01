@@ -84,6 +84,11 @@ public class HubManager implements HubService {
     public void teleportToLobby(Player p) {
         spectating.remove(p.getUniqueId()); // 回大厅 = 结束观战
         HubAPI.notifyLobbyHandlers(p); // 先让各游戏插件把玩家踢出自身游戏状态（有防递归保护）
+        // **兜底**：不管各游戏有没有在 leave() 里摘会话，回主城必须把玩家从归属链上摘干净。
+        // 真实 bug：LuckPillar 之类只接了 session.join 没接 session.leave，
+        // 玩家用床退出后会话仍挂着他 → 之后点任何别的游戏都被 I1 拒绝
+        // （表现为"你正在 luckypillar 的等待中"，重进服务器也无效，只能重启服务器）。
+        com.hub.session.PlayerSessions.quitToLobby(p);
         clearGame(p.getUniqueId());
         Location lobby = getLobby();
         if (lobby != null) {

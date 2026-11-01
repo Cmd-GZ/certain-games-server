@@ -1,5 +1,5 @@
 name: KnockbackBattle
-version: '1.1.0'
+version: '1.1.1'
 main: com.knockback.KnockbackPlugin
 api-version: '1.21'
 description: 击退大战：击退镐与风弹把对手打下平台

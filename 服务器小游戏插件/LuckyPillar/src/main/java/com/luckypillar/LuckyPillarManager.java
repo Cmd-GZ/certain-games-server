@@ -424,6 +424,13 @@ public class LuckyPillarManager {
     public void leave(Player p, boolean silent) {
         UUID id = p.getUniqueId();
         String name = playerArena.remove(id);
+        // I1：从该场地的会话上摘掉自己（漏了会让玩家卡在"已在等待中"）
+        if (name != null) {
+            LuckyPillarSession sess = sessions.get(name);
+            if (sess != null && !sess.state().isFinal()) {
+                sess.leave(p);
+            }
+        }
         if (name == null) {
             if (!silent) {
                 msg(p, "&c你不在任何场中。");
