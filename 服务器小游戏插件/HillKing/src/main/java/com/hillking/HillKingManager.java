@@ -214,9 +214,7 @@ public final class HillKingManager {
 
     public void load() {
         // 会话（I4/I5）：只在第一次 load 建一次；重复 load（/hill reload）不动已有会话
-        if (session == null) {
-            session = new HillKingSession(this);
-        }
+        ensureSession();
         startCountdown();
         arena.load();
         data = PlayerStats.load("hillking", new File(plugin.getDataFolder(), "data.yml"));
@@ -263,6 +261,20 @@ public final class HillKingManager {
     /** 兼容旧调用：把 session 状态映射回原来的两态枚举。 */
     public State state() {
         return isRunningState() ? State.RUNNING : State.WAITING;
+    }
+
+    /**
+     * 拿一个可用会话；已结束的会话**不能复用**（I5：ENDED 是终态）。
+     *
+     * <p>⚠️ 修的是我引入的回归：原来只在 {@code load()} 里 new 一次，
+     * 一局结束后 state 停在 ENDED，{@code isWaitingState()} 永远 false →
+     * {@code startGame()} 直接返回，表现为"**每次开服只能玩一局**"。
+     * 正确语义是：会话 = 一局，结束就换新的。
+     */
+    private void ensureSession() {
+        if (session == null || session.state().isFinal()) {
+            session = new HillKingSession(this);
+        }
     }
 
     /** WAITING 阶段（可加入/退出）。 */

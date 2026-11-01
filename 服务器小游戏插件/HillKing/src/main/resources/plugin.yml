@@ -1,5 +1,5 @@
 name: HillKing
-version: '1.3.0'
+version: '1.3.1'
 main: com.hillking.HillKingPlugin
 api-version: '1.21'
 description: 高台之王：站在红色羊毛高台上每秒得分，用咸鱼把对手拍下去
