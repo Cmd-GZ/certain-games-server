@@ -61,6 +61,8 @@ tools/build.sh --deploy       # 全量构建 → .server/deploy/plugins/
 tools/serve.sh --deploy       # 部署进服务器 → 启动（前台，Ctrl-C 或 echo stop > .server/.serve.fifo）
 tools/smoke.sh --deploy       # 冒烟台：真起服 → 断言日志 → 干净关服
 tools/version-check.py        # pom/plugin.yml 版本一致性（R4），不一致 exit 1
+# 已合入但上游还没做完的模块：在模块目录放一个 .build-skip（写原因）即可跳过构建，
+# 它的 jar 就不会被部署/加载（恢复 = 删掉该文件）。当前：FireJumper
 tools/region-report.py        # 生成《区域归属表》（只读）
 tools/fakeclient.py           # "假玩家"：协议直连登录 + 按时间表发命令（需要真人在场的流程用）
 tools/smoke-arcade-party.txt  # 派对冒烟的命令脚本（配合 --fake-player 用）

@@ -50,6 +50,15 @@ echo "== [2/3] 其余 25 个模块 package"
 fail=0
 for pom in */pom.xml; do
   case "$pom" in MiniGameLib/pom.xml) continue ;; esac
+  # 未完工的模块可以放一个 .build-skip（内容写原因）来跳过构建：
+  # 它的 jar 就不会出现在产物里，服务器也就不会加载那个插件。
+  # 上游还没做完的功能用它挡掉，别让半成品上线。
+  if [ -f "$(dirname "$pom")/.build-skip" ]; then
+    echo "  跳过 $(dirname "$pom")（$(head -1 "$(dirname "$pom")/.build-skip")）"
+    # 必须删掉 target/：否则上次构建留下的 jar 会被下面的 find 当成产物一起部署出去
+    rm -rf "$(dirname "$pom")/target"
+    continue
+  fi
   # 用 clean package：增量编译在某些情况下会复用 target/classes 里的旧/坏 class，
   # 表现为"构建成功但 jar 里是半成品"（真实踩过：类里带着 ECJ 的
   # "Unresolved compilation problems"，插件一启用就 Error）。全量 clean 只多几秒。
