@@ -67,9 +67,10 @@ tools/version-check.py        # pom/plugin.yml 版本一致性（R4），不一�
 tools/region-report.py        # 生成《区域归属表》（只读）
 tools/fakeclient.py           # "假玩家"：协议直连登录 + 按时间表发命令（需要真人在场的流程用）
 tools/smoke-arcade-party.txt  # 派对冒烟的命令脚本（配合 --fake-player 用）
+# /gw 的别名是 [gworlds, world]；**没有** /gameworld（不存在）。子命令见 docs/交接.md §2.9
 ```
 
-### 0.5 六条硬规则（不遵守会浪费一整轮）
+### 0.5 七条硬规则（不遵守会浪费一整轮）
 
 1. **`build.sh` 必须 clean。** 增量构建会复用 `target/classes` 留下半成品 jar
    （类里带 ECJ 的 `Unresolved compilation problems`，插件一启用就 `java.lang.Error`）。
@@ -92,7 +93,11 @@ tools/smoke-arcade-party.txt  # 派对冒烟的命令脚本（配合 --fake-play
    P=.server/server/small_games/*/plugins; S=.server/run/small_games/*/plugins
    for d in $P/*/; do n=$(basename "$d"); for f in "$d"*.yml "$d"*.snap; do [ -f "$f" ] && cp "$f" "$S/$n/"; done; done
    ```
-6. **机制不确定就去读字节码**（`javap -c`），别凭 javadoc 印象下结论。
+6. **用户说"检查/看看"时，只检查、不改。** 结论先给出，等点头再动手。
+   真实教训：用户问"`/gameworld` 是 `/gw` 的别名吗"，我查完顺手把别名加进了 `plugin.yml`、
+   还改写了 `usage`，过程中**把原有的 `/world` 别名删掉了**（差点让运维习惯失效）。
+   已回退。**范围锁定不是只针对跨插件——"检查"和"修改"也是两件事。**
+7. **机制不确定就去读字节码**（`javap -c`），别凭 javadoc 印象下结论。
    真实教训：我曾误判 `createSection` 会保留旧键 → 编出一个不存在的"删场地复活"bug。
 
 ### 0.6 环境事实（省得每次重新测）
