@@ -15,6 +15,14 @@
 #   tools/smoke.sh --commands FILE      # 启动后逐行喂命令
 #   tools/smoke.sh --expect 'PATTERN'   # 断言日志里必须出现（可重复）
 #   tools/smoke.sh --reject 'PATTERN'   # 断言日志里不能出现（可重复）
+#   tools/smoke.sh --fake-player NAME   # 起一个"假玩家"配合需要真人的流程（见 tools/fakeclient.py）
+#   tools/smoke.sh --fake-commands 'a;b' # 假玩家到点依次发的命令（分号分隔，不带前导 /）
+#   tools/smoke.sh --fake-delay N       # 假玩家登录后多久开始发命令（默认 3 秒）
+#   tools/smoke.sh --fake-stay N        # 最后一条命令后再挂多久（默认 100 秒）
+#
+# 为什么要 --fake-player：`/arcade start` 能强制跨过人数门槛，但跨不过"一个人都没有"——
+# 街机派对这类"先有人进等待区才开局"的流程，没有客户端就只能人肉进服验。
+# 假玩家是协议直连（抬头有说明），只登录、只发命令、只应答心跳。
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,6 +33,10 @@ CMDS=""
 EXPECTS=()
 REJECTS=()
 TIMEOUT=240
+FAKE_NAME=""
+FAKE_CMDS=""
+FAKE_DELAY=3
+FAKE_STAY=100
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -34,6 +46,10 @@ while [ $# -gt 0 ]; do
     --expect)   EXPECTS+=("$2"); shift 2 ;;
     --reject)   REJECTS+=("$2"); shift 2 ;;
     --timeout)  TIMEOUT="$2"; shift 2 ;;
+    --fake-player)   FAKE_NAME="$2"; shift 2 ;;
+    --fake-commands) FAKE_CMDS="$2"; shift 2 ;;
+    --fake-delay)    FAKE_DELAY="$2"; shift 2 ;;
+    --fake-stay)     FAKE_STAY="$2"; shift 2 ;;
     *) echo "未知参数 $1" >&2; exit 2 ;;
   esac
 done
@@ -94,6 +110,14 @@ fi
 
 if [ "$done_seen" = 1 ]; then
   sleep 3
+  FAKE_JOB=""
+  if [ -n "$FAKE_NAME" ]; then
+    echo "== 假玩家 $FAKE_NAME 命令: $FAKE_CMDS（延迟 ${FAKE_DELAY}s，挂 ${FAKE_STAY}s）"
+    python3 "$ROOT/tools/fakeclient.py" --port 25560 --name "$FAKE_NAME" \
+        --commands "$FAKE_CMDS" --delay "$FAKE_DELAY" --stay "$FAKE_STAY" \
+        --connect-timeout 60 > "$ROOT/.server/fakeclient.log" 2>&1 &
+    FAKE_JOB=$!
+  fi
   if [ -n "$CMDS" ]; then
     if [ ! -f "$CMDS" ]; then
       echo "❌ 命令脚本不见了：$CMDS"; rc=1
@@ -110,6 +134,11 @@ if [ "$done_seen" = 1 ]; then
   sleep 2
   echo "stop" >&3
   for _ in $(seq 1 180); do kill -0 "$JOB" 2>/dev/null || break; sleep 1; done
+  if [ -n "${FAKE_JOB:-}" ]; then
+    kill -0 "$FAKE_JOB" 2>/dev/null && kill "$FAKE_JOB" 2>/dev/null
+    wait "$FAKE_JOB" 2>/dev/null
+    echo "== 假玩家日志: $ROOT/.server/fakeclient.log"
+  fi
 fi
 exec 3>&-
 rm -f "$FIFO"

@@ -4,6 +4,7 @@ import com.hub.api.ArenaStatus;
 import com.hub.api.ArcadeBridge;
 import com.hub.api.GameState;
 import com.hub.api.HubAPI;
+import com.hub.session.EndReason;
 import com.hub.util.Chat;
 import com.hub.util.StartCountdown;
 import com.hub.util.WaitCountdown;
@@ -49,6 +50,28 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
     public static final String GAME = "街机派对";
     public static final String ARENA = "主场地";
 
+    /**
+     * 「派对」的**编排属性**（决策 D17）—— 它决定流程/UI，不决定会话结构。
+     *
+     * <p>判断只有一条：<b>父 session 是否必须比子 session 活得久</b>。
+     * 单局游戏（{@code SINGLE}）与单局包装成派对（{@link #SINGLE} = PARTY_OF_ONE）
+     * 共用同一条执行路径；只有多局派对（{@link #PARTY} + 未来的 COMPOSITE 父子）才需要嵌套。
+     */
+    public enum Flow {
+        /** 多局串烧（现状）：抽 N 个小游戏，打完进颁奖台。 */
+        PARTY,
+        /** PARTY_OF_ONE：只打一个，打完就结束，没有领奖台、没有"下一局"。 */
+        SINGLE;
+
+        static Flow of(String raw) {
+            return raw != null && raw.trim().equalsIgnoreCase("single") ? SINGLE : PARTY;
+        }
+
+        public String id() {
+            return this == SINGLE ? "single" : "party";
+        }
+    }
+
     public enum State {
         WAITING, TRANSITION, ROUND, PODIUM
     }
@@ -64,6 +87,14 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
     private final Random random = new Random();
 
     private State state = State.WAITING;
+    /** 本次派对的会话（I1/I4/I5）。一局派对一个，无 children（D17）。 */
+    private ArcadePartySession session;
+    /** 收场时给玩家看的文案（end(reason) 不带文案，所以暂存在这）。 */
+    private String endMessage;
+    /** 正在关服：收场时不要播报/传送（玩家正在被踢下线）。 */
+    private boolean shuttingDown;
+    /** 本场是否走过领奖台（冒烟台断言用：PARTY_OF_ONE 永远是 false）。 */
+    private boolean podiumShown;
     private final Set<UUID> waiting = new LinkedHashSet<>();
     private final Set<UUID> playing = new LinkedHashSet<>();
     private final Map<UUID, Integer> stars = new HashMap<>();
@@ -177,6 +208,58 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         return Math.max(1, Math.min(16, cfgInt("games-per-party", 3)));
     }
 
+    /** 实际这一场要打几个小游戏：单局包装（PARTY_OF_ONE）恒为 1。 */
+    public int effectiveGamesPerParty() {
+        return flow() == Flow.SINGLE ? 1 : gamesPerParty();
+    }
+
+    /**
+     * 编排属性（D17）。声明在 {@code ArcadeParty/config.yml} 的 {@code flow} 键：
+     * {@code party}（多局串烧，现状）或 {@code single}（单局包装成派对 = PARTY_OF_ONE）。
+     *
+     * <p>为什么暂时放在插件配置而不是房间模板：房间↔派对的绑定是阶段二（PARTY_MULTI）的事，
+     * 现在把 {@code flow} 写进 {@code templates.yml} 会是一个没人读的死键；
+     * 等房间能绑定派对时，只需要把这里的**数据来源**换成"绑定的房间"，执行路径不变。
+     */
+    public Flow flow() {
+        return Flow.of(plugin.getConfig().getString("flow", "party"));
+    }
+
+    /** 单局包装（PARTY_OF_ONE）：只打一个、打完即整局结束、没有领奖台。 */
+    public boolean isPartyOfOne() {
+        return flow() == Flow.SINGLE;
+    }
+
+    /** 只允许本场玩的小游戏（key）；空 = 不限制（用 {@code /arcade flow <x> -} 清掉）。 */
+    public String flowGame() {
+        String key = plugin.getConfig().getString("flow-game", "");
+        return key == null ? "" : key.trim();
+    }
+
+    /** 改编排属性并落盘（单一写者：config.yml）。game 传 {@code -} 表示清空限制。 */
+    public void setFlow(String raw, String game) {
+        Flow target = Flow.of(raw);
+        plugin.getConfig().set("flow", target.id());
+        if (game != null) {
+            String cleaned = game.trim();
+            if (cleaned.equals("-") || cleaned.equalsIgnoreCase("none")) {
+                cleaned = "";
+            }
+            plugin.getConfig().set("flow-game", cleaned);
+        }
+        plugin.saveConfig();
+    }
+
+    /** 给人看的一行：{@code party（多局串烧，3 个）} / {@code single（单局包装，hotpotato）}。 */
+    public String describeFlow() {
+        String key = flowGame();
+        String pinned = key.isEmpty() ? "" : "，只玩 " + key;
+        if (isPartyOfOne()) {
+            return "single（单局包装" + (key.isEmpty() ? "，随机一个" : pinned) + "）";
+        }
+        return "party（多局串烧，" + gamesPerParty() + " 个" + pinned + "）";
+    }
+
     public int transitionSeconds() {
         return Math.max(1, Math.min(300, cfgInt("transition-seconds", 15)));
     }
@@ -223,7 +306,8 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             HubAPI.registerGame(GAME, GAME, "FIREWORK_ROCKET", "e");
             reportArena();
         }, 40L);
-        plugin.getLogger().info("等待区" + (lobby != null ? "已配置" : "未配置（/arcade setlobby）") + "。");
+        plugin.getLogger().info("等待区" + (lobby != null ? "已配置" : "未配置（/arcade setlobby）")
+                + "；编排属性 flow=" + describeFlow() + "。");
     }
 
     public void reload() {
@@ -234,12 +318,22 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
     }
 
     public void shutdown() {
-        cancelTasks();
-        restoreAll();
-        StartCountdown.setGloballySuppressed(false);
-        WaitCountdown.setGloballySuppressed(false);
-        ArcadeBridge.unregister(this);
-        saveSettings();
+        // 关服：走同一个 end() 出口（I4），但收场时不播报、不传送（玩家正在被踢下线）
+        shuttingDown = true;
+        try {
+            if (session != null) {
+                session.end(EndReason.ADMIN_STOP);
+            } else {
+                cancelTasks();
+                restoreAll();
+            }
+        } finally {
+            shuttingDown = false;
+            StartCountdown.setGloballySuppressed(false);
+            WaitCountdown.setGloballySuppressed(false);
+            ArcadeBridge.unregister(this);
+            saveSettings();
+        }
     }
 
     private void ensureDefaults() {
@@ -250,6 +344,8 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         boolean changed = false;
         changed |= setDefault("min-players", 2);
         changed |= setDefault("max-players", 16);
+        changed |= setDefault("flow", "party");
+        changed |= setDefault("flow-game", "");
         changed |= setDefault("games-per-party", 3);
         changed |= setDefault("transition-seconds", 15);
         changed |= setDefault("transition.freeze", true);
@@ -582,6 +678,10 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             HubAPI.teleportToLobby(player);
             Chat.send(player, "&e你已离开" + GAME + "。");
         }
+        // 归属链（I1）：先把这个玩家从派对的会话上摘掉；最后一个人走了会话会自己 end(ABORT)
+        if (session != null) {
+            session.leave(player);
+        }
         if (state == State.WAITING) {
             updateCountdown();
         } else if (playing.isEmpty()) {
@@ -600,6 +700,9 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         }
         stars.remove(id);
         HubAPI.clearGame(id);
+        if (session != null) {
+            session.leave(player);
+        }
         if (state == State.WAITING) {
             updateCountdown();
         } else if (playing.isEmpty()) {
@@ -646,10 +749,25 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             broadcastWaiting("&c没有启用任何小游戏（config.yml 的 games 段或 /arcade menu）。");
             return;
         }
+        // flow-game 非空 = 本场只允许这几个小游戏（两种 flow 都生效；房间化之后它会来自房间模板）
+        String pinned = flowGame();
+        if (!pinned.isEmpty()) {
+            pool.retainAll(List.of(pinned));
+            if (pool.isEmpty()) {
+                broadcastWaiting("&c本场指定的小游戏 &f" + pinned
+                        + " &c当前不可用（未启用 / 没有空场地 / join-start 命令不完整）。");
+                return;
+            }
+        }
         Collections.shuffle(pool, random);
-        int want = Math.min(gamesPerParty(), pool.size());
         selected.clear();
-        selected.addAll(pool.subList(0, want));
+        if (isPartyOfOne()) {
+            // PARTY_OF_ONE：整场只有一个游戏（钉死的那一个，或从可用的池里随机抽）
+            selected.add(pool.get(0));
+        } else {
+            int want = Math.min(gamesPerParty(), pool.size());
+            selected.addAll(pool.subList(0, want));
+        }
 
         countdown.cancel();
         cancelTasks();
@@ -675,8 +793,28 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
                 HubAPI.setPlaying(id, GAME);
             }
         }
+        // 会话（I1/I4/I5）：整场派对 = 一个 session，玩家挂到它的归属链上；无 children（D17）
+        session = new ArcadePartySession(this);
+        for (UUID id : playing) {
+            Player p = Bukkit.getPlayer(id);
+            if (p != null) {
+                session.join(p);
+            }
+        }
+        session.start();
+        podiumShown = false;
+
+        plugin.getLogger().info("[派对] 开局 flow=" + flow().id()
+                + "，小游戏 " + selected.size() + " 个（" + String.join(", ", selected) + "）"
+                + "，参与者 " + playing.size() + " 人，会话 " + session.describe()
+                + (isPartyOfOne() ? "；单局包装：本局结束 = 整场结束（无颁奖台、无下一局）" : ""));
+
         broadcast("&6&l========== " + GAME + " 开始 ==========");
-        broadcast("&7本局共 &e" + selected.size() + " &7个小游戏：" + displayList());
+        if (isPartyOfOne()) {
+            broadcast("&7单局派对（PARTY_OF_ONE）：&f" + displayList() + " &7打完即结束，没有颁奖典礼。");
+        } else {
+            broadcast("&7本局共 &e" + selected.size() + " &7个小游戏：" + displayList());
+        }
         beginTransition();
     }
 
@@ -757,7 +895,7 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             }
         }
         setupSidebar();
-        broadcast("&e第 &f" + (roundIndex + 1) + "/" + selected.size() + " &e局：&f"
+        broadcast("&e" + roundLabel() + "：&f"
                 + displayOf(currentGameKey) + " &7将在 &e" + transitionLeft + " &7秒后开始"
                 + (transitionSpectators.isEmpty() ? "" : " &7（&f" + transitionSpectators.size() + " 人旁观）"));
         if (currentArena != null) {
@@ -795,11 +933,20 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         for (UUID id : playing) {
             Player p = Bukkit.getPlayer(id);
             if (p != null) {
-                Chat.actionBar(p, "&7第 &f" + (roundIndex + 1) + "/" + selected.size()
-                        + " &7局 &f" + displayOf(currentGameKey) + " &8| &e" + transitionLeft + "s"
+                Chat.actionBar(p, "&7" + roundLabel() + " &f" + displayOf(currentGameKey)
+                        + " &8| &e" + transitionLeft + "s"
                         + " &8| &6★ &f" + starsOf(id));
             }
         }
+    }
+
+    /**
+     * 局数标签：多局串烧是「第 x/y 局」，单局包装（PARTY_OF_ONE）只说「本局」——
+     * 这是两种 flow 唯一的展示差异（D17：结构完全相同）。
+     */
+    private String roundLabel() {
+        return isPartyOfOne()
+                ? "本局" : "第 " + (roundIndex + 1) + "/" + selected.size() + " 局";
     }
 
     private void startRound() {
@@ -823,7 +970,7 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             finishRound(List.of(), List.of(), List.of());
             return;
         }
-        broadcast("&6&l第 " + (roundIndex + 1) + " 局：&e" + displayOf(currentGameKey) + " &7开始！"
+        broadcast("&6&l" + roundLabel() + "：&e" + displayOf(currentGameKey) + " &7开始！"
                 + (transitionSpectators.isEmpty() ? "" : "（" + transitionSpectators.size() + " 人旁观）"));
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), start);
         guardTicks = 0;
@@ -888,7 +1035,10 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             }
         }
 
-        broadcast("&6&l✦  ✦  ✦   第 " + (roundIndex + 1) + " 局结束   ✦  ✦  ✦");
+        broadcast("&6&l✦  ✦  ✦   " + roundLabel() + "结束   ✦  ✦  ✦");
+        plugin.getLogger().info("[派对] " + roundLabel() + "结束："
+                + displayOf(currentGameKey) + "（第一/二/三名 "
+                + firsts.size() + "/" + seconds.size() + "/" + thirds.size() + " 人）");
         broadcastRank("第一名", firsts, starFirst());
         broadcastRank("第二名", seconds, starSecond());
         broadcastRank("第三名", thirds, starThird());
@@ -897,6 +1047,11 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         }
 
         roundIndex++;
+        // D17：单局包装（PARTY_OF_ONE）—— 这一局结束 = 整场结束，直接收场，不进领奖台、没有"下一局"
+        if (isPartyOfOne()) {
+            endParty(EndReason.ROUND_END, "&6&l派对结束！");
+            return;
+        }
         if (roundIndex >= selected.size()) {
             beginPodium();
         } else {
@@ -928,9 +1083,16 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
     // ---------- 颁奖 ----------
 
     private void beginPodium() {
+        // 防御：单局包装永远不该走到领奖台（正常路径在 finishRound 里已经收场了，D17）
+        if (isPartyOfOne()) {
+            endParty(EndReason.ROUND_END, "&6&l派对结束！");
+            return;
+        }
         cancelTransition();
         cancelTimeout();
         state = State.PODIUM;
+        podiumShown = true;
+        plugin.getLogger().info("[派对] 全部小游戏打完，进入颁奖典礼（flow=" + flow().id() + "）");
         currentGameKey = "";
         podiumLines.clear();
         podiumFrozen.clear();
@@ -984,9 +1146,9 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
                     int delay = endDelaySeconds();
                     if (delay > 0) {
                         endTask = Bukkit.getScheduler().runTaskLater(plugin,
-                                ArcadePartyManager.this::endParty, delay * 20L);
+                                () -> endParty(EndReason.ROUND_END, null), delay * 20L);
                     } else {
-                        endParty();
+                        endParty(EndReason.ROUND_END, null);
                     }
                     stage = 4;
                 }
@@ -1036,11 +1198,54 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         return Math.max(0, Math.min(300, cfgInt("podium.end-delay-seconds", 10)));
     }
 
-    private void endParty() {
-        if (state != State.PODIUM) {
+    /**
+     * 请求结束整场派对。**统一走会话的 {@code end(reason)}**（I4：生命周期唯一出口），
+     * 幂等；真正的收场在 {@link #doEndParty(EndReason)}（由 {@link ArcadePartySession#onEnd} 回调）。
+     *
+     * @param why     结束原因（只有 ROUND_END 才算"正常打完"）
+     * @param message 给玩家看的一句话；null = 按 reason 给默认文案
+     */
+    private void endParty(EndReason why, String message) {
+        if (message != null) {
+            endMessage = message;
+        }
+        if (session != null) {
+            session.end(why);
             return;
         }
-        broadcast("&6&l派对结束！");
+        // 没有会话（理论上不会发生：state != WAITING 时一定有会话）—— 兜底收场，别把状态卡死
+        doEndParty(why);
+    }
+
+    /** 管理员中止：不颁奖，直接回大厅。 */
+    public void abortParty(String reason) {
+        if (state == State.WAITING) {
+            return;
+        }
+        endParty(EndReason.ADMIN_STOP, reason == null ? "&e派对已结束。" : reason);
+    }
+
+    /**
+     * 真正的收场逻辑。由 {@link ArcadePartySession#onEnd(EndReason)} 回调，
+     * 所以**必然只执行一次**（框架保证），这里不再需要"是否在颁奖阶段"的守卫。
+     */
+    void doEndParty(EndReason why) {
+        plugin.getLogger().info("[派对] 收场 reason=" + why + "，flow=" + flow().id()
+                + "，走过颁奖=" + podiumShown);
+        String message = endMessage;
+        if (message == null) {
+            message = switch (why) {
+                case ROUND_END -> "&6&l派对结束！";
+                case ADMIN_STOP -> "&e管理员结束了本场派对。";
+                case ABORT -> "&7所有玩家都离开了，派对结束。";
+                default -> "&e派对已结束。";
+            };
+        }
+        endMessage = null;
+        boolean announce = !shuttingDown;
+        if (announce) {
+            broadcast(message);
+        }
         List<UUID> everyone = new ArrayList<>(playing);
         for (UUID id : everyone) {
             Player p = Bukkit.getPlayer(id);
@@ -1051,42 +1256,10 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
                 p.setGameMode(GameMode.SURVIVAL);
                 p.setAllowFlight(false);
                 p.setFlying(false);
-                Chat.title(p, "&6&l派对结束", "&f感谢参与！", 2);
-                HubAPI.teleportToLobby(p);
-            }
-            HubAPI.clearGame(id);
-        }
-        restoreAllSidebar();
-        playing.clear();
-        stars.clear();
-        selected.clear();
-        podiumFrozen.clear();
-        endTask = null;
-        roundIndex = 0;
-        cancelTasks();
-        StartCountdown.setGloballySuppressed(false);
-        WaitCountdown.setGloballySuppressed(false);
-        state = State.WAITING;
-        updateCountdown();
-        reportArena();
-    }
-
-    /** 管理员中止：不颁奖，直接回大厅。 */
-    public void abortParty(String reason) {
-        if (state == State.WAITING) {
-            return;
-        }
-        broadcast(reason == null ? "&e派对已结束。" : reason);
-        for (UUID id : new ArrayList<>(playing)) {
-            Player p = Bukkit.getPlayer(id);
-            if (p != null && p.isOnline()) {
-                p.setInvisible(false);
-                p.setInvulnerable(false);
-                resetPlayer(p);
-                p.setGameMode(GameMode.SURVIVAL);
-                p.setAllowFlight(false);
-                p.setFlying(false);
-                HubAPI.teleportToLobby(p);
+                if (announce) {
+                    Chat.title(p, "&6&l派对结束", "&f感谢参与！", 2);
+                    HubAPI.teleportToLobby(p);
+                }
             }
             HubAPI.clearGame(id);
         }
@@ -1096,13 +1269,22 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         stars.clear();
         selected.clear();
         podiumFrozen.clear();
+        currentGameKey = "";
+        currentArena = null;
+        roundParticipants.clear();
+        transitionParticipants.clear();
+        transitionSpectators.clear();
+        roundResolved = false;
         roundIndex = 0;
-        cancelTasks();
+        cancelTasks();   // 取消并清空所有任务字段（endTask/podiumTask/transitionTask/timeoutTask/guardTask）
         StartCountdown.setGloballySuppressed(false);
         WaitCountdown.setGloballySuppressed(false);
         state = State.WAITING;
-        updateCountdown();
-        reportArena();
+        session = null;
+        if (announce) {
+            updateCountdown();
+            reportArena();
+        }
     }
 
     // ---------- 星星 / 计分板 ----------
@@ -1485,10 +1667,8 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
     private void reportArena() {
         boolean active = state != State.WAITING;
         String extra = state == State.ROUND
-                ? "第 " + (roundIndex + 1) + "/" + selected.size() + " 局 · " + displayOf(currentGameKey)
-                : (state == State.TRANSITION
-                ? "准备中 · 第 " + (roundIndex + 1) + "/" + selected.size() + " 局"
-                : null);
+                ? roundLabel() + " · " + displayOf(currentGameKey)
+                : (state == State.TRANSITION ? "准备中 · " + roundLabel() : null);
         HubAPI.setArena(GAME, ARENA, active ? GameState.PLAYING : GameState.WAITING,
                 waiting.size() + playing.size(), extra);
         if (lobby != null) {

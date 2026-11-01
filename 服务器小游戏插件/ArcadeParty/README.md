@@ -3,6 +3,13 @@
 > AI 先读这一段，别先读源码
 
 - **一句话职责**：把多个迷你小游戏**随机顺序串烧**成一局派对（同一个游戏一局只出现一次），每局小游戏前三名拿 3/2/1 颗星，局间有准备阶段并在右侧计分板显示累积星星，最后按星星排名在颁奖台揭晓前三并放烟花。命令 `/arcade`（别名 `/party`、`/arcadeparty`），显示名 `街机派对`。
+- **编排属性 `flow`（决策 D17，1.4.0 起）**：派对不是 session 类型，而是房间/对局的一种**编排属性**，只决定流程与 UI：
+  - `flow: party`（默认，现状）= 多局串烧 → 打完进颁奖台；
+  - `flow: single` = **PARTY_OF_ONE**：只打一个小游戏，**打完即整场结束，没有颁奖典礼、没有"下一局"**；
+    执行路径与单局小游戏完全相同 —— **一个 session、无 children**（`/hub doctor` 的 `[对局]` 里只有一条 `{arcade=1}`）。
+  - `flow-game: <key>`：本场只允许这个/这些小游戏（留空 = 不限制）；运行期用 `/arcade flow <party|single> [key|-]` 改，写回 config.yml。
+  - 两种 flow 的差别只有三处展示：局数标签（「本局」vs「第 1/3 局」）、开局播报、收场（跳过颁奖台）。玩法/计时/星星/派发命令同一条代码。
+  - 为什么 `flow` 现在在插件配置而不是房间模板：房间↔派对的绑定是第二期（`PARTY_MULTI`）的事，现在写进 `templates.yml` 是死键。详见 `docs/派对编排属性.md`。
 - **流程**：
   1. 玩家 `/arcade join` 进等待区；人数够或 OP 强制开始 → 从可用小游戏池随机抽 `games-per-party` 个（不重复）。
   2. **准备阶段**（`transition-seconds`，默认 15 秒）：参赛者会被**加入下一个游戏的等待区（lobby）**并冻结在那里倒计时，右侧计分板显示星星榜，最后 3 秒播 title；超员观战者留在派对等待区。期间各游戏等待室的自动开局、以及各游戏自己的开局倒计时都被临时关闭——**准备阶段一结束就直接开局**，不会再多播 3 秒。
@@ -11,12 +18,13 @@
   5. 打完全部小游戏 → **颁奖**：全体传到观众席，前三名隐身站上各自颁奖台（**揭晓前锁住移动，轮到自己的名次才解锁**），按 第三名 → 第二名 → 第一名 依次**只用 title** 现身（名字 + ★N）+ 烟花；三个人都揭晓后，聊天栏才一次性公布「颁奖结果」三行，然后全体回主城。
 - **命令**：
   - 玩家：`/arcade join`、`leave`、`list`、`stars [玩家]`
-  - OP：`menu`（设置菜单）、`start`、`stop`、`setlobby`、`setaudience`、`setpodium <first|second|third>`、**`addfirework`**（把脚下这格设为烟花发射点，可多次添加）、`clearfireworks`、`fireworks`（查看已配置的点）、`save`、`reload`
+  - OP：`menu`（设置菜单）、**`flow <party|single> [小游戏key|-]`**（编排属性）、`start`、`stop`、`setlobby`、`setaudience`、`setpodium <first|second|third>`、**`addfirework`**（把脚下这格设为烟花发射点，可多次添加）、`clearfireworks`、`fireworks`（查看已配置的点）、`save`、`reload`
 - **设置菜单**（`/arcade menu`，管理员；也可以挂在 Hub 菜单里）：
   - 每局小游戏个数、派对最多玩家、过渡准备时间：左键 +1 / 右键 -1（Shift = ±5）
   - 每个小游戏一格：点击启用/禁用；显示房间上限与 join/start 命令
   - 改动立刻写回 `config.yml`
 - **配置**：`server/plugins/ArcadeParty/config.yml`
+  - `flow`（`party`/`single`）/ `flow-game`（只玩哪个小游戏）
   - `min-players` / `max-players` / `games-per-party` / `transition-seconds` / `round-timeout-seconds`
   - `transition.freeze`（默认 true：过渡阶段锁移动，仍可转头；**改成 false 就允许准备阶段移动**）
   - `podium.end-delay-seconds`（默认 10：颁奖结果公布后停留多少秒展示前三名，再送回大厅；0 = 立刻返回）

@@ -1,0 +1,142 @@
+# ============================================================================
+# 街机派对第一期：PARTY_OF_ONE（单局包装成派对）+ 多局派对回归
+#
+# 时间线：每条命令间隔 1 秒，以开服 "Done (" 之后 3 秒为 0 点（下面写 D+n）。
+# 假玩家（TestBot）由 tools/smoke.sh --fake-player 起，时间线相对**它自己进服**：
+#   +2s 起连发 5 次 /hill join；+17s 起每 3 秒发一次 /arcade join，连发 40 次（120 秒）
+# 所以控制台只依赖"等够久"，不依赖假玩家的登录耗时；重复 join 无害（已在队列里只会提示）。
+#
+# 为什么先收掉 HillKing 那一局：HillKing 在插件启用时就建了一个常驻等待会话
+# （HillKingManager#load 里 new HillKingSession），所以 {hillking=1} 会一直挂在 [对局] 段。
+# 这一节把它正常打完收场，后面单局派对的 [对局] 才严格只有 1 条。
+# 注意：/hill start 会先走 3 秒 StartCountdown（force 只是跳过人数门槛），
+#       所以 /hill stop 必须隔 5 秒以上，否则 stopGame() 看到"还没开局"直接空转。
+# ⚠️ 顺带暴露的既有问题：HillKing 的会话是"一次性"的（ENDED 之后不会再建），
+#    这一局结束后本进程内 HillKing 不能再开局。见 docs/改动记录.md 最上面一条。
+# ============================================================================
+
+list
+hub room create hillking_test pt1   # 房间引擎：异步复制 9ms / 主线程加载 ~58ms；房间会额外声明模板里的区域（24 → 25 块）
+hub room list
+hub doctor   # 基线：[对局] {hillking=1}（HillKing 启用时就建了常驻等待会话）
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+hill start   # 控制台强制开局（3 秒倒计时后真正 RUNNING）
+list
+list
+list
+list
+list
+hill stop   # 收场 → HillKing 会话 ENDED
+list
+hub doctor   # 期望 [对局] 0 个
+arcade flow single hotpotato   # 声明编排属性：单局包装成派对（PARTY_OF_ONE）
+arcade list
+list
+arcade start   # ← 假玩家此时已在派对等待区
+hub doctor   # ① 期望 [对局] 1 个 {arcade=1} / arcade/主场地 [RUNNING] 1 人 / [归属] 1 人有归属
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+hub doctor   # ② 期望 0 个活动对局（这一局结束 = 整场结束，没有颁奖台）
+arcade flow party hotpotato   # 多局派对回归 A：钉死一个游戏 → 仍会走到颁奖典礼
+arcade start
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+hub doctor   # 颁奖进行中，[对局] 仍只有 1 条
+arcade stop
+arcade flow party -   # 多局派对回归 B：不钉小游戏 → 照旧抽 games-per-party 个
+list
+list
+list
+list
+list
+list
+list
+list
+list
+list
+arcade start   # 期望 [派对] 开局 flow=party，小游戏 8 个
+hub doctor
+arcade stop
+hub doctor   # 期望 0 个活动对局
+hub room delete room_pt1
+hub room list
+hub doctor

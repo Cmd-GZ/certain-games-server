@@ -12,6 +12,7 @@
 | `smoke.sh` | **冒烟台**：真起一个 Paper 服务器 → 灌命令 → 断言日志 → 干净关服 | 只写 `.server/smoke.log`；`--deploy` 会覆盖服务器 `plugins/*.jar` |
 | `version-check.py` | 检查/修正 `pom.xml` 版本与 `plugin.yml` 版本一致（R4） | `--fix` 时改 pom |
 | `region-report.py` | 生成《区域归属表》（I2 的取证） | **只读**，只写报告 md |
+| `fakeclient.py` | **假玩家**：协议直连登录，到点往聊天栏发命令、应答心跳 | 只在服务器里留一个"站着不动的玩家"（断开即消失） |
 
 ## 典型流程
 
@@ -27,11 +28,34 @@ tools/smoke.sh --deploy
 tools/serve.sh --deploy                # 起服，然后客户端连 <本机IP>:25560
 #   关服：Ctrl-C 一次，或另开终端 echo stop > .server/.serve.fifo
 
+# 需要"有真人在场"的流程（派对/等待室开局）→ 用假玩家
+tools/smoke.sh --deploy --commands .server/arcade-party-cmds.txt \
+    --fake-player TestBot \
+    --fake-commands '2:hill join;5:arcade join' \
+    --fake-delay 0 --fake-stay 40 \
+    --expect '\[对局\].*1 个活动对局：.*\{arcade=1\}'
+
 # 发版前
 tools/version-check.py                 # 不一致就 exit 1
 tools/region-report.py --out 服务器小游戏插件/docs/区域归属表.md
 tools/smoke.sh --deploy --expect 'SkyPit v1\.0\.3'
 ```
+
+### `fakeclient.py`：为什么需要它 / 怎么用
+
+Paper 26.2 没有 MockBukkit，"造一个玩家"也没有公开 API；而 `arcade`/`hill` 这类流程
+**必须先有人在等待区**才开得了局（`/arcade start` 的 force 只跳过人数门槛，跳不过"一个人都没有"）。
+所以这个脚本用**真实协议**登录一个假玩家：离线模式无加密，包 ID 是从 `server.jar` 里
+`net/minecraft/network/protocol/**/*Protocols.class` 的注册顺序读出来的（AGENTS.md 硬规则第 6 条），
+当前对应 **Paper 26.2 / protocol 776**。升级 Paper 后如果登录卡住，八成是这里的包 ID 要重读。
+
+```bash
+python3 tools/fakeclient.py --port 25560 --name TestBot \
+    --commands '2:hill join;5:arcade join'   # 每项可写 "<秒>:" 前缀 = 相对上一条的延迟
+```
+
+它能做：登录、停在原地、应答 keep-alive/ping、按时间表发命令。
+它**不做**：移动、交互、看画面 —— 需要"点方块/看菜单"的验证还是得真人进服。
 
 ### 人工测试服的三个注意点
 

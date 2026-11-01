@@ -46,6 +46,7 @@ public final class ArcadePartyCommand implements CommandExecutor, TabCompleter {
                 }
             }
             case "list" -> list(sender);
+            case "flow" -> flow(sender, args);
             case "stars" -> stars(sender, args);
             case "menu" -> {
                 if (!admin(sender)) {
@@ -175,7 +176,9 @@ public final class ArcadePartyCommand implements CommandExecutor, TabCompleter {
         Chat.send(sender, "&6===== 街机派对 =====");
         Chat.send(sender, "&7状态：&e" + manager.state() + " &7等待 &e" + manager.waitingCount()
                 + " &7场内 &e" + manager.playingCount());
+        Chat.send(sender, "&7编排属性 flow：&e" + manager.describeFlow());
         Chat.send(sender, "&7每局小游戏：&e" + manager.gamesPerParty()
+                + " &7| 本场实际 &e" + manager.effectiveGamesPerParty()
                 + " &7| 最多玩家 &e" + manager.maxPlayers()
                 + " &7| 过渡 &e" + manager.transitionSeconds() + "s");
         Chat.send(sender, "&7等待区：&f" + (manager.getLobby() != null ? "已配置" : "未配置（/arcade setlobby）"));
@@ -186,6 +189,43 @@ public final class ArcadePartyCommand implements CommandExecutor, TabCompleter {
         }
         Chat.send(sender, "&7启用的小游戏（&e" + pool.size() + "&7）：&f"
                 + (names.isEmpty() ? "无" : String.join("、", names)));
+    }
+
+    /**
+     * {@code /arcade flow [party|single] [小游戏key]} —— 声明/查看「派对编排属性」（D17）。
+     *
+     * <p>{@code single} = 单局包装成派对（PARTY_OF_ONE）：只打一个、打完即结束、没有颁奖典礼；
+     * {@code party} = 多局串烧（现状）。第二个参数可选，用来钉死单局时玩哪个小游戏。
+     */
+    private void flow(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            Chat.send(sender, "&6编排属性 flow：&e" + manager.describeFlow());
+            Chat.send(sender, "&7用法：&f/arcade flow <party|single> [小游戏key]");
+            Chat.send(sender, "&7party = 多局串烧（现状）；single = 单局包装成派对（打完即结束，无颁奖）");
+            return;
+        }
+        if (!admin(sender)) {
+            return;
+        }
+        if (manager.state() != ArcadePartyManager.State.WAITING) {
+            Chat.send(sender, "&c派对进行中，不能改编排属性。");
+            return;
+        }
+        String raw = args[1].toLowerCase(Locale.ROOT);
+        if (!raw.equals("party") && !raw.equals("single")) {
+            Chat.send(sender, "&c只能是 party 或 single。");
+            return;
+        }
+        String game = args.length >= 3 ? args[2].toLowerCase(Locale.ROOT) : null;
+        boolean clearing = game != null && (game.equals("-") || game.equalsIgnoreCase("none"));
+        if (game != null && !clearing && !game.isBlank()
+                && !manager.enabledGameKeys().contains(game)) {
+            Chat.send(sender, "&e注意：&f" + game + " &e当前不在可用小游戏池里"
+                    + "（未启用 / 没空场地 / join-start 命令不完整），开局时会失败。");
+        }
+        manager.setFlow(raw, game);
+        Chat.send(sender, "&a编排属性已改为：&e" + manager.describeFlow());
+        Chat.send(sender, "&7下一场派对生效；当前状态：&f" + manager.state());
     }
 
     private void stars(CommandSender sender, String[] args) {
@@ -210,6 +250,7 @@ public final class ArcadePartyCommand implements CommandExecutor, TabCompleter {
         if (admin(sender)) {
             Chat.send(sender, "&6-- OP --");
             Chat.send(sender, "&e/arcade menu&f 打开设置菜单（每局个数 / 人数 / 过渡时间 / 小游戏开关）");
+            Chat.send(sender, "&e/arcade flow <party|single> [小游戏]&f 编排属性（single = 单局包装成派对）");
             Chat.send(sender, "&e/arcade start&f 开始  &e/arcade stop&f 结束");
             Chat.send(sender, "&e/arcade setlobby&f 等待区  &e/arcade setaudience&f 颁奖观众席");
             Chat.send(sender, "&e/arcade setpodium <first|second|third>&f 前三名站位");
@@ -246,13 +287,25 @@ public final class ArcadePartyCommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         List<String> out = new ArrayList<>();
         if (args.length == 1) {
-            List<String> subs = new ArrayList<>(List.of("join", "leave", "list", "stars", "help"));
+            List<String> subs = new ArrayList<>(List.of("join", "leave", "list", "stars", "help", "flow"));
             boolean admin = !(sender instanceof Player player) || manager.isAdmin(player);
             if (admin) {
                 subs.addAll(List.of("menu", "start", "stop", "setlobby", "setaudience",
                         "setpodium", "addfirework", "clearfireworks", "fireworks", "save", "reload"));
             }
             subs.stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).forEach(out::add);
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("flow")) {
+            for (String option : List.of("party", "single")) {
+                if (option.startsWith(args[1].toLowerCase(Locale.ROOT))) {
+                    out.add(option);
+                }
+            }
+        } else if (args.length == 3 && args[0].equalsIgnoreCase("flow")) {
+            for (String key : manager.enabledGameKeys()) {
+                if (key.startsWith(args[2].toLowerCase(Locale.ROOT))) {
+                    out.add(key);
+                }
+            }
         } else if (args.length == 2 && args[0].equalsIgnoreCase("setpodium")) {
             for (String option : List.of("first", "second", "third")) {
                 if (option.startsWith(args[1].toLowerCase(Locale.ROOT))) {
