@@ -113,6 +113,9 @@ public final class MemoryFlipManager {
     }
 
     private final Set<UUID> waiting = new LinkedHashSet<>();
+    /** 加入时的 tick 与同 tick 内的随机名次（D21：同 tick 的人随机决定主持人）。 */
+    private final java.util.Map<UUID, Long> joinTick = new java.util.HashMap<>();
+    private final java.util.Map<UUID, Long> joinSeed = new java.util.HashMap<>();
     private final Set<UUID> playing = new LinkedHashSet<>();
     private final Map<UUID, PlayState> states = new HashMap<>();
 
@@ -178,6 +181,46 @@ public final class MemoryFlipManager {
             @Override
             public void onStart() {
                 startGame(false);
+            }
+
+            // ---------- D21 主持人流程（配置 flow: host 才启用，默认走上游） ----------
+            @Override
+            public boolean hostFlow() {
+                return "host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"));
+            }
+
+            @Override
+            public int waitSeconds() {
+                return Math.max(5, plugin.getConfig().getInt("wait-seconds", 300));
+            }
+
+            @Override
+            public java.util.List<UUID> waitingOrder() {
+                // 顺序 = (加入 tick, 该 tick 内的随机名次)：同 tick 进来的人随机决定谁是主持人
+                java.util.List<UUID> order = new ArrayList<>(waiting);
+                order.sort(java.util.Comparator
+                        .comparingLong((UUID id) -> joinTick.getOrDefault(id, 0L))
+                        .thenComparingLong(id -> joinSeed.getOrDefault(id, 0L)));
+                return order;
+            }
+
+            @Override
+            public void onHostTimeout(UUID host) {
+                Player p = Bukkit.getPlayer(host);
+                String name = p == null ? host.toString() : p.getName();
+                waiting.remove(host);
+                // I1：会话归属也要摘掉，否则 doctor 的人数不降、且他再也进不了别的游戏
+                if (session != null && p != null) {
+                    session.leave(p);
+                }
+                if (p != null && p.isOnline()) {
+                    Chat.send(p, "&c倒计时结束还没开始，你被移出本局（主持人超时）。");
+                    HubAPI.teleportToLobby(p);
+                }
+                plugin.getLogger().info("[MemoryFlip] 主持人 " + name + " 超时未开始，已移出本局（剩余 "
+                        + waiting.size() + " 人）");
+                broadcast("&e主持人 &f" + name + " &e超时未开始，已移出本局。");
+                updateCountdown();
             }
         });
     }
@@ -350,6 +393,18 @@ public final class MemoryFlipManager {
 
     // ---------- 加入 / 离开 ----------
 
+    /** 发送者是否是当前主持人（D21；仅 flow: host 时成立）。 */
+    public boolean isHost(org.bukkit.command.CommandSender sender) {
+        if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
+            return false;
+        }
+        if (!(sender instanceof Player p)) {
+            return false;
+        }
+        UUID host = countdown.currentHost();
+        return host != null && host.equals(p.getUniqueId());
+    }
+
     public void join(Player player) {
         UUID id = player.getUniqueId();
         if (state != State.WAITING) {
@@ -369,6 +424,8 @@ public final class MemoryFlipManager {
             return;
         }
         waiting.add(id);
+        joinTick.put(id, (long) Bukkit.getCurrentTick());
+        joinSeed.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
         ensureSession();
         if (session != null && !session.join(player)) {
             plugin.getLogger().warning("[MemoryFlip] " + player.getName() + " 加入归属链失败（见 [被吞异常]）");

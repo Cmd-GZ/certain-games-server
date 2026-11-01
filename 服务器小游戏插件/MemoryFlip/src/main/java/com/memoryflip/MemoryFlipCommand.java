@@ -47,8 +47,19 @@ public final class MemoryFlipCommand implements CommandExecutor, TabCompleter {
             case "list" -> list(sender);
             case "stats" -> stats(sender, args);
             case "start" -> {
-                if (!admin(sender)) {
-                    return true;
+                // D21：开始权在主持人手上；但主持人**不享受管理员特权**（人数不够不能开）
+                boolean isAdmin = !(sender instanceof org.bukkit.entity.Player sp) || manager.isAdmin(sp);
+                if (!isAdmin) {
+                    if (!manager.isHost(sender)) {
+                        Chat.send(sender, "&c只有本局**主持人**或管理员可以开始。"
+                                + "&7（主持人 = 最早加入等待队列的人）");
+                        return true;
+                    }
+                    if (manager.waitingCount() < manager.minPlayers()) {
+                        Chat.send(sender, "&c人数还没达到 &f" + manager.minPlayers()
+                                + " 人&c，主持人也不能开始。");
+                        return true;
+                    }
                 }
                 if (manager.isRunning()) {
                     Chat.send(sender, "&e对局已经在进行中。");
