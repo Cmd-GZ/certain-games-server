@@ -31,6 +31,27 @@ import java.util.Map;
 public final class GameWorldsPlugin extends JavaPlugin implements CommandExecutor, TabCompleter {
 
     /** 本插件托管的世界（world_xxx）。 */
+    // ---------- 世界命名前缀（docs/世界命名与前缀.md，决策 D19） ----------
+    /** 模板世界：设计者编辑的地图源，**永不当场地加载**（需要时 /gw load 手动加载）。 */
+    static final String PREFIX_TEMPLATE = "tmpl_";
+    /** 房间实例：**房间引擎独占**（会自动回收），不接受手工创建。 */
+    static final String PREFIX_ROOM = "room_";
+    /** 历史遗留的持久游玩世界前缀（只用于识别，新世界不再自动补它）。 */
+    static final String PREFIX_LEGACY = "world_";
+
+    /** 名字是否已经带了已知前缀（含裸名 {@code world}）。 */
+    static boolean hasKnownPrefix(String name) {
+        return name.startsWith(PREFIX_TEMPLATE)
+                || name.startsWith(PREFIX_ROOM)
+                || name.startsWith(PREFIX_LEGACY)
+                || name.equals("world");
+    }
+
+    /** 模板世界不自动加载。 */
+    static boolean isTemplate(String name) {
+        return name.startsWith(PREFIX_TEMPLATE);
+    }
+
     private final Map<String, World> managed = new LinkedHashMap<>();
 
     @Override
@@ -59,15 +80,26 @@ public final class GameWorldsPlugin extends JavaPlugin implements CommandExecuto
             getLogger().warning("config.yml 缺少 worlds 段，无世界可管理。");
             return;
         }
+        int templates = 0;
         for (String name : sec.getKeys(false)) {
             ConfigurationSection ws = sec.getConfigurationSection(name);
             if (ws != null && !ws.getBoolean("enabled", true)) {
+                continue;
+            }
+            // D19：模板世界**不自动加载**（它只是被房间引擎复制的源；加载它既浪费内存，
+            // 也会让"模板永不加载"这条约定失效）。要用就 /gw load <名字>。
+            if (isTemplate(name)) {
+                templates++;
                 continue;
             }
             World w = loadOrCreate(name, ws);
             if (w != null) {
                 managed.put(name, w);
             }
+        }
+        if (templates > 0) {
+            getLogger().info("跳过 " + templates + " 个模板世界（" + PREFIX_TEMPLATE
+                    + " 前缀，按需 /gw load 加载）。");
         }
     }
 
@@ -278,6 +310,11 @@ public final class GameWorldsPlugin extends JavaPlugin implements CommandExecuto
         ws.set("mob-griefing", false);
         ws.set("keep-inventory", true);
         saveConfig();
+        if (isTemplate(name)) {
+            // 模板只登记、不加载：设计者要建图时再 /gw load
+            send(sender, "&a已登记模板世界 &e" + name + "&7（未加载，用 &f/gw load " + name + "&7 进入编辑）");
+            return null;
+        }
         World w = loadOrCreate(name, ws);
         if (w != null) {
             managed.put(name, w);
@@ -325,16 +362,66 @@ public final class GameWorldsPlugin extends JavaPlugin implements CommandExecuto
             }
             case "create" -> {
                 if (!admin(sender)) return true;
-                if (args.length < 2) {
-                    send(sender, "&c用法：/gw create <世界名> [void]（不写 void = 超平坦；写 void = 完全空的世界）");
+                // 参数：[--persist] <世界名> [void]
+                // 语义（D19，见 docs/世界命名与前缀.md）：
+                //   默认          -> 造**模板**：无已知前缀则自动补 tmpl_，**不自动加载**
+                //   --persist     -> 造**持久世界**：名字原样，开服自动加载（主城这类）
+                //   room_ 前缀    -> 一律拒绝（房间世界由 /hub room create 建，引擎会自动回收）
+                boolean persist = false;
+                int nameIdx = 1;
+                while (nameIdx < args.length && args[nameIdx].startsWith("--")) {
+                    String opt = args[nameIdx].toLowerCase(java.util.Locale.ROOT);
+                    if (opt.equals("--persist") || opt.equals("-p")) {
+                        persist = true;
+                    } else {
+                        send(sender, "&c未知选项 &e" + args[nameIdx]
+                                + "&c。用法：/gw create [--persist] <世界名> [void]");
+                        return true;
+                    }
+                    nameIdx++;
+                }
+                if (args.length <= nameIdx) {
+                    send(sender, "&c用法：/gw create [--persist] <世界名> [void]\n"
+                            + "&7  默认造**模板**（自动补 tmpl_，不自动加载）\n"
+                            + "&7  --persist 造**持久世界**（名字原样，开服自动加载）");
                     return true;
                 }
-                String name = args[1].toLowerCase();
-                if (name.matches("[^a-z0-9_\\-]")) {
+                String raw = args[nameIdx].toLowerCase(java.util.Locale.ROOT);
+                if (raw.matches(".*[^a-z0-9_\\-].*")) {
                     send(sender, "&c世界名只能包含小写字母、数字、下划线和连字符。");
                     return true;
                 }
-                boolean voidWorld = args.length >= 3 && args[2].equalsIgnoreCase("void");
+                // 前缀与"造什么"必须一致，矛盾就拒绝（D19）：
+                //   room_      任何情况下都拒绝（引擎独占、会被自动回收）
+                //   tmpl_ + --persist  拒绝（持久世界不能是模板）
+                //   world_ + 默认      拒绝（那是持久世界的名字，建成模板会误导）
+                if (raw.startsWith(PREFIX_ROOM)) {
+                    send(sender, "&croom_ 前缀是房间引擎独占的（房间会被自动回收），不能用 /gw 创建。"
+                            + "\n&7要开房间请用 &f/hub room create <模板>");
+                    return true;
+                }
+                if (persist && raw.startsWith(PREFIX_TEMPLATE)) {
+                    send(sender, "&c--persist 要造的是**持久世界**，名字不能带 " + PREFIX_TEMPLATE
+                            + " 前缀（那是模板）。\n&7要么去掉 --persist（造模板），要么换个名字。");
+                    return true;
+                }
+                if (!persist && raw.startsWith(PREFIX_LEGACY)) {
+                    send(sender, "&c" + PREFIX_LEGACY + " 是持久世界的名字前缀，建成模板会误导。"
+                            + "\n&7要造持久世界请加 &f--persist&7；要造模板请换个不以 " + PREFIX_LEGACY + " 开头的名字。");
+                    return true;
+                }
+                String name;
+                if (persist) {
+                    name = raw;                       // 持久世界：原样
+                } else if (raw.startsWith(PREFIX_TEMPLATE)) {
+                    name = raw;                       // 已经是模板名，不重复补
+                } else {
+                    name = PREFIX_TEMPLATE + raw;     // 默认造模板
+                    send(sender, "&7世界名未带前缀，按模板处理 → &f" + name
+                            + "&7（要持久世界请加 &f--persist&7）");
+                }
+                boolean voidWorld = args.length > nameIdx + 1
+                        && args[nameIdx + 1].equalsIgnoreCase("void");
                 World w = createManagedWorld(name, sender, voidWorld);
                 if (w != null) {
                     send(sender, "&a已创建" + (voidWorld ? "虚空" : "超平坦") + "世界 &e" + name
