@@ -1,5 +1,7 @@
 package com.memoryflip;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.ArcadeBridge;
 import com.hub.api.GameState;
 import com.hub.api.HubAPI;
@@ -78,6 +80,17 @@ public final class MemoryFlipManager {
     private StartCountdown startCountdown;
 
     private State state = State.WAITING;
+    /** 对局会话（I1/I4/I5）：join/leave 都要挂到归属链上，收场统一走 end()。 */
+    private MemoryFlipSession session;
+    /** endGame 传下来的收场文案，交给 doEndGame 使用（保证玩家看到的文字不变）。 */
+    private String pendingEndMessage;
+
+    private void ensureSession() {
+        if (session == null || session.state().isFinal()) {
+            session = new MemoryFlipSession(this);
+        }
+    }
+
     private final Set<UUID> waiting = new LinkedHashSet<>();
     private final Set<UUID> playing = new LinkedHashSet<>();
     private final Map<UUID, PlayState> states = new HashMap<>();
@@ -335,6 +348,10 @@ public final class MemoryFlipManager {
             return;
         }
         waiting.add(id);
+        ensureSession();
+        if (session != null && !session.join(player)) {
+            plugin.getLogger().warning("[MemoryFlip] " + player.getName() + " 加入归属链失败（见 [被吞异常]）");
+        }
         player.getInventory().clear();
         player.setGameMode(GameMode.SURVIVAL);
         resetPlayer(player);
@@ -455,6 +472,9 @@ public final class MemoryFlipManager {
         }
         countdown.cancel();
         state = State.RUNNING;
+        if (session != null) {
+            session.start();
+        }
         waiting.clear();
         playing.clear();
         playing.addAll(ready);
@@ -723,10 +743,32 @@ public final class MemoryFlipManager {
         endGame("&e管理员结束了本局。");
     }
 
+    /**
+     * 收场入口（I4：生命周期唯一出口）。
+     *
+     * <p>原来这里直接干活；现在改成"先让会话 end()，再由 onEnd 回到 {@link #doEndGame} 干活"，
+     * 这样"谁结束了这一局、为什么结束"有了统一记录，且**只会执行一次**（框架保证幂等）。
+     */
     private void endGame(String reason) {
         if (state != State.RUNNING) {
             return;
         }
+        pendingEndMessage = reason;          // 把玩家原本看到的文案带过去，别丢
+        if (session == null) {
+            doEndGame(EndReason.ROUND_END);
+            return;
+        }
+        session.end(EndReason.ROUND_END);
+    }
+
+    /** 真正的收场逻辑（由 session.onEnd 回调，也可在无会话时直接调用）。 */
+    void doEndGame(EndReason endReason) {
+        if (state != State.RUNNING) {
+            return;
+        }
+        // 收场文案沿用原来的（endGame 传下来的那句），没有就用默认
+        String reason = pendingEndMessage != null ? pendingEndMessage : "&7对局结束。";
+        pendingEndMessage = null;
         cancelTasks();
         state = State.WAITING;
 
