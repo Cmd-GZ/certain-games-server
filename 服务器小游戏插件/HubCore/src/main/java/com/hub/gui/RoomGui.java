@@ -94,6 +94,41 @@ public final class RoomGui {
         return org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(f);
     }
 
+    // ---------- 与主城菜单的接缝 ----------
+
+    /**
+     * 把"注册表里的游戏 id"映射成**已登记模板的 gameKey**（大小写不敏感）。
+     *
+     * <p>返回 null = 这个游戏还没有任何模板 → 调用方保持旧行为（直接进静态场地）。
+     * 这样"房间化"可以**按游戏逐个开启**，不用一次性把 24 个游戏全切过去。
+     */
+    public static String matchTemplateGame(String gameId) {
+        if (gameId == null) {
+            return null;
+        }
+        String norm = gameId.replace("_", "").replace("-", "").toLowerCase(java.util.Locale.ROOT);
+        for (WorldTemplate t : RoomManager.templates()) {
+            String key = t.gameKey().replace("_", "").replace("-", "").toLowerCase(java.util.Locale.ROOT);
+            if (key.equals(norm)) {
+                return t.gameKey();
+            }
+        }
+        return null;
+    }
+
+    /** 某个 gameKey 是否有可用模板（有 = 该游戏已具备房间化条件）。 */
+    public static boolean hasTemplates(String gameKey) {
+        if (gameKey == null) {
+            return false;
+        }
+        for (WorldTemplate t : RoomManager.templates()) {
+            if (t.gameKey().equals(gameKey)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // ---------- 文本版（控制台用 / 也是 GUI 的内容来源） ----------
 
     /**

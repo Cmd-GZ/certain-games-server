@@ -693,6 +693,19 @@ public class HubManager implements HubService {
 
     /** 加入指定场地（状态不是等待中就只提示）。 */
     private void joinArena(Player p, String game, String arena) {
+        // R3：这个游戏已经登记了模板 -> 走**房间流程**（选房 UI），不再直接进静态场地。
+        // 没有模板的游戏保持旧行为 —— 这样房间化可以按游戏逐个开启，不用一次性全切。
+        // 菜单里是**显示名**（"建筑猜猜乐"），模板登记的是 gameKey（"gtb"）——
+        // 先让注册表把显示名解析成 id，再按 id 找模板（大小写不敏感）。
+        com.hub.gui.RoomGui.init(plugin);
+        var regInfo = plugin.getRegistry().get(game);
+        String gameKey = regInfo == null ? null : regInfo.id();
+        String matched = com.hub.gui.RoomGui.matchTemplateGame(gameKey);
+        if (matched != null) {
+            p.closeInventory();
+            com.hub.gui.RoomGui.open(p, matched, com.hub.gui.RoomGui.Mode.ROOMS);
+            return;
+        }
         if (arena == null || arena.isEmpty()) {
             p.sendMessage(LEGACY.deserialize("&c这个槽位还没绑定场地，请找 OP 用 /hub menu edit 设置。"));
             return;
