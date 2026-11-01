@@ -66,15 +66,15 @@ tools/smoke.sh --deploy       # 冒烟台：真起服 → 断言日志 → 干�
 tools/version-check.py        # pom/plugin.yml 版本一致性（R4），不一致 exit 1
 tools/maven-settings.xml      # 可选的 Maven settings：把本地仓库指向 .server/m2repo
 # 服务器小游戏插件/libs/m2/   # vendor 的 com.hub:minigame-lib（IDE 靠它解析，build.sh 自动同步）
-# 已合入但上游还没做完的模块：在模块目录放一个 .build-skip（写原因）即可跳过构建，
-# 它的 jar 就不会被部署/加载（恢复 = 删掉该文件）。当前：FireJumper
+# 已合入但上游还没做完的模块：在模块目录放一个 .build-skip（写原因）即可跳过构建。
+# 当前没有（FireJumper 上游补齐场地后已恢复正常构建）
 tools/region-report.py        # 生成《区域归属表》（只读）
 tools/fakeclient.py           # "假玩家"：协议直连登录 + 按时间表发命令（需要真人在场的流程用）
 tools/smoke-arcade-party.txt  # 派对冒烟的命令脚本（配合 --fake-player 用）
 # /gw 的别名是 [gworlds, world]；**没有** /gameworld（不存在）。子命令见 docs/交接.md §2.9
 ```
 
-### 0.5 九条硬规则（不遵守会浪费一整轮）
+### 0.5 十条硬规则（不遵守会浪费一整轮）
 
 1. **`build.sh` 必须 clean。** 增量构建会复用 `target/classes` 留下半成品 jar
    （类里带 ECJ 的 `Unresolved compilation problems`，插件一启用就 `java.lang.Error`）。
@@ -115,7 +115,12 @@ tools/smoke-arcade-party.txt  # 派对冒烟的命令脚本（配合 --fake-play
    看起来像代码 bug，实际上是"运行时换 jar"。**已给两个脚本加了 `session.lock` 守卫**，
    但仍要记住：`build.sh --deploy` 只写 `.server/deploy/`（安全），
    真正落地到 run 目录的是 smoke/serve。
-9. **机制不确定就去读字节码**（`javap -c`），别凭 javadoc 印象下结论。
+9. **接生命周期必须成对**（`session.join` ↔ `session.leave`），而且**冒烟要测"退出后再进另一个游戏"**。
+   真实事故：20 多个游戏只接了 `join` 没接 `leave` → 玩家用床退出后归属链上还挂着他 →
+   点任何别的游戏都被 I1 拒绝，提示"你正在 X 的等待中"，**重进服务器无效、只能重启**。
+   我的测试全是"进一个游戏就结束"，所以完全没发现。框架层已加兜底
+   （`teleportToLobby` 强制 `PlayerSessions.quitToLobby`），但各游戏仍要自己摘干净。
+10. **机制不确定就去读字节码**（`javap -c`），别凭 javadoc 印象下结论。
    真实教训：我曾误判 `createSection` 会保留旧键 → 编出一个不存在的"删场地复活"bug。
 
 ### 0.6 环境事实（省得每次重新测）
