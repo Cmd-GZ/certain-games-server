@@ -1,5 +1,7 @@
 package com.landclaim;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.GameState;
 import com.hub.api.HubAPI;
 import com.hub.data.PlayerStats;
@@ -75,6 +77,22 @@ public final class LandClaimManager {
 
     private WaitCountdown countdown;
     private YamlConfiguration stats;
+    /** D22：会话层统一按场地键索引（单图游戏只有一个键）。 */
+    private final java.util.Map<String, LandClaimSession> sessions = new java.util.LinkedHashMap<>();
+    private String pendingEndMessage;
+    private LandClaimSession session;
+
+    private LandClaimSession ensureSession() {
+        String key = "main";
+        LandClaimSession s = sessions.get(key);
+        if (s == null || s.state().isFinal()) {
+            s = new LandClaimSession(this, key);
+            sessions.put(key, s);
+        }
+        session = s;
+        return s;
+    }
+
     private boolean running;
     private boolean ending;
     private int remaining;
@@ -201,6 +219,15 @@ public final class LandClaimManager {
             return false;
         }
         states.put(id, PlayerState.capture(player));
+        // I1（D23）：玩家已在别的对局里 -> **拒绝加入**并把话说清楚。
+        // 这一步必须在把玩家写进本游戏队列**之前**，否则会留下
+        // "游戏队列里有他、归属链上没他"的半加入状态（doctor 里查不出来，事后很难查）。
+        ensureSession();
+        if (session != null && !session.join(player)) {
+            Chat.send(player, "&c你正在另一局游戏里，请先退出再加入（右键 &f回主城&c 或输入 &f/hub&c）。");
+            plugin.getLogger().warning("[LandClaim] " + player.getName() + " 已在别的对局，拒绝加入");
+            return false;
+        }
         names.put(id, player.getName());
         scores.put(id, 0);
         colors.put(id, color);
@@ -291,6 +318,9 @@ public final class LandClaimManager {
             set.clear();
         }
         running = true;
+        if (session != null && !session.state().isFinal()) {
+            session.start();
+        }
         ending = false;
 
         int i = 0;
@@ -447,7 +477,21 @@ public final class LandClaimManager {
 
     // ---------- 结算 ----------
 
+    /** 收场入口（I4）：先让会话 end()，再由 onEnd 回到 doEndGame。 */
     public void endGame(boolean natural) {
+        pendingNatural = natural;
+        if (session == null || session.state().isFinal()) {
+            doEndGame();
+            return;
+        }
+        session.end(EndReason.ROUND_END);
+    }
+
+    private boolean pendingNatural;
+
+    /** 真正的收场逻辑（由 session.onEnd 回调）。 */
+    void doEndGame() {
+        boolean natural = pendingNatural;
         if (ending) {
             return;
         }

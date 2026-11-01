@@ -1,5 +1,7 @@
 package com.snakeparty;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.ArcadeBridge;
 import com.hub.api.GameState;
 import com.hub.api.HubAPI;
@@ -64,6 +66,23 @@ public final class SnakePartyManager {
     private final LiveSidebar liveSidebar;
 
     private State state = State.WAITING;
+    /** D22：会话层统一按场地键索引（单图游戏只有一个键）。 */
+    private final java.util.Map<String, SnakePartySession> sessions = new java.util.LinkedHashMap<>();
+    private java.util.Set<UUID> pendingWinners;
+    private String pendingEndMessage;
+    private SnakePartySession session;
+
+    private SnakePartySession ensureSession() {
+        String key = "main";
+        SnakePartySession s = sessions.get(key);
+        if (s == null || s.state().isFinal()) {
+            s = new SnakePartySession(this, key);
+            sessions.put(key, s);
+        }
+        session = s;
+        return s;
+    }
+
     private final Set<UUID> waiting = new LinkedHashSet<>();
     private final Set<UUID> playing = new LinkedHashSet<>();
     private final Set<UUID> eliminated = new LinkedHashSet<>();
@@ -408,6 +427,13 @@ public final class SnakePartyManager {
             Chat.send(player, "&c场地还没配置完整（缺 " + arena.missing() + "），请联系管理员。");
             return;
         }
+        // I1（D23）：先挂会话再入队；失败就拒绝，避免"队列里有他、归属链上没他"的半加入
+        ensureSession();
+        if (session != null && !session.join(player)) {
+            Chat.send(player, "&c你正在另一局游戏里，请先退出再加入（右键 &f回主城&c 或输入 &f/hub&c）。");
+            plugin.getLogger().warning("[SnakeParty] " + player.getName() + " 已在别的对局，拒绝加入");
+            return;
+        }
         waiting.add(id);
         player.getInventory().clear();
         player.setGameMode(GameMode.SURVIVAL);
@@ -608,6 +634,9 @@ public final class SnakePartyManager {
             return;
         }
         state = State.RUNNING;
+        if (session != null && !session.state().isFinal()) {
+            session.start();
+        }
         secondsLeft = gameSeconds();
         for (UUID id : playing) {
             Player p = Bukkit.getPlayer(id);
@@ -650,7 +679,23 @@ public final class SnakePartyManager {
         }
     }
 
+    /** 收场入口（I4）：先让会话 end()，再由 onEnd 回到 doEndGame。 */
     private void endGame(Set<UUID> winners, String reason) {
+        pendingWinners = winners;
+        pendingEndMessage = reason;
+        if (session == null || session.state().isFinal()) {
+            doEndGame();
+            return;
+        }
+        session.end(EndReason.ROUND_END);
+    }
+
+    /** 真正的收场逻辑。赢家与文案透传，玩家看到的结算不变。 */
+    void doEndGame() {
+        Set<UUID> winners = pendingWinners;
+        String reason = pendingEndMessage != null ? pendingEndMessage : "&7对局结束。";
+        pendingWinners = null;
+        pendingEndMessage = null;
         if (state != State.RUNNING && state != State.COUNTDOWN) {
             return;
         }

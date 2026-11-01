@@ -243,6 +243,21 @@ public abstract class GameSession {
 
     // ---------- 参与者 ----------
 
+    /** other 是否与本会话存在父子关系（派对嵌套是允许的，不算冲突）。 */
+    private boolean isAncestorOrDescendant(GameSession other) {
+        for (GameSession p = this.parent; p != null; p = p.parent) {
+            if (p == other) {
+                return true;
+            }
+        }
+        for (GameSession p = other.parent; p != null; p = p.parent) {
+            if (p == this) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * 加入。会把玩家挂到归属链；冲突时不把异常抛给玩家看，而是记 {@code Failures} 并 return false。
      *
@@ -255,9 +270,21 @@ public abstract class GameSession {
         if (state.isClosed() || state == SessionState.CREATED) {
             return false;
         }
+        // 玩家已经在**另一个并列对局**里 —— 这是正常的玩家操作（在 GUI 里点了别的游戏），
+        // 不是程序错误，所以**不记 Failures**（那是给真异常用的，混进去会把 doctor 刷满、
+        // 让真正的问题被淹掉）。这里留一行 INFO 足够定位。
+        List<GameSession> chain = PlayerSessions.chainOf(p.getUniqueId());
+        for (GameSession other : chain) {
+            if (other != this && !isAncestorOrDescendant(other)) {
+                org.bukkit.Bukkit.getLogger().info("[" + gameKey + "] " + p.getName()
+                        + " 已在 " + other.gameKey() + " 里（" + other.state() + "），本次加入被拒绝");
+                return false;
+            }
+        }
         try {
             PlayerSessions.attach(p, this);
         } catch (IllegalStateException ex) {
+            // 走到这里说明上面那段没拦住 —— 真的不一致了，才值得记 Failures
             Failures.recordAndWarn(gameKey + ".加入归属冲突", ex);
             return false;
         }
