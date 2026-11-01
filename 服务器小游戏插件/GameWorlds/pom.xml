@@ -29,7 +29,7 @@
             <!-- 复用 WorldNames（世界命名规则的唯一实现） -->
             <groupId>com.hub</groupId>
             <artifactId>minigame-lib</artifactId>
-            <version>1.7.4</version>
+            <version>1.8.0</version>
             <scope>provided</scope>
         </dependency>
         <dependency>

@@ -46,7 +46,8 @@ public final class HillKingCommand implements CommandExecutor, TabCompleter {
             case "list" -> list(sender);
             case "stats" -> stats(sender, args);
             case "start" -> {
-                if (!admin(sender)) {
+                // D21：主持人流程下，**当前主持人**也能开始（开始权在主持人手上）
+                if (!admin(sender) && !manager.isHost(sender)) {
                     return true;
                 }
                 if (manager.state() != HillKingManager.State.WAITING) {

@@ -136,6 +136,36 @@ public final class HillKingManager {
             public void onStart() {
                 startGame(false);
             }
+
+            // ---------- D21（主持人流程）：配置 flow: host 才启用，默认走上游 ----------
+            @Override
+            public boolean hostFlow() {
+                return "host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"));
+            }
+
+            @Override
+            public int waitSeconds() {
+                return Math.max(5, plugin.getConfig().getInt("wait-seconds", 300));
+            }
+
+            @Override
+            public java.util.List<UUID> waitingOrder() {
+                return new ArrayList<>(waiting); // waiting 是 LinkedHashSet，顺序 = 加入顺序
+            }
+
+            @Override
+            public void onHostTimeout(UUID host) {
+                Player p = Bukkit.getPlayer(host);
+                String name = p == null ? host.toString() : p.getName();
+                waiting.remove(host);
+                if (p != null && p.isOnline()) {
+                    Chat.send(p, "&c倒计时结束还没开始，你被移出本局（主持人超时）。");
+                    HubAPI.teleportToLobby(p);
+                }
+                broadcast("&e主持人 &f" + name + " &e超时未开始，已移出本局。");
+                updateCountdown();
+                reportArena();
+            }
         });
     }
 
@@ -156,6 +186,15 @@ public final class HillKingManager {
     private Material material(String key, Material def) {
         Material material = Material.matchMaterial(cfgString(key, def.name()));
         return material == null || material.isAir() ? def : material;
+    }
+
+    /** 发送者是否是当前主持人（D21：最早的等待者）。 */
+    public boolean isHost(org.bukkit.command.CommandSender sender) {
+        if (!(sender instanceof Player p)) {
+            return false;
+        }
+        UUID host = countdown.currentHost();
+        return host != null && host.equals(p.getUniqueId());
     }
 
     public int minPlayers() {
@@ -423,6 +462,17 @@ public final class HillKingManager {
         }
         updateBoard();
         reportArena();
+    }
+
+    /** 启动时打印当前等待流程，方便运维确认配置生效（配置写错时一眼看得出来）。 */
+    public void logFlow() {
+        boolean hostFlow = "host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"));
+        if (hostFlow) {
+            plugin.getLogger().info("等待流程：主持人（" + Math.max(5, plugin.getConfig()
+                    .getInt("wait-seconds", 300)) + "s；最早加入者为主持人，超时未开始则踢出主持人）");
+        } else {
+            plugin.getLogger().info("等待流程：上游（达标 30s / 满人 3s；队列里有 OP 则暂停，等 OP 手动开始）");
+        }
     }
 
     private void updateCountdown() {

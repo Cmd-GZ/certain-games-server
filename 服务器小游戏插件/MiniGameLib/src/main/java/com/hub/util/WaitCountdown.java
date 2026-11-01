@@ -5,6 +5,7 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -47,6 +48,34 @@ public final class WaitCountdown {
 
         /** 倒计时归零 → 开始游戏（调用插件内部无权限校验的开局方法）。 */
         void onStart();
+
+        // ---------- 目标流程（D21，上游已同意）的可选钩子 ----------
+        // 全部**默认关闭**，所以现有 24 个游戏的行为一个字节都不变；
+        // 游戏想切到 D21，只要覆盖下面这几个方法。
+
+        /** 是否启用「主持人流程」（默认 false = 上游行为）。 */
+        default boolean hostFlow() {
+            return false;
+        }
+
+        /** 达标后的倒计时秒数（默认 30；D21 想用 300 就覆盖这里）。 */
+        default int waitSeconds() {
+            return WAIT_SECONDS;
+        }
+
+        /** 等待队列**按加入顺序**（主持人 = 第一个）。默认直接取 waitingPlayers。 */
+        default List<UUID> waitingOrder() {
+            return List.copyOf(waitingPlayers());
+        }
+
+        /**
+         * 倒计时归零但**没有人开始**时触发（仅 hostFlow 生效）。
+         *
+         * <p>D21 的规定是：**把主持人踢出游戏**（而不是自动开局）。插件在这个回调里
+         * 把人移出队列即可；倒计时不会自动重启，等剩下的人构成新的等待队列后再 update。
+         */
+        default void onHostTimeout(UUID host) {
+        }
 
         /** 倒计时开始时的文案（默认与原实现一致，需要不同说法可以覆盖）。 */
         default String startMessage(int seconds) {
@@ -98,7 +127,7 @@ public final class WaitCountdown {
                 start(FULL_SECONDS);
             }
         } else if (!isRunning()) {
-            start(WAIT_SECONDS);
+            start(host.hostFlow() ? Math.max(1, host.waitSeconds()) : WAIT_SECONDS);
         }
     }
 
@@ -114,6 +143,14 @@ public final class WaitCountdown {
             long left = remainingSeconds();
             if (left <= 0) {
                 cancel();
+                if (host.hostFlow()) {
+                    // D21：倒计时结束还没人开始 -> 主持人被踢，**不自动开局**
+                    UUID hostId = currentHost();
+                    if (hostId != null) {
+                        host.onHostTimeout(hostId);
+                    }
+                    return;
+                }
                 host.onStart();
                 return;
             }
@@ -127,6 +164,16 @@ public final class WaitCountdown {
             task = null;
         }
         endMs = 0L;
+    }
+
+    /**
+     * 当前主持人 = 等待队列里**最早加入**的那个人；队列空则 null。
+     *
+     * <p>依赖 {@link Host#waitingOrder()} 的顺序（各游戏用 LinkedHashSet 存队列，天然有序）。
+     */
+    public UUID currentHost() {
+        List<UUID> order = host.waitingOrder();
+        return order == null || order.isEmpty() ? null : order.get(0);
     }
 
     public boolean isRunning() {

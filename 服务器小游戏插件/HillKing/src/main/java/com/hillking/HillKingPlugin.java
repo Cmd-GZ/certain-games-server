@@ -14,6 +14,7 @@ public class HillKingPlugin extends JavaPlugin {
         saveDefaultConfig();
         manager = new HillKingManager(this);
         manager.load();
+        manager.logFlow();   // 打印等待流程，配置写错时一眼看得出来
 
         HillKingCommand command = new HillKingCommand(this, manager);
         PluginCommand hill = getCommand("hill");
