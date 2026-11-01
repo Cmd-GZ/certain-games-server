@@ -1,5 +1,7 @@
 package com.luckypillar;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.GameState;
 import com.hub.api.HubAPI;
 import com.hub.data.PlayerStats;
@@ -50,6 +52,22 @@ import java.util.UUID;
  * → 终局 TNT 雨 → 结算 8 秒 → 回主城。
  */
 public class LuckyPillarManager {
+
+    /** D22：每个场地一个会话（多图游戏）。 */
+    private final java.util.Map<String, LuckyPillarSession> sessions = new java.util.LinkedHashMap<>();
+    private java.util.UUID pendingWinner;
+    private boolean pendingHasWinner;
+    private boolean pendingDraw;
+
+    private LuckyPillarSession ensureSession(String arenaName) {
+        LuckyPillarSession s = sessions.get(arenaName);
+        if (s == null || s.state().isFinal()) {
+            s = new LuckyPillarSession(this, arenaName);
+            sessions.put(arenaName, s);
+        }
+        return s;
+    }
+
 
     /** HubCore 里登记的游戏显示名（必须与 plugin.yml 的 minigame.name / HubCore games.name 一致）。 */
     public static final String GAME = "幸运之柱";
@@ -368,6 +386,13 @@ public class LuckyPillarManager {
         int max = plugin.getConfig().getInt("max-players", 12);
         if (a.getPlayers().size() >= max) {
             msg(p, "&c人数已满（&e" + max + "&c）。");
+            return false;
+        }
+        LuckyPillarSession sess = ensureSession(arenaName);
+        if (!sess.join(p)) {
+            if (sess.players().isEmpty()) {
+                sessions.remove(arenaName);
+            }
             return false;
         }
         playerArena.put(id, arenaName);
@@ -1011,7 +1036,30 @@ public class LuckyPillarManager {
     }
 
     /** 结算：广播冠/亚/季军 → 冠军 +1 → 结算展示 8 秒（场地保留）→ 回主城 → 清场。 */
+    /** 收场入口（I4）：先让会话 end()，再由 onEnd 回到 doEndMatch。 */
     private void endMatch(LuckyPillarArena a, UUID winner, boolean draw) {
+        pendingWinner = winner;
+        pendingHasWinner = winner != null;
+        pendingDraw = draw;
+        LuckyPillarSession sess = sessions.get(a.getName());
+        if (sess == null || sess.state().isFinal()) {
+            doEndMatch(a.getName());
+            return;
+        }
+        sess.end(EndReason.ROUND_END);
+    }
+
+    /** 真正的收场逻辑（由 session.onEnd 回调）。结算参数透传，玩家看到的结果不变。 */
+    void doEndMatch(String arenaName) {
+        LuckyPillarArena a = arenas.get(arenaName);
+        if (a == null) {
+            return;
+        }
+        UUID winner = pendingHasWinner ? pendingWinner : null;
+        boolean draw = pendingDraw;
+        pendingWinner = null;
+        pendingHasWinner = false;
+        pendingDraw = false;
         if (a.getState() != LuckyPillarArena.State.RUNNING) {
             return;
         }

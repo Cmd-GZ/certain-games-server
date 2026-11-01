@@ -1,5 +1,7 @@
 package com.skypit;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.HubAPI;
 import com.hub.data.PlayerStats;
 import com.hub.util.Chat;
@@ -43,6 +45,20 @@ import java.util.UUID;
  */
 public class SkyPitManager {
 
+    /**
+     * 框架会话（特殊形态：天坑没有轮次，进区域即入局、离开/死亡即出局）。
+     * 注意：本类里已有一个 {@code pitStates}（玩家 → 存档状态），这里**已改名**。
+     */
+    private SkyPitSession session;
+
+    private SkyPitSession ensureSession() {
+        if (session == null || session.state().isFinal()) {
+            session = new SkyPitSession();
+        }
+        return session;
+    }
+
+
     public static final int KIT_GUI_SIZE = 54;
     public static final int BTN_SAVE = 41;
     public static final int BTN_CLEAR = 42;
@@ -71,7 +87,7 @@ public class SkyPitManager {
     private Kit kit = new Kit();
 
     // 正在天坑内战斗的玩家（UUID -> 进入前的状态）
-    private final Map<UUID, SavedState> sessions = new LinkedHashMap<>();
+    private final Map<UUID, SavedState> pitStates = new LinkedHashMap<>();
 
     // 击杀数据
     private FileConfiguration data;
@@ -135,12 +151,12 @@ public class SkyPitManager {
     }
 
     public void onDisable() {
-        for (UUID id : new ArrayList<>(sessions.keySet())) {
+        for (UUID id : new ArrayList<>(pitStates.keySet())) {
             Player p = Bukkit.getPlayer(id);
             if (p != null && p.isOnline()) {
                 exitPit(p, false);
             } else {
-                sessions.remove(id);
+                pitStates.remove(id);
             }
         }
     }
@@ -394,11 +410,11 @@ public class SkyPitManager {
     }
 
     public boolean inPit(UUID id) {
-        return sessions.containsKey(id);
+        return pitStates.containsKey(id);
     }
 
     public int pitCount() {
-        return sessions.size();
+        return pitStates.size();
     }
 
     /** 是否参与天坑战斗（创造/旁观不参与，方便 OP 建设）。 */
@@ -414,10 +430,19 @@ public class SkyPitManager {
      */
     public void enterPit(Player p) {
         UUID id = p.getUniqueId();
-        if (sessions.containsKey(id) || !isPvpEligible(p) || !hasRegion()) {
+        if (pitStates.containsKey(id) || !isPvpEligible(p) || !hasRegion()) {
             return;
         }
-        sessions.put(id, new SavedState(p));
+        pitStates.put(id, new SavedState(p));
+        // 框架会话：进区域即入局（没有等待阶段，第一个进来就直接 RUNNING）
+        SkyPitSession gs = ensureSession();
+        if (gs.join(p)) {
+            if (gs.state() == com.hub.session.SessionState.WAITING) {
+                gs.start();
+            }
+        } else {
+            plugin.getLogger().info("[SkyPit] " + p.getName() + " 已在别的对局里，天坑这次不计入会话");
+        }
         if (!kit.isEmpty()) {
             kit.apply(p);
         }
@@ -432,9 +457,12 @@ public class SkyPitManager {
 
     /** 玩家离开区域：归还状态、关闭 PvP 上报。teleport=true 时传送回入口/主城。 */
     public void exitPit(Player p, boolean teleport) {
-        SavedState st = sessions.remove(p.getUniqueId());
+        SavedState st = pitStates.remove(p.getUniqueId());
         if (st == null) {
             return;
+        }
+        if (session != null && !session.state().isFinal()) {
+            session.leave(p);   // 最后一个人走掉时框架会自动 end(ABORT)
         }
         st.apply(p);
         HubAPI.clearGame(p.getUniqueId());
@@ -449,7 +477,7 @@ public class SkyPitManager {
 
     /** 只发给当前在天坑里的玩家，大厅和其他世界看不到局内播报。 */
     private void broadcastPit(String message) {
-        for (UUID id : new ArrayList<>(sessions.keySet())) {
+        for (UUID id : new ArrayList<>(pitStates.keySet())) {
             Player p = Bukkit.getPlayer(id);
             if (p != null && p.isOnline()) {
                 Chat.sendTitled(p, message);
@@ -459,12 +487,12 @@ public class SkyPitManager {
 
     /** 死亡：只结算击杀，背包由重生时归还（不掉落）。 */
     public void handleDeath(Player victim) {
-        if (!sessions.containsKey(victim.getUniqueId())) {
+        if (!pitStates.containsKey(victim.getUniqueId())) {
             return;
         }
         Player killer = victim.getKiller();
         if (killer != null && !killer.getUniqueId().equals(victim.getUniqueId())
-                && sessions.containsKey(killer.getUniqueId())) {
+                && pitStates.containsKey(killer.getUniqueId())) {
             int kills = recordKill(killer);
             broadcastPit("&e" + victim.getName() + " &7在天坑中被 &c" + killer.getName()
                     + " &7击杀！&e" + killer.getName() + "&7 累计击杀 &e" + kills + "&7 人");
@@ -476,10 +504,10 @@ public class SkyPitManager {
 
     /** 重生：归还装备并传送到复活点（未设置则入口，再未设置则主城）。 */
     public void handleRespawn(Player p, Location respawnLoc) {
-        if (!sessions.containsKey(p.getUniqueId())) {
+        if (!pitStates.containsKey(p.getUniqueId())) {
             return;
         }
-        SavedState st = sessions.remove(p.getUniqueId());
+        SavedState st = pitStates.remove(p.getUniqueId());
         st.apply(p);
         HubAPI.clearGame(p.getUniqueId());
         Location target = respawnPoint != null ? respawnPoint : (entry != null ? entry : HubAPI.getLobby());
@@ -500,7 +528,7 @@ public class SkyPitManager {
 
     /** 退出服务器：归还背包（避免把天坑装备写进玩家存档）。 */
     public void handleQuit(Player p) {
-        SavedState st = sessions.remove(p.getUniqueId());
+        SavedState st = pitStates.remove(p.getUniqueId());
         if (st == null) {
             return;
         }
@@ -525,12 +553,12 @@ public class SkyPitManager {
     // ---------- 击杀统计 ----------
 
     private void updateLiveBoard() {
-        if (sessions.isEmpty()) {
+        if (pitStates.isEmpty()) {
             liveSidebar.hide("skypit");
             return;
         }
         List<UUID> online = new ArrayList<>();
-        for (UUID id : sessions.keySet()) {
+        for (UUID id : pitStates.keySet()) {
             Player p = Bukkit.getPlayer(id);
             if (p != null && p.isOnline()) {
                 online.add(id);

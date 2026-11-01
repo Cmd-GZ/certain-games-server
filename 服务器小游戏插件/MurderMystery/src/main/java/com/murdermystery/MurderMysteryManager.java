@@ -1,5 +1,7 @@
 package com.murdermystery;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.GameState;
 import com.hub.data.PlayerStats;
 import com.hub.api.HubAPI;
@@ -66,6 +68,21 @@ import java.util.UUID;
  * 出界淘汰、HubCore 大厅联动、战绩存储、配置模式与加入告示牌。
  */
 public class MurderMysteryManager {
+
+    /** D22：每个场地一个会话（多图游戏）。 */
+    private final java.util.Map<String, MurderMysterySession> sessions = new java.util.LinkedHashMap<>();
+    private boolean pendingInnocentsWin;
+    private String pendingOutcome;
+
+    private MurderMysterySession ensureSession(String arenaName) {
+        MurderMysterySession s = sessions.get(arenaName);
+        if (s == null || s.state().isFinal()) {
+            s = new MurderMysterySession(this, arenaName);
+            sessions.put(arenaName, s);
+        }
+        return s;
+    }
+
 
     /** 与 HubCore 菜单登记一致的显示名（alias）。 */
     public static final String GAME_NAME = "密室杀手";
@@ -637,6 +654,13 @@ public class MurderMysteryManager {
         int max = maxPlayers();
         if (a.getPlayers().size() >= max) {
             msg(p, "&c人数已满（&e" + max + "&c）。");
+            return false;
+        }
+        MurderMysterySession sess = ensureSession(arenaName);
+        if (!sess.join(p)) {
+            if (sess.players().isEmpty()) {
+                sessions.remove(arenaName);
+            }
             return false;
         }
         playerArena.put(id, arenaName);
@@ -1965,7 +1989,28 @@ public class MurderMysteryManager {
      * @param innocentsWin true 表示无辜者阵营获胜（决定战绩记给谁）
      * @param outcome      结算横幅，由调用方按实际结束原因给出（时间到 / 杀手被消灭 / 无辜者全灭…）
      */
+    /** 收场入口（I4）：先让会话 end()，再由 onEnd 回到 doEndGame。 */
     private void endGame(MurderMysteryArena a, boolean innocentsWin, String outcome) {
+        pendingInnocentsWin = innocentsWin;
+        pendingOutcome = outcome;
+        MurderMysterySession sess = sessions.get(a.getName());
+        if (sess == null || sess.state().isFinal()) {
+            doEndGame(a.getName());
+            return;
+        }
+        sess.end(EndReason.ROUND_END);
+    }
+
+    /** 真正的收场逻辑（由 session.onEnd 回调）。结算参数透传，玩家看到的结果不变。 */
+    void doEndGame(String arenaName) {
+        MurderMysteryArena a = arenas.get(arenaName);
+        if (a == null) {
+            return;
+        }
+        boolean innocentsWin = pendingInnocentsWin;
+        String outcome = pendingOutcome != null ? pendingOutcome : "";
+        pendingInnocentsWin = false;
+        pendingOutcome = null;
         if (a.getState() != MurderMysteryArena.State.RUNNING) {
             return;
         }
