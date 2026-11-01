@@ -201,5 +201,13 @@ games:
     join-command: 'fj join'
     start-command: 'fj start'
 
+  arrowrain:
+    display: 万箭齐发
+    enabled: true
+    arena-aware: false
+    max-players: 16
+    join-command: 'arrowrain join'
+    start-command: 'arrowrain start'
+
 # 配置版本（迁移用，不要手改）
 config-version: 1

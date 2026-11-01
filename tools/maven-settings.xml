@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  IDE / 手动 mvn 用这份 settings，把本地仓库指向 **workspace 内的 .server/m2repo**。
+
+  为什么需要：
+    - 本仓库的插件都 `provided` 依赖 `com.hub:minigame-lib`，它**不在 Maven 中央仓库**，
+      只能由本仓库先 `mvn install` 到本地；
+    - 默认的 ~/.m2/repository 在当前开发环境里是**只读**的，install 会失败，
+      于是那里只留下 *.lastUpdated 空壳 → IDE 一片红："Missing artifact com.hub:minigame-lib"。
+
+  用法：
+    IDEA：Settings → Build Tools → Maven → User settings file 选这个文件
+    命令行：mvn -s tools/maven-settings.xml ...
+  注意：`<localRepository>` 写的是绝对路径，换机器要改。
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
+  <localRepository>/home/user/MyProject/certain-games-server/.server/m2repo</localRepository>
+</settings>

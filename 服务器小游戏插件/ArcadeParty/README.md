@@ -38,7 +38,7 @@
   - `scoreboard.enabled/title/line`
   - `games.<key>`：`display` / `enabled` / `arena-aware` / `max-players` / `join-command` / `start-command`
   - **多场地游戏**：`arena-aware: true` 时命令里写 `{arena}`（如 `dig join {arena}` / `dig start {arena}`）；派对会自动查主城登记的空场（状态为等待中）并替换。**抽到的游戏如果当时没有空场，会从本局清单里去掉并换下一个**，不会把带 `{arena}` 的命令空跑；开局前也会再检查一次。
-- **已接入的小游戏**（会通过 `ArcadeBridge` 回报前三名）：`digtobottom`（一掘到底）、`anvilbattle`（铁砧掘战）、`animalslaughter`（动物屠宰）、`snakeparty`（蛇行派对）、`hotpotato`（烫手山芋）、`tntrun`（雪塔大作战）、`colorparty`（色盲派对）、`grouprace`（群友竞速）、`knockback`（击退大战）、`landclaim`（占地风云1）、`jumpfill`（花落水家）、`memoryflip`（记忆翻牌）、`hillking`（高台之王）、`oneshot`（One Shot）、`firejumper`（跃火者）。
+- **已接入的小游戏**（会通过 `ArcadeBridge` 回报前三名）：`digtobottom`（一掘到底）、`anvilbattle`（铁砧掘战）、`animalslaughter`（动物屠宰）、`snakeparty`（蛇行派对）、`hotpotato`（烫手山芋）、`tntrun`（雪塔大作战）、`colorparty`（色盲派对）、`grouprace`（群友竞速）、`knockback`（击退大战）、`landclaim`（占地风云1）、`jumpfill`（花落水家）、`memoryflip`（记忆翻牌）、`hillking`（高台之王）、`oneshot`（One Shot）、`firejumper`（跃火者）、`arrowrain`（万箭齐发）。
 - **接入一个新小游戏**：
   1. 在它的结算处（算好前三名之后）调用
      `com.hub.api.ArcadeBridge.report("<key>", firsts, seconds, thirds);`
