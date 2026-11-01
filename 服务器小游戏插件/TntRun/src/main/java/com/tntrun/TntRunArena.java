@@ -409,21 +409,21 @@ public class TntRunArena {
     }
 
     public void save(ConfigurationSection sec) {
-        sec.set("pos1", pos1);
-        sec.set("pos2", pos2);
-        sec.set("spawn", spawn);
-        sec.set("lobby", lobbyPoint);
-        sec.set("center", center);
+        com.hub.world.Worlds.writeLocation(sec, "pos1", pos1);
+        com.hub.world.Worlds.writeLocation(sec, "pos2", pos2);
+        com.hub.world.Worlds.writeLocation(sec, "spawn", spawn);
+        com.hub.world.Worlds.writeLocation(sec, "lobby", lobbyPoint);
+        com.hub.world.Worlds.writeLocation(sec, "center", center);
         sec.set("cutoff-y", cutoffY);
     }
 
     public static TntRunArena load(String name, ConfigurationSection sec) {
         TntRunArena a = new TntRunArena(name);
-        a.pos1 = (Location) sec.get("pos1");
-        a.pos2 = (Location) sec.get("pos2");
-        a.spawn = (Location) sec.get("spawn");
-        a.lobbyPoint = (Location) sec.get("lobby");
-        a.center = (Location) sec.get("center");
+        a.pos1 = com.hub.world.Worlds.readLocation(sec, "pos1");
+        a.pos2 = com.hub.world.Worlds.readLocation(sec, "pos2");
+        a.spawn = com.hub.world.Worlds.readLocation(sec, "spawn");
+        a.lobbyPoint = com.hub.world.Worlds.readLocation(sec, "lobby");
+        a.center = com.hub.world.Worlds.readLocation(sec, "center");
         a.cutoffY = sec.getInt("cutoff-y");
         return a;
     }

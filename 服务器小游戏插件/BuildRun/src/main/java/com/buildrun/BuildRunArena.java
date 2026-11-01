@@ -411,22 +411,22 @@ public class BuildRunArena {
     // ---------- 配置读写 ----------
 
     public void save(ConfigurationSection sec) {
-        sec.set("pos1", pos1);
-        sec.set("pos2", pos2);
+        com.hub.world.Worlds.writeLocation(sec, "pos1", pos1);
+        com.hub.world.Worlds.writeLocation(sec, "pos2", pos2);
         sec.set("direction", direction);
         sec.set("gap", gap);
-        sec.set("spawn", spawn);
-        sec.set("lobby", lobby);
+        com.hub.world.Worlds.writeLocation(sec, "spawn", spawn);
+        com.hub.world.Worlds.writeLocation(sec, "lobby", lobby);
     }
 
     public static BuildRunArena load(String name, ConfigurationSection sec) {
         BuildRunArena a = new BuildRunArena(name);
-        a.pos1 = (Location) sec.get("pos1");
-        a.pos2 = (Location) sec.get("pos2");
+        a.pos1 = com.hub.world.Worlds.readLocation(sec, "pos1");
+        a.pos2 = com.hub.world.Worlds.readLocation(sec, "pos2");
         a.setDirection(sec.getString("direction", "+x"));
         a.gap = Math.max(0, sec.getInt("gap", 0));
-        a.spawn = (Location) sec.get("spawn");
-        a.lobby = (Location) sec.get("lobby");
+        a.spawn = com.hub.world.Worlds.readLocation(sec, "spawn");
+        a.lobby = com.hub.world.Worlds.readLocation(sec, "lobby");
         return a;
     }
 

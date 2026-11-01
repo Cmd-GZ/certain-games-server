@@ -398,10 +398,10 @@ public class ColorPartyArena {
     // ---------- 配置 ----------
 
     public void save(ConfigurationSection sec) {
-        sec.set("pos1", pos1);
-        sec.set("pos2", pos2);
-        sec.set("spawn", spawn);
-        sec.set("lobby", lobbyPoint);
+        com.hub.world.Worlds.writeLocation(sec, "pos1", pos1);
+        com.hub.world.Worlds.writeLocation(sec, "pos2", pos2);
+        com.hub.world.Worlds.writeLocation(sec, "spawn", spawn);
+        com.hub.world.Worlds.writeLocation(sec, "lobby", lobbyPoint);
         sec.set("panel-pos1", panelPos1);
         sec.set("panel-pos2", panelPos2);
         if (cutoffY != CUTOFF_UNSET) {
@@ -411,10 +411,10 @@ public class ColorPartyArena {
 
     public static ColorPartyArena load(String name, ConfigurationSection sec) {
         ColorPartyArena a = new ColorPartyArena(name);
-        a.pos1 = (Location) sec.get("pos1");
-        a.pos2 = (Location) sec.get("pos2");
-        a.spawn = (Location) sec.get("spawn");
-        a.lobbyPoint = (Location) sec.get("lobby");
+        a.pos1 = com.hub.world.Worlds.readLocation(sec, "pos1");
+        a.pos2 = com.hub.world.Worlds.readLocation(sec, "pos2");
+        a.spawn = com.hub.world.Worlds.readLocation(sec, "spawn");
+        a.lobbyPoint = com.hub.world.Worlds.readLocation(sec, "lobby");
         a.panelPos1 = (Location) sec.get("panel-pos1");
         a.panelPos2 = (Location) sec.get("panel-pos2");
         a.cutoffY = sec.contains("cutoff-y") ? sec.getInt("cutoff-y") : CUTOFF_UNSET;

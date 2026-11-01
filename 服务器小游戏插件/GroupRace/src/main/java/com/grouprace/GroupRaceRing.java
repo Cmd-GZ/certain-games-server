@@ -107,7 +107,7 @@ public final class GroupRaceRing {
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new LinkedHashMap<>();
-        map.put("world", center.getWorld() == null ? "" : center.getWorld().getName());
+        map.put("world", center.getWorld() == null ? "" : com.hub.world.Worlds.tokenOf(center.getWorld()));
         map.put("x", center.getX());
         map.put("y", center.getY());
         map.put("z", center.getZ());
@@ -122,7 +122,7 @@ public final class GroupRaceRing {
         if (map == null) {
             return null;
         }
-        World world = Bukkit.getWorld(String.valueOf(map.get("world")));
+        World world = com.hub.world.Worlds.resolve(String.valueOf(map.get("world")));
         if (world == null) {
             return null;
         }

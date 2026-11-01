@@ -203,7 +203,7 @@ public final class GroupRaceArena {
         if (value instanceof String raw && !raw.isBlank()) {
             String[] parts = raw.split(",");
             if (parts.length >= 4) {
-                World world = org.bukkit.Bukkit.getWorld(parts[0].trim());
+                World world = com.hub.world.Worlds.resolve(parts[0]);   // R2：支持 tpl:模板键
                 if (world != null) {
                     try {
                         double x = Double.parseDouble(parts[1].trim());

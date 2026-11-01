@@ -344,10 +344,10 @@ public class FootballArena {
 
     /** 保存（Location 直接序列化，与其它游戏一致）。 */
     public void save(ConfigurationSection sec) {
-        sec.set("pos1", pos1);
-        sec.set("pos2", pos2);
-        sec.set("center", center);
-        sec.set("lobby", lobbyPoint);
+        com.hub.world.Worlds.writeLocation(sec, "pos1", pos1);
+        com.hub.world.Worlds.writeLocation(sec, "pos2", pos2);
+        com.hub.world.Worlds.writeLocation(sec, "center", center);
+        com.hub.world.Worlds.writeLocation(sec, "lobby", lobbyPoint);
         sec.set("spawn-red", spawnRed);
         sec.set("spawn-blue", spawnBlue);
         sec.set("goal-red-1", goalRedPos1);
@@ -358,10 +358,10 @@ public class FootballArena {
 
     public static FootballArena load(String name, ConfigurationSection sec) {
         FootballArena a = new FootballArena(name);
-        a.pos1 = (Location) sec.get("pos1");
-        a.pos2 = (Location) sec.get("pos2");
-        a.center = (Location) sec.get("center");
-        a.lobbyPoint = (Location) sec.get("lobby");
+        a.pos1 = com.hub.world.Worlds.readLocation(sec, "pos1");
+        a.pos2 = com.hub.world.Worlds.readLocation(sec, "pos2");
+        a.center = com.hub.world.Worlds.readLocation(sec, "center");
+        a.lobbyPoint = com.hub.world.Worlds.readLocation(sec, "lobby");
         a.spawnRed = (Location) sec.get("spawn-red");
         a.spawnBlue = (Location) sec.get("spawn-blue");
         a.goalRedPos1 = (Location) sec.get("goal-red-1");

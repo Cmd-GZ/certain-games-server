@@ -63,7 +63,7 @@ tools/version-check.py        # pom/plugin.yml 版本一致性（R4），不一�
 tools/region-report.py        # 生成《区域归属表》（只读）
 ```
 
-### 0.5 五条硬规则（不遵守会浪费一整轮）
+### 0.5 六条硬规则（不遵守会浪费一整轮）
 
 1. **`build.sh` 必须 clean。** 增量构建会复用 `target/classes` 留下半成品 jar
    （类里带 ECJ 的 `Unresolved compilation problems`，插件一启用就 `java.lang.Error`）。
@@ -79,7 +79,14 @@ tools/region-report.py        # 生成《区域归属表》（只读）
    <房间>/session.lock
    <房间>/level.dat_old
    ```
-5. **机制不确定就去读字节码**（`javap -c`），别凭 javadoc 印象下结论。
+5. **验证"场地是否正常加载"之前，先把 run 副本的配置从 `.server/server/...`（pristine）还原。**
+   插件在关服时会把配置写回去，多跑几轮冒烟后 run 副本会和原始状态漂移，
+   此时"区域少了几块"是**配置漂移**而不是代码回归 —— 今天已因此误判过一次。
+   ```bash
+   P=.server/server/small_games/*/plugins; S=.server/run/small_games/*/plugins
+   for d in $P/*/; do n=$(basename "$d"); for f in "$d"*.yml "$d"*.snap; do [ -f "$f" ] && cp "$f" "$S/$n/"; done; done
+   ```
+6. **机制不确定就去读字节码**（`javap -c`），别凭 javadoc 印象下结论。
    真实教训：我曾误判 `createSection` 会保留旧键 → 编出一个不存在的"删场地复活"bug。
 
 ### 0.6 环境事实（省得每次重新测）

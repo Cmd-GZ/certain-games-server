@@ -6,7 +6,7 @@
 
     <groupId>com.digdown</groupId>
     <artifactId>dig-to-bottom</artifactId>
-    <version>1.0.4</version>
+    <version>1.0.5</version>
     <packaging>jar</packaging>
 
     <name>DigToBottom</name>
@@ -34,7 +34,7 @@
         <dependency>
             <groupId>com.hub</groupId>
             <artifactId>minigame-lib</artifactId>
-            <version>1.7.0</version>
+            <version>1.7.1</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

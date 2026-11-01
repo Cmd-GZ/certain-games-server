@@ -232,9 +232,9 @@ public class DigToBottomArena {
     }
 
     public void save(ConfigurationSection sec) {
-        sec.set("center", center);
-        sec.set("lobby", lobby);
-        sec.set("spectator", spectator);
+        com.hub.world.Worlds.writeLocation(sec, "center", center);
+        com.hub.world.Worlds.writeLocation(sec, "lobby", lobby);
+        com.hub.world.Worlds.writeLocation(sec, "spectator", spectator);
         sec.set("lanes", lanes);
         sec.set("radius", radius);
         sec.set("built", built);
@@ -246,9 +246,9 @@ public class DigToBottomArena {
         if (sec == null) {
             return a;
         }
-        a.center = (Location) sec.get("center");
-        a.lobby = (Location) sec.get("lobby");
-        a.spectator = (Location) sec.get("spectator");
+        a.center = com.hub.world.Worlds.readLocation(sec, "center");
+        a.lobby = com.hub.world.Worlds.readLocation(sec, "lobby");
+        a.spectator = com.hub.world.Worlds.readLocation(sec, "spectator");
         a.lanes = Math.max(1, sec.getInt("lanes", 8));
         a.radius = Math.max(1, sec.getInt("radius", 8));
         a.built = sec.getBoolean("built", false);

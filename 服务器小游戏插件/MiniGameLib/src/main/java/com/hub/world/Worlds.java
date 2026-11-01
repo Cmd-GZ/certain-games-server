@@ -4,6 +4,7 @@ import com.hub.room.RoomManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.configuration.ConfigurationSection;
 
 /**
  * 世界解析器 —— {@code docs/框架不变量.md} 里「模板世界 / 游玩世界」（R2 坐标解耦）的核心。
@@ -117,6 +118,82 @@ public final class Worlds {
             return new Location(world, x, y, z, yaw, pitch);
         } catch (NumberFormatException ex) {
             return null;
+        }
+    }
+
+    // ---------- 配置里的 Location 读写（R2） ----------
+    //
+    // 很多游戏的场地是直接用 Bukkit 原生 `Location` 序列化存的，YAML 里长这样：
+    //   pos1:
+    //     ==: org.bukkit.Location
+    //     world_key: minecraft:world_mm     ← Paper 26.2；老版本是 world: xxx
+    //     x: 1.0  y: 64.0  z: 2.0
+    //
+    // 一旦把 world_key 换成 tpl:<模板键>，Bukkit 的 Location.deserialize 找不到世界会**抛异常并刷 ERROR**
+    // （不是返回 null）。所以这里自己读写，绕开它。
+
+    /** 是否是 "可能是 Location 的配置键"（用子键判断，避免触发反序列化）。 */
+    private static String rawWorldToken(ConfigurationSection sec, String key) {
+        if (sec == null) {
+            return null;
+        }
+        String token = sec.getString(key + ".world_key");
+        if (token == null) {
+            token = sec.getString(key + ".world");
+        }
+        return token;
+    }
+
+    /**
+     * 读一个坐标；支持 {@code tpl:} token。
+     *
+     * @return 读不出来 / 模板没有存活房间 → {@code null}（上层按"未配置"处理）
+     */
+    public static Location readLocation(ConfigurationSection sec, String key) {
+        if (sec == null) {
+            return null;
+        }
+        // 注意：**不能**用 sec.isConfigurationSection(key) 作为前置条件 ——
+        // 坐标在 YAML 里是带 `==: org.bukkit.Location` 的序列化 Map，
+        // 不同 Bukkit 版本/加载方式下不一定被当成 section，加了会误判成"没配置"。
+        String token = rawWorldToken(sec, key);
+        if (token != null && isTemplateToken(token)) {
+            World world = resolve(token);
+            if (world == null) {
+                return null;   // 模板还没有存活房间
+            }
+            return new Location(world,
+                    sec.getDouble(key + ".x"), sec.getDouble(key + ".y"), sec.getDouble(key + ".z"),
+                    (float) sec.getDouble(key + ".yaw"), (float) sec.getDouble(key + ".pitch"));
+        }
+        // 普通世界名：交给 Bukkit 正常反序列化
+        Object raw = sec.get(key);
+        return raw instanceof Location loc ? loc : null;
+    }
+
+    /**
+     * 写一个坐标。
+     *
+     * <p>房间实例世界会写成 {@code tpl:<模板键>}；**{@code loc == null} 时什么都不做**
+     * —— 绝不能把磁盘上已有的坐标擦掉（"读不出来"必须表现为"不动它"）。
+     */
+    public static void writeLocation(ConfigurationSection sec, String key, Location loc) {
+        if (sec == null || loc == null) {
+            return;
+        }
+        sec.set(key, loc);
+        if (loc.getWorld() == null) {
+            return;
+        }
+        String token = tokenOf(loc.getWorld());
+        if (token.equals(loc.getWorld().getName())) {
+            return;   // 普通世界，照 Bukkit 默认写法即可
+        }
+        // 房间实例：把世界字段换成 token（哪个字段存在就改哪个）
+        if (sec.isSet(key + ".world_key")) {
+            sec.set(key + ".world_key", token);
+        } else {
+            sec.set(key + ".world", token);
         }
     }
 }

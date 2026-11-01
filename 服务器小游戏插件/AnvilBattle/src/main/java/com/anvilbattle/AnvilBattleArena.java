@@ -244,7 +244,7 @@ public final class AnvilBattleArena {
             return "";
         }
         return String.format(Locale.ROOT, "%s,%.2f,%.2f,%.2f,%.1f,%.1f",
-                loc.getWorld().getName(), loc.getX(), loc.getY(), loc.getZ(),
+                com.hub.world.Worlds.tokenOf(loc.getWorld()), loc.getX(), loc.getY(), loc.getZ(),
                 loc.getYaw(), loc.getPitch());
     }
 
@@ -256,7 +256,7 @@ public final class AnvilBattleArena {
         if (parts.length < 4) {
             return null;
         }
-        World world = Bukkit.getWorld(parts[0].trim());
+        World world = com.hub.world.Worlds.resolve(parts[0]);   // R2：支持 tpl:模板键
         if (world == null) {
             return null;
         }
