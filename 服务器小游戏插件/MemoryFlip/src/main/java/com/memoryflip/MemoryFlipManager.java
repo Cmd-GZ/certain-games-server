@@ -80,15 +80,36 @@ public final class MemoryFlipManager {
     private StartCountdown startCountdown;
 
     private State state = State.WAITING;
-    /** 对局会话（I1/I4/I5）：join/leave 都要挂到归属链上，收场统一走 end()。 */
-    private MemoryFlipSession session;
+    /**
+     * 对局会话（I1/I4/I5）：**按场地名索引**。
+     *
+     * <p>为什么单场地也要用 Map：上游经常给小游戏加地图，一旦有第二张图，
+     * "一个字段"的写法就要重写成"一张表"。这里先从会话层统一成多场地形状，
+     * 将来加图时**不用改这一层的形状**（D22）。
+     *
+     * <p>注意仍然存在的限制：这个游戏的**内部状态**（state / waiting / playing）
+     * 目前还是全局单份，真正支持两场同跑需要把那部分也按场地拆开 —— 见改动记录。
+     */
+    private final java.util.Map<String, MemoryFlipSession> sessions = new java.util.LinkedHashMap<>();
     /** endGame 传下来的收场文案，交给 doEndGame 使用（保证玩家看到的文字不变）。 */
     private String pendingEndMessage;
 
-    private void ensureSession() {
-        if (session == null || session.state().isFinal()) {
-            session = new MemoryFlipSession(this);
+    /** 当前场地键（单图时期固定；加图后由配置/场地对象提供）。 */
+    private String arenaKey() {
+        return "main";
+    }
+
+    private MemoryFlipSession session;
+
+    private MemoryFlipSession ensureSession() {
+        String key = arenaKey();
+        MemoryFlipSession s = sessions.get(key);
+        if (s == null || s.state().isFinal()) {
+            s = new MemoryFlipSession(this, key);
+            sessions.put(key, s);
         }
+        session = s;
+        return s;
     }
 
     private final Set<UUID> waiting = new LinkedHashSet<>();

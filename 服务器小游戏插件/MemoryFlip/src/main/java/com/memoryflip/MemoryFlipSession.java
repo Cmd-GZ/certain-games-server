@@ -15,8 +15,8 @@ final class MemoryFlipSession extends GameSession {
 
     private final MemoryFlipManager manager;
 
-    MemoryFlipSession(MemoryFlipManager manager) {
-        super("memoryflip", "");
+    MemoryFlipSession(MemoryFlipManager manager, String arenaName) {
+        super("memoryflip", arenaName);
         this.manager = manager;
         enterWaiting();
     }
