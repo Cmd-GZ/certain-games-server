@@ -54,7 +54,8 @@ public final class RoomActions {
         }
         String join = games().getString("games." + gameKey + ".join-command");
         if (join != null && !join.isBlank()) {
-            join = join.replace("{arena}", "").trim();
+            // {arena} 用房间记住的场地名（一个模板世界多张地图时，这决定进哪块）
+            join = join.replace("{arena}", room.arena == null ? "" : room.arena).trim();
             p.performCommand(join);
             p.sendMessage(LEGACY.deserialize("&a已进入房间 &f" + roomId
                     + " &7并加入 &f/" + join + "&7（模板 &f" + room.template.key() + "&7）"));

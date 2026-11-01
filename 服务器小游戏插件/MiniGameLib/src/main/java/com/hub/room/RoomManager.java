@@ -43,6 +43,13 @@ public final class RoomManager {
     public static final class Room {
         public final String roomId;
         public final WorldTemplate template;
+        /**
+         * 这个房间服务的是模板世界里的**哪张地图**（= 模板 regions 里的 field name）。
+         *
+         * <p>为什么需要：一个模板世界可能装多张地图（`world_mini_game` 就是），
+         * 而一个房间只服务一张。空串表示"整个模板世界算一张图"。
+         */
+        public String arena = "";
         public World world;
         public final long createdAt = System.currentTimeMillis();
         public long lastActiveAt = System.currentTimeMillis();
@@ -68,6 +75,7 @@ public final class RoomManager {
         public String describe() {
             return roomId + " ← " + template.key()
                     + " [" + (world == null ? "未加载" : world.getName()) + "]"
+                    + (arena == null || arena.isBlank() ? "" : " 地图=" + arena)
                     + " 人=" + playerCount() + " 年龄=" + ageSeconds() + "s 空置=" + idleSeconds() + "s";
         }
     }
@@ -375,6 +383,17 @@ public final class RoomManager {
      *
      * @param done 创建完成（成功返回 Room，失败返回 null）后**在主线程**回调
      */
+    /** 建房间并记下它服务的是哪张地图（arena = 模板 regions 里的 name）。 */
+    public static void createAsync(String templateKey, String desiredRoomId, String arenaName,
+                                   java.util.function.Consumer<Room> done) {
+        createAsync(templateKey, desiredRoomId, room -> {
+            if (room != null && arenaName != null && !arenaName.isBlank()) {
+                room.arena = arenaName;
+            }
+            done.accept(room);
+        });
+    }
+
     public static void createAsync(String templateKey, String desiredRoomId,
                                    java.util.function.Consumer<Room> done) {
         if (!ready || plugin == null) {

@@ -596,17 +596,41 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
         }
         String game = args[1];
         String map = args[2];
+        // 解析 <地图>：
+        //   ① 先看它是不是某个模板里声明的**场地名**（模板 regions[].name）——
+        //      这是"一个模板世界装多张地图"的正解（如 world_mini_game 里的 群系 / hillking）；
+        //   ② 再退回按模板键 / 目录名匹配（单图模板的常见写法）。
         String templateKey = null;
+        String arenaName = "";
         for (com.hub.room.WorldTemplate t : com.hub.room.RoomManager.templates()) {
             boolean gameOk = t.gameKey().equalsIgnoreCase(game)
                     || registry.canonicalName(game).equalsIgnoreCase(t.gameKey());
             if (!gameOk) {
                 continue;
             }
-            if (t.key().equalsIgnoreCase(map) || t.folder().equalsIgnoreCase(map)
-                    || t.folder().equalsIgnoreCase("tmpl_" + map) || t.key().equalsIgnoreCase("tmpl_" + map)) {
-                templateKey = t.key();
+            for (com.hub.room.WorldTemplate.Box box : t.regions()) {
+                if (box.arenaName() != null && box.arenaName().equalsIgnoreCase(map)) {
+                    templateKey = t.key();
+                    arenaName = box.arenaName();
+                    break;
+                }
+            }
+            if (templateKey != null) {
                 break;
+            }
+        }
+        if (templateKey == null) {
+            for (com.hub.room.WorldTemplate t : com.hub.room.RoomManager.templates()) {
+                boolean gameOk = t.gameKey().equalsIgnoreCase(game)
+                        || registry.canonicalName(game).equalsIgnoreCase(t.gameKey());
+                if (!gameOk) {
+                    continue;
+                }
+                if (t.key().equalsIgnoreCase(map) || t.folder().equalsIgnoreCase(map)
+                        || t.folder().equalsIgnoreCase("tmpl_" + map) || t.key().equalsIgnoreCase("tmpl_" + map)) {
+                    templateKey = t.key();
+                    break;
+                }
             }
         }
         if (templateKey == null) {
@@ -615,15 +639,17 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             return;
         }
         final String tpl = templateKey;
+        final String arenaForRoom = arenaName;
         sender.sendMessage(LEGACY.deserialize("&7正在从模板 &f" + tpl + " &7创建房间…"));
         String desired = args.length >= 4 ? args[3] : null;   // 可选：指定房间名
-        com.hub.room.RoomManager.createAsync(tpl, desired, room -> {
+        com.hub.room.RoomManager.createAsync(tpl, desired, arenaForRoom, room -> {
             if (room == null) {
                 sender.sendMessage(LEGACY.deserialize("&c创建失败（模板目录缺失 / 达到上限），详情见控制台与 /hub doctor。"));
                 return;
             }
             getLogger().info("[/hub create] " + sender.getName() + " 建房间 " + room.roomId
-                    + "（游戏 " + game + "，地图 " + map + "，模板 " + tpl + "）");
+                    + "（游戏 " + game + "，地图 " + map + "，模板 " + tpl
+                    + (arenaForRoom.isBlank() ? "" : "，场地名 " + arenaForRoom) + "）");
             sender.sendMessage(LEGACY.deserialize("&a已创建房间 &f" + room.roomId
                     + "&7（模板 &f" + tpl + "&7）。加入：&f/hub join " + room.roomId));
         });
