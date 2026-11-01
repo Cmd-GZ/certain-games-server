@@ -244,6 +244,8 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             case "arena" -> arenaCommand(sender, args);
             case "doctor" -> doctor(sender);
             case "room" -> roomCommand(sender, args);
+            case "join" -> joinRoom(sender, args);
+            case "create" -> createRoom(sender, args);
             case "start" -> startOrStop(sender, args, true);
             case "stop" -> startOrStop(sender, args, false);
             default -> sender.sendMessage(LEGACY.deserialize(
@@ -554,6 +556,95 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
         }
         int slash = frame.lastIndexOf('.');
         return slash < 0 ? frame : frame.substring(slash + 1);
+    }
+
+    // ---------- /hub join | /hub create：高层语义（D24） ----------
+    //
+    // 分层：/hub 面向玩家与运维，只做「校验 → 以框架身份做原子操作 → 初始化玩家状态」；
+    // 真正的世界操作在 /gw（create room / tp），玩家**不需要**拥有 /gw 的权限。
+    // 这样 GUI 与命令走同一条路径，将来换实现只改一处。
+
+    /** `/hub join <房间>`：校验 → 传送进房间世界（框架身份）→ 跑该游戏的 join-command。 */
+    private void joinRoom(CommandSender sender, String[] args) {
+        if (!(sender instanceof org.bukkit.entity.Player p)) {
+            sender.sendMessage(LEGACY.deserialize("&c该命令需要玩家执行（控制台用 /hub room list 查看房间）。"));
+            return;
+        }
+        if (args.length < 2) {
+            sender.sendMessage(LEGACY.deserialize("&c用法：/hub join <房间名>"));
+            sender.sendMessage(LEGACY.deserialize("&7房间列表：&f/hub room list"));
+            return;
+        }
+        var room = com.hub.room.RoomManager.room(args[1]);
+        if (room == null) {
+            sender.sendMessage(LEGACY.deserialize("&c没有这个房间：&f" + args[1]));
+            return;
+        }
+        if (room.world == null) {
+            sender.sendMessage(LEGACY.deserialize("&c房间世界还没加载好，稍等再试。"));
+            return;
+        }
+        p.closeInventory();
+        p.teleport(room.world.getSpawnLocation());
+        String gameKey = room.template.gameKey();
+        getLogger().info("[/hub join] " + p.getName() + " -> " + room.roomId + "（" + gameKey + "）");
+        String join = gamesConfig().getString("games." + gameKey + ".join-command");
+        if (join != null && !join.isBlank()) {
+            p.performCommand(join.replace("{arena}", "").trim());
+            p.sendMessage(LEGACY.deserialize("&a已进入房间 &f" + room.roomId
+                    + " &7并加入 &f/" + join + "&7（模板 &f" + room.template.key() + "&7）"));
+        } else {
+            p.sendMessage(LEGACY.deserialize("&a已进入房间 &f" + room.roomId
+                    + "&7（游戏 &f" + gameKey + "&7 没配 join-command）"));
+        }
+    }
+
+    /**
+     * `/hub create <游戏> <地图>`：校验 → `map → 模板世界` → 建房间 → 初始化。
+     *
+     * <p>⚠️ **地图与模板世界不是 1:1**（一个模板世界可能装多张图）。当前快照里模板登记只有
+     * `key` + `folder`，没有"地图"这一层，所以这里的 `<地图>` 先按**模板键或模板目录名**匹配；
+     * 等模板登记加上地图清单后，这里换成"按地图查所属模板"即可，**命令形式不用变**。
+     */
+    private void createRoom(CommandSender sender, String[] args) {
+        if (args.length < 3) {
+            sender.sendMessage(LEGACY.deserialize("&c用法：/hub create <游戏> <地图> [房间名]"));
+            sender.sendMessage(LEGACY.deserialize("&7可用模板：&f/hub room templates"));
+            return;
+        }
+        String game = args[1];
+        String map = args[2];
+        String templateKey = null;
+        for (com.hub.room.WorldTemplate t : com.hub.room.RoomManager.templates()) {
+            boolean gameOk = t.gameKey().equalsIgnoreCase(game)
+                    || registry.canonicalName(game).equalsIgnoreCase(t.gameKey());
+            if (!gameOk) {
+                continue;
+            }
+            if (t.key().equalsIgnoreCase(map) || t.folder().equalsIgnoreCase(map)
+                    || t.folder().equalsIgnoreCase("tmpl_" + map) || t.key().equalsIgnoreCase("tmpl_" + map)) {
+                templateKey = t.key();
+                break;
+            }
+        }
+        if (templateKey == null) {
+            sender.sendMessage(LEGACY.deserialize("&c游戏 &f" + game + " &c下没有地图 &f" + map
+                    + "&c（模板列表见 &f/hub room templates&c）"));
+            return;
+        }
+        final String tpl = templateKey;
+        sender.sendMessage(LEGACY.deserialize("&7正在从模板 &f" + tpl + " &7创建房间…"));
+        String desired = args.length >= 4 ? args[3] : null;   // 可选：指定房间名
+        com.hub.room.RoomManager.createAsync(tpl, desired, room -> {
+            if (room == null) {
+                sender.sendMessage(LEGACY.deserialize("&c创建失败（模板目录缺失 / 达到上限），详情见控制台与 /hub doctor。"));
+                return;
+            }
+            getLogger().info("[/hub create] " + sender.getName() + " 建房间 " + room.roomId
+                    + "（游戏 " + game + "，地图 " + map + "，模板 " + tpl + "）");
+            sender.sendMessage(LEGACY.deserialize("&a已创建房间 &f" + room.roomId
+                    + "&7（模板 &f" + tpl + "&7）。加入：&f/hub join " + room.roomId));
+        });
     }
 
     // ---------- /hub start|stop：统一控制面（D18「先配置转发，后真接口」） ----------

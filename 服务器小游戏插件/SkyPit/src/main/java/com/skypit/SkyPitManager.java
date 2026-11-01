@@ -438,7 +438,9 @@ public class SkyPitManager {
         SkyPitSession gs = ensureSession();
         if (gs.join(p)) {
             if (gs.state() == com.hub.session.SessionState.WAITING) {
+                // 第一个人进入区域 = 开局（天坑没有等待阶段）
                 gs.start();
+                plugin.getLogger().info("[SkyPit] 会话开始（第一个人进入天坑：" + p.getName() + "）");
             }
         } else {
             plugin.getLogger().info("[SkyPit] " + p.getName() + " 已在别的对局里，天坑这次不计入会话");
@@ -463,6 +465,9 @@ public class SkyPitManager {
         }
         if (session != null && !session.state().isFinal()) {
             session.leave(p);   // 最后一个人走掉时框架会自动 end(ABORT)
+            if (session.state().isFinal()) {
+                plugin.getLogger().info("[SkyPit] 会话结束（最后一个人离开天坑：" + p.getName() + "）");
+            }
         }
         st.apply(p);
         HubAPI.clearGame(p.getUniqueId());
