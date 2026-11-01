@@ -107,6 +107,7 @@ tools/smoke-arcade-party.txt  # 派对冒烟的命令脚本（配合 --fake-play
 | 房间创建耗时（实测） | 异步复制 **9–10ms** + 主线程加载 **24–61ms**（复制已移出主线程） |
 | **主线程阻塞（已闭环）** | 插件级 3 个热点**已修**：`MurderMystery GoldScan`（同步 `getChunkAt`）、`TNTBattle loadLeaderboard`（`location.getChunk()`）、`GuessTheBuild Arena#applyFloor`（整块地板一次性重铺，实测 4.1s）。卡顿 4183+969ms → 归因仅剩 **3595ms 的 `SavedDataStorage#saveAndJoin`**，即 **Paper 启动时给 15 个世界存盘**（`Saving chunks for level ...`），框架自身、与世界数量成正比，插件层修不了。`/hub doctor` 的 `[卡顿]` 段看可疑帧 |
 | **上游回退过的功能** | 「密室杀手开局打乱全员皮肤」——上游加了又回退（本快照里没有）。它是 `Unsafe#park` 型阻塞（逐个解析 `PlayerProfile`）。**要重做必须异步批量取档案，不能在主线程逐个解析** |
+| 假玩家登录延迟 | `tools/fakeclient.py` 从连上到登录成功实测 **2–20 秒**波动 → **别写\"第 N 秒发命令\"的时间表**，要挑对时序不敏感的判据（例：会话数量 `1 → 0 → 1`） |
 | 服务端堆 | `-Xms1G -Xmx2G`（**物理 32GB 用不上**）；开服后实测 421–824MB（20–40%）。见 D13 |
 
 ### 0.7 已定决策（用户拍板，别再问一遍）

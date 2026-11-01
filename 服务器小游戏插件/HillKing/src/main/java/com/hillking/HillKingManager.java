@@ -324,6 +324,8 @@ public final class HillKingManager {
 
     public void join(Player player) {
         UUID id = player.getUniqueId();
+        // 上一局结束后会话停在 ENDED（终态），必须换新的，否则这里会被判成"对局进行中"而拒绝加入
+        ensureSession();
         if (!isWaitingState()) {
             Chat.send(player, "&c对局正在进行中，请等这一局结束后再加入。");
             return;
