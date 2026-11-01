@@ -1,5 +1,5 @@
 name: BuildRun
-version: '1.0.4'
+version: '1.1.0'
 main: com.buildrun.BuildRunPlugin
 api-version: '1.21'
 description: 你建我跑：每人建一条跑酷，然后按顺序轮流让建造者和其他人跑

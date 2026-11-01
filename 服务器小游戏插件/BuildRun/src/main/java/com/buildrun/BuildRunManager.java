@@ -1,5 +1,7 @@
 package com.buildrun;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.GameState;
 import com.hub.api.HubAPI;
 import com.hub.data.PlayerStats;
@@ -149,6 +151,18 @@ public class BuildRunManager {
     private final BuildRunPlugin plugin;
     private final LiveSidebar liveSidebar;
     private final Map<String, BuildRunArena> arenas = new LinkedHashMap<>();
+
+    /** D22：每个场地一个会话（多图游戏：不同场地可同时各开一局）。 */
+    private final Map<String, BuildRunSession> sessions = new LinkedHashMap<>();
+
+    private BuildRunSession ensureSession(String arenaName) {
+        BuildRunSession s = sessions.get(arenaName);
+        if (s == null || s.state().isFinal()) {
+            s = new BuildRunSession(this, arenaName);
+            sessions.put(arenaName, s);
+        }
+        return s;
+    }
     private final Map<UUID, String> playerArena = new LinkedHashMap<>();
     private final Map<String, WaitCountdown> waits = new LinkedHashMap<>();
     private final SetupMode setup;
@@ -427,6 +441,9 @@ public class BuildRunManager {
         // 人数上限已彻底取消：这里**不读** max-players（老配置里写 8 也不生效），来几个人就复制几块场地
         playerArena.put(id, arenaName);
         a.getPlayers().add(id);
+        if (!ensureSession(arenaName).join(p)) {
+            plugin.getLogger().warning("[BuildRun] " + p.getName() + " 加入归属链失败（场 " + arenaName + "）");
+        }
 
         p.setGameMode(GameMode.SURVIVAL);
         p.getInventory().clear();
@@ -648,6 +665,10 @@ public class BuildRunManager {
             return;
         }
         a.setPhase(BuildRunArena.Phase.BUILDING);
+        BuildRunSession started = sessions.get(a.getName());
+        if (started != null && !started.state().isFinal()) {
+            started.start();
+        }
         int seconds = Math.max(10, cfg("build-seconds", 180));
         a.setDeadline(System.currentTimeMillis() + seconds * 1000L);
         // 开建前先把场地里的掉落物清干净（上一局 / 复制过程留下的都算）
@@ -1045,7 +1066,25 @@ public class BuildRunManager {
         liveSidebar.update("buildrun:" + a.getName(), "&3&l你建我跑 · 分数", online, lines);
     }
 
+    /** 收场入口（I4）：先让该场地的会话 end()，再由 onEnd 回到 doEndGame。 */
     private void endGame(BuildRunArena a) {
+        if (a.getPhase() == BuildRunArena.Phase.WAITING || a.getPhase() == BuildRunArena.Phase.ENDING) {
+            return;
+        }
+        BuildRunSession sess = sessions.get(a.getName());
+        if (sess != null && !sess.state().isFinal()) {
+            sess.end(EndReason.ROUND_END);
+            return;
+        }
+        doEndGame(a.getName());
+    }
+
+    /** 真正的收场逻辑（由 session.onEnd 回调）。 */
+    void doEndGame(String arenaName) {
+        BuildRunArena a = arenas.get(arenaName);
+        if (a == null) {
+            return;
+        }
         if (a.getPhase() == BuildRunArena.Phase.WAITING || a.getPhase() == BuildRunArena.Phase.ENDING) {
             return;
         }

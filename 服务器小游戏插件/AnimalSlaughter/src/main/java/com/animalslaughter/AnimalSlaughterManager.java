@@ -1,5 +1,7 @@
 package com.animalslaughter;
 
+import com.hub.session.EndReason;
+
 import com.destroystokyo.paper.entity.Pathfinder;
 import com.hub.api.ArcadeBridge;
 import com.hub.api.GameState;
@@ -81,6 +83,22 @@ public final class AnimalSlaughterManager {
     private final Random random = new Random();
 
     private State state = State.WAITING;
+    /** D22：会话层统一按场地键索引（单图游戏只有一个键）。 */
+    private final java.util.Map<String, AnimalSlaughterSession> sessions = new java.util.LinkedHashMap<>();
+    private String pendingEndMessage;
+    private AnimalSlaughterSession session;
+
+    private AnimalSlaughterSession ensureSession() {
+        String key = "main";
+        AnimalSlaughterSession s = sessions.get(key);
+        if (s == null || s.state().isFinal()) {
+            s = new AnimalSlaughterSession(this, key);
+            sessions.put(key, s);
+        }
+        session = s;
+        return s;
+    }
+
     private final Set<UUID> waiting = new LinkedHashSet<>();
     private final Set<UUID> playing = new LinkedHashSet<>();
     private final Map<UUID, Integer> scores = new HashMap<>();
@@ -485,6 +503,10 @@ public final class AnimalSlaughterManager {
             return;
         }
         waiting.add(id);
+        ensureSession();
+        if (session != null && !session.join(player)) {
+            plugin.getLogger().warning("[AnimalSlaughter] " + player.getName() + " 加入归属链失败（见 [被吞异常]）");
+        }
         player.getInventory().clear();
         player.setGameMode(GameMode.SURVIVAL);
         resetPlayer(player);
@@ -688,6 +710,9 @@ public final class AnimalSlaughterManager {
             return;
         }
         state = State.RUNNING;
+        if (session != null) {
+            session.start();
+        }
         secondsLeft = gameSeconds();
         for (UUID id : playing) {
             Player p = Bukkit.getPlayer(id);
@@ -730,7 +755,20 @@ public final class AnimalSlaughterManager {
         }
     }
 
+    /** 收场入口（I4）：先让会话 end()，再由 onEnd 回到 doEndGame 干活。 */
     private void endGame(String reason) {
+        pendingEndMessage = reason;
+        if (session == null || session.state().isFinal()) {
+            doEndGame();
+            return;
+        }
+        session.end(EndReason.ROUND_END);
+    }
+
+    /** 真正的收场逻辑（由 session.onEnd 回调）。文案沿用 endGame 传下来的那句。 */
+    void doEndGame() {
+        String reason = pendingEndMessage != null ? pendingEndMessage : "&7对局结束。";
+        pendingEndMessage = null;
         if (state != State.RUNNING && state != State.COUNTDOWN) {
             return;
         }
