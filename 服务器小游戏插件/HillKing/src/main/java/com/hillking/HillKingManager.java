@@ -158,10 +158,18 @@ public final class HillKingManager {
                 Player p = Bukkit.getPlayer(host);
                 String name = p == null ? host.toString() : p.getName();
                 waiting.remove(host);
+                // I1：会话归属也要摘掉，否则 doctor 的 [对局] 人数永远不降（曾经就是这样：
+                // 人已经不在队列里了，会话链上却还挂着，看起来"超时没生效"）
+                if (session != null && p != null) {
+                    session.leave(p);
+                }
                 if (p != null && p.isOnline()) {
                     Chat.send(p, "&c倒计时结束还没开始，你被移出本局（主持人超时）。");
                     HubAPI.teleportToLobby(p);
                 }
+                // 落到控制台才算"可审计"：玩家侧播报只在游戏里可见
+                plugin.getLogger().info("[HillKing] 主持人 " + name + " 超时未开始，已移出本局（剩余 "
+                        + waiting.size() + " 人）");
                 broadcast("&e主持人 &f" + name + " &e超时未开始，已移出本局。");
                 updateCountdown();
                 reportArena();

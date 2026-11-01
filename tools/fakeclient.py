@@ -25,6 +25,7 @@ import argparse
 import socket
 import struct
 import sys
+import threading
 import time
 import uuid
 import zlib
@@ -269,7 +270,9 @@ def main():
     ap = argparse.ArgumentParser(description="冒烟台用的假玩家")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=25560)
-    ap.add_argument("--name", default="TestBot")
+    ap.add_argument("--name", default="TestBot",
+                    help="玩家名；逗号分隔可以起多个（TestBot,SecondBot）并发登录")
+    ap.add_argument("--stagger", type=float, default=2.0, help="多个假玩家之间错开多少秒登录")
     ap.add_argument("--commands", default="",
                     help="分号分隔的命令；每项可写成 '<秒>:' 前缀表示相对上一条的延迟（不带前导 /）")
     ap.add_argument("--delay", type=float, default=2.0, help="进入游戏后多久开始发命令（秒）")
@@ -285,13 +288,33 @@ def main():
         if not item:
             continue
         delay = args.gap
-        head, sep, tail = item.partition(":")
-        if sep and head.strip().isdigit():
-            delay = float(head.strip())
-            item = tail.strip()
+        hd, sep, tl = item.partition(":")
+        if sep and hd.strip().isdigit():
+            delay = float(hd.strip())
+            item = tl.strip()
         if item:
             commands.append((delay, item))
 
+    names = [n.strip() for n in args.name.split(",") if n.strip()] or ["TestBot"]
+    names = names[:4]                      # 最多 4 个，防止手滑起一堆
+    if len(names) == 1:
+        return run_one(args, names[0], commands, 0.0)
+    results = []
+    threads = []
+    for idx, nm in enumerate(names):
+        t = threading.Thread(target=lambda nm=nm, idx=idx: results.append(
+            run_one(args, nm, commands, idx * args.stagger)), name=nm, daemon=True)
+        t.start()
+        threads.append(t)
+        time.sleep(args.stagger)           # 错开登录，避免同一 tick 挤进来
+    for t in threads:
+        t.join()
+    log(f"多假玩家结束：{len(results)} 个，失败 {sum(1 for r in results if r != 0)} 个")
+    return 0 if results and all(r == 0 for r in results) else 1
+
+
+def run_one(args, name, commands, extra_delay):
+    """跑一个假玩家：连上、登录、按时间表发命令、挂到最后。返回 0/1。"""
     # 服务器可能还没开好 / 登录可能被拖慢（刚开服时实测有 20s+ 的）：连不上就重试，
     # 登录阶段超时也重连（一个卡住的连接会一直挂着，不值得等）。
     deadline = time.time() + args.connect_timeout
@@ -302,9 +325,9 @@ def main():
         except OSError:
             time.sleep(1.0)
             continue
-        log(f"已连上 {args.host}:{args.port}，以 {args.name} 登录")
+        log(f"已连上 {args.host}:{args.port}，以 {name} 登录")
         try:
-            login(attempt, args.name, args.port)
+            login(attempt, name, args.port)
             conn = attempt
             break
         except Exception as exc:                  # noqa: BLE001 —— 登录阶段重试
@@ -319,7 +342,7 @@ def main():
         return 1
 
     try:
-        at = time.time() + args.delay
+        at = time.time() + args.delay + extra_delay
         actions = []
         for delay, cmd in commands:
             at += delay

@@ -48,6 +48,8 @@ public final class HillKingCommand implements CommandExecutor, TabCompleter {
             case "start" -> {
                 // D21：主持人流程下，**当前主持人**也能开始（开始权在主持人手上）
                 if (!admin(sender) && !manager.isHost(sender)) {
+                    Chat.send(sender, "&c只有本局**主持人**或管理员可以开始。"
+                            + "&7（主持人 = 最早加入等待队列的人）");
                     return true;
                 }
                 if (manager.state() != HillKingManager.State.WAITING) {
