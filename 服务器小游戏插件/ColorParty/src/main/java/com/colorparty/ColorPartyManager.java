@@ -1,5 +1,7 @@
 package com.colorparty;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.GameState;
 import com.hub.api.HubAPI;
 import com.hub.data.PlayerStats;
@@ -75,6 +77,18 @@ public class ColorPartyManager {
     private final ColorPartyPlugin plugin;
     private final LiveSidebar liveSidebar;
     private final Map<String, ColorPartyArena> arenas = new LinkedHashMap<>();
+
+    /** D22：每个场地一个会话（多图游戏）。 */
+    private final Map<String, ColorPartySession> sessions = new LinkedHashMap<>();
+
+    private ColorPartySession ensureSession(String arenaName) {
+        ColorPartySession s = sessions.get(arenaName);
+        if (s == null || s.state().isFinal()) {
+            s = new ColorPartySession(this, arenaName);
+            sessions.put(arenaName, s);
+        }
+        return s;
+    }
     private final Map<UUID, String> playerArena = new LinkedHashMap<>();
     /** 每个场一个等待倒计时实例（公共库 com.hub.util.WaitCountdown）。 */
     private final Map<String, WaitCountdown> waits = new LinkedHashMap<>();
@@ -371,6 +385,9 @@ public class ColorPartyManager {
         }
         playerArena.put(id, arenaName);
         a.getPlayers().add(id);
+        if (!ensureSession(arenaName).join(p)) {
+            plugin.getLogger().warning("[ColorParty] " + p.getName() + " 加入归属链失败（场 " + arenaName + "）");
+        }
         p.getInventory().clear();
         p.setGameMode(GameMode.SURVIVAL);
         p.setHealth(20);
@@ -471,6 +488,10 @@ public class ColorPartyManager {
             return true;
         }
         a.setState(ColorPartyArena.State.RUNNING);
+        ColorPartySession started = sessions.get(a.getName());
+        if (started != null && !started.state().isFinal()) {
+            started.start();
+        }
         a.cancelTasks();
         a.nextRound(); // 守卫回合 +1：上一局残留的调度任务全部失效
         wait(a).cancel();
@@ -674,7 +695,28 @@ public class ColorPartyManager {
         liveSidebar.update("colorparty:" + a.getName(), "&d&l色盲派对 · 存活", online, lines);
     }
 
+    /** 收场入口（I4）：先让该场地的会话 end()，再由 onEnd 回到 doEndGame。 */
     private void endGame(ColorPartyArena a, UUID winner) {
+        pendingWinner = winner;
+        ColorPartySession sess = sessions.get(a.getName());
+        if (sess == null || sess.state().isFinal()) {
+            doEndGame(a.getName());
+            return;
+        }
+        sess.end(EndReason.ROUND_END);
+    }
+
+    /** endGame 与 doEndGame 之间传递赢家（玩家看到的结算不能变）。 */
+    private UUID pendingWinner;
+
+    /** 真正的收场逻辑（由 session.onEnd 回调）。 */
+    void doEndGame(String arenaName) {
+        ColorPartyArena a = arenas.get(arenaName);
+        if (a == null) {
+            return;
+        }
+        UUID winner = pendingWinner;
+        pendingWinner = null;
         liveSidebar.hide("colorparty:" + a.getName());
         a.setState(ColorPartyArena.State.WAITING);
         a.cancelTasks();

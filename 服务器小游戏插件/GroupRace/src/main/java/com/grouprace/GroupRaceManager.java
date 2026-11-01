@@ -1,5 +1,7 @@
 package com.grouprace;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.HubAPI;
 import com.hub.api.ArcadeBridge;
 import com.hub.util.Chat;
@@ -45,6 +47,23 @@ import java.util.UUID;
 
 /** 群友竞速赛的全部对局逻辑。 */
 public final class GroupRaceManager {
+    /** D22：会话层统一按场地键索引（单图游戏只有一个键）。 */
+    private final java.util.Map<String, GroupRaceSession> sessions = new java.util.LinkedHashMap<>();
+    private String pendingEndMessage;
+    private java.util.List<UUID> pendingRanking;
+    private GroupRaceSession session;
+
+    private GroupRaceSession ensureSession() {
+        String key = "main";
+        GroupRaceSession s = sessions.get(key);
+        if (s == null || s.state().isFinal()) {
+            s = new GroupRaceSession(this, key);
+            sessions.put(key, s);
+        }
+        session = s;
+        return s;
+    }
+
 
     public static final String GAME_NAME = "群友竞速赛";
 
@@ -365,6 +384,10 @@ public final class GroupRaceManager {
             return;
         }
         waiting.add(id);
+        ensureSession();
+        if (session != null && !session.join(player)) {
+            plugin.getLogger().warning("[GroupRace] " + player.getName() + " 加入归属链失败（见 [被吞异常]）");
+        }
         player.getInventory().clear();
         player.setGameMode(GameMode.SURVIVAL);
         resetPlayer(player);
@@ -491,6 +514,9 @@ public final class GroupRaceManager {
         removeAllLobbyPigs();
         countdown.cancel();
         state = State.RUNNING;
+        if (session != null && !session.state().isFinal()) {
+            session.start();
+        }
         playing.clear();
         playing.addAll(ready);
         finished.clear();
@@ -1054,7 +1080,23 @@ public final class GroupRaceManager {
         endGame(computeRanking(), "&e管理员结束了本局。");
     }
 
+    /** 收场入口（I4）：先让会话 end()，再由 onEnd 回到 doEndGame。 */
     public void endGame(List<UUID> ranking, String reason) {
+        pendingRanking = ranking;
+        pendingEndMessage = reason;
+        if (session == null || session.state().isFinal()) {
+            doEndGame();
+            return;
+        }
+        session.end(EndReason.ROUND_END);
+    }
+
+    /** 真正的收场逻辑（由 session.onEnd 回调）。名次与文案都透传，玩家看到的结算不变。 */
+    void doEndGame() {
+        List<UUID> ranking = pendingRanking;
+        String reason = pendingEndMessage != null ? pendingEndMessage : "&7比赛结束。";
+        pendingRanking = null;
+        pendingEndMessage = null;
         if (state != State.RUNNING) {
             return;
         }
