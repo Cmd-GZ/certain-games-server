@@ -1,5 +1,7 @@
 package com.arrowrain;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.ArcadeBridge;
 import com.hub.api.GameState;
 import com.hub.api.HubAPI;
@@ -43,6 +45,23 @@ import java.util.UUID;
 
 /** 万箭齐发：每回合随机刷新半砖掩体，没躲好就会被箭雨淘汰；第 N 回合起开放 PvP。 */
 public final class ArrowRainManager {
+
+    /** D22：会话层按场地键索引（单图游戏只有一个键）。 */
+    private final java.util.Map<String, ArrowRainSession> sessions = new java.util.LinkedHashMap<>();
+    private boolean pendingTimeUp;
+    private ArrowRainSession session;
+
+    private ArrowRainSession ensureSession() {
+        String key = "main";
+        ArrowRainSession s = sessions.get(key);
+        if (s == null || s.state().isFinal()) {
+            s = new ArrowRainSession(this, key);
+            sessions.put(key, s);
+        }
+        session = s;
+        return s;
+    }
+
 
     public static final String GAME = "万箭齐发";
     public static final String ARENA = "主场地";
@@ -306,6 +325,13 @@ public final class ArrowRainManager {
             Chat.send(player, "&c场地还没配置完整（缺 " + arena.missing() + "），请联系管理员。");
             return;
         }
+        ArrowRainSession sess = ensureSession();
+        if (!sess.join(player)) {
+            if (sess.players().isEmpty()) {
+                sessions.remove("main");
+            }
+            return;
+        }
         waiting.add(id);
         clearPlayer(player);
         player.setGameMode(GameMode.ADVENTURE);
@@ -396,6 +422,9 @@ public final class ArrowRainManager {
         phaseTicks = 0;
         startDelayTicks = Math.max(0, cfgInt("start-delay-seconds", 3)) * 20;
         state = State.RUNNING;
+        if (session != null && !session.state().isFinal()) {
+            session.start();
+        }
 
         List<Location> spawns = new ArrayList<>(arena.spawns());
         Collections.shuffle(spawns, random);
@@ -716,7 +745,20 @@ public final class ArrowRainManager {
         }
     }
 
+    /** 收场入口（I4）：先让会话 end()，再由 onEnd 回到 doEndGame。 */
     private void endGame(boolean timeUp) {
+        pendingTimeUp = timeUp;
+        if (session == null || session.state().isFinal()) {
+            doEndGame();
+            return;
+        }
+        session.end(EndReason.ROUND_END);
+    }
+
+    /** 真正的收场逻辑。timeUp 透传，玩家看到的结算不变。 */
+    void doEndGame() {
+        boolean timeUp = pendingTimeUp;
+        pendingTimeUp = false;
         if (state == State.RUNNING) {
             finishGame(timeUp, true);
         }

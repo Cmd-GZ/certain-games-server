@@ -64,6 +64,8 @@ tools/build.sh --deploy       # 全量构建 → .server/deploy/plugins/
 tools/serve.sh --deploy       # 部署进服务器 → 启动（前台，Ctrl-C 或 echo stop > .server/.serve.fifo）
 tools/smoke.sh --deploy       # 冒烟台：真起服 → 断言日志 → 干净关服
 tools/version-check.py        # pom/plugin.yml 版本一致性（R4），不一致 exit 1
+tools/maven-settings.xml      # 可选的 Maven settings：把本地仓库指向 .server/m2repo
+# 服务器小游戏插件/libs/m2/   # vendor 的 com.hub:minigame-lib（IDE 靠它解析，build.sh 自动同步）
 # 已合入但上游还没做完的模块：在模块目录放一个 .build-skip（写原因）即可跳过构建，
 # 它的 jar 就不会被部署/加载（恢复 = 删掉该文件）。当前：FireJumper
 tools/region-report.py        # 生成《区域归属表》（只读）

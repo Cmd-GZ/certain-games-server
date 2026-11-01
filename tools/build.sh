@@ -46,6 +46,17 @@ if ! "$MVN" "${COMMON[@]}" -f MiniGameLib/pom.xml clean install -DskipTests > /t
   echo "MiniGameLib 构建失败，日志："; tail -40 /tmp/mg-build.log; exit 1
 fi
 
+# MiniGameLib 构建完就刷新 vendor 副本：插件 pom 通过 file:// 指向 服务器小游戏插件/libs/m2，
+# 这样 IDE 能解析 com.hub:minigame-lib（默认 ~/.m2 在有些环境是只读的，install 会失败）。
+MG_VER=$(sed -n 's|.*<version>\(.*\)</version>.*|\1|p' "$ROOT/服务器小游戏插件/MiniGameLib/pom.xml" | head -1)
+if [ -n "$MG_VER" ]; then
+  VENDOR="$ROOT/服务器小游戏插件/libs/m2/com/hub/minigame-lib/$MG_VER"
+  mkdir -p "$VENDOR"
+  cp "$ROOT/.server/m2repo/com/hub/minigame-lib/$MG_VER/minigame-lib-$MG_VER.jar" "$VENDOR/" 2>/dev/null
+  cp "$ROOT/.server/m2repo/com/hub/minigame-lib/$MG_VER/minigame-lib-$MG_VER.pom" "$VENDOR/" 2>/dev/null
+  echo "== vendor 副本已同步：libs/m2 ... minigame-lib $MG_VER"
+fi
+
 echo "== [2/3] 其余 25 个模块 package"
 fail=0
 for pom in */pom.xml; do

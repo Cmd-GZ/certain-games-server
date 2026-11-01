@@ -6,7 +6,7 @@
 
     <groupId>com.arcade</groupId>
     <artifactId>arcade-party</artifactId>
-    <version>1.4.2</version>
+    <version>1.5.0</version>
     <packaging>jar</packaging>
 
     <name>ArcadeParty</name>
@@ -18,6 +18,11 @@
     </properties>
 
     <repositories>
+        <repository>
+            <id>workspace-libs</id>
+            <url>file://${project.basedir}/../libs/m2</url>
+        </repository>
+
         <repository>
             <id>papermc</id>
             <url>https://repo.papermc.io/repository/maven-public/</url>
