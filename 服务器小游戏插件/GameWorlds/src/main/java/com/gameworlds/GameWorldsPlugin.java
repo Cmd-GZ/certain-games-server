@@ -315,6 +315,81 @@ public final class GameWorldsPlugin extends JavaPlugin implements CommandExecuto
         return w;
     }
 
+    // ---------- no-preserve-world 的三次确认（危险操作门） ----------
+
+    /** 待确认的危险操作：key = 发送者|动作|名字。 */
+    private final java.util.Map<String, int[]> pendingDanger = new java.util.concurrent.ConcurrentHashMap<>();
+    /** 危险确认的状态：上次操作时间（用于超时失效）。 */
+    private final java.util.Map<String, Long> pendingDangerAt = new java.util.concurrent.ConcurrentHashMap<>();
+    /** 确认次数与超时：必须**连发三次同一条命令**，且两次间隔不超过 2 分钟。 */
+    private static final int DANGER_CONFIRMS = 3;
+    private static final long DANGER_TIMEOUT_MS = 2 * 60 * 1000L;
+
+    /**
+     * 危险操作门：`no-preserve-world` 必须确认 {@value #DANGER_CONFIRMS} 次。
+     *
+     * <p>为什么是三次：普通 `delete` 本身已经是"命令 + confirm"两次；危险形态再高一级。
+     * 实现方式是**连发同一条命令**（而不是记一堆待确认队列），因为运维最自然的动作就是
+     * "把刚才那条再敲一遍"；超时或中间做了别的操作都会让计数失效。
+     *
+     * @return true = 已确认够次数，可以执行
+     */
+    private boolean dangerGate(CommandSender sender, String action, String name) {
+        String key = sender.getName() + "|" + action + "|" + name;
+        long now = System.currentTimeMillis();
+        Long at = pendingDangerAt.get(key);
+        int[] cnt = pendingDanger.get(key);
+        if (at == null || cnt == null || now - at > DANGER_TIMEOUT_MS) {
+            cnt = new int[]{0};
+        }
+        cnt[0]++;
+        pendingDanger.put(key, cnt);
+        pendingDangerAt.put(key, now);
+        if (cnt[0] >= DANGER_CONFIRMS) {
+            pendingDanger.remove(key);
+            pendingDangerAt.remove(key);
+            getLogger().warning("[危险操作已确认 " + DANGER_CONFIRMS + " 次] " + sender.getName()
+                    + " -> " + action + " " + name);
+            return true;
+        }
+        int left = DANGER_CONFIRMS - cnt[0];
+        send(sender, "&c&l⚠ 危险操作：&e" + action + " " + name);
+        send(sender, "&c这会对世界做 &l不做任何前缀/归属检查&c 的操作，可能造出"
+                + "框架不认识的世界，或删掉不该删的东西。");
+        send(sender, "&6确认进度 &e" + cnt[0] + "&7/&e" + DANGER_CONFIRMS
+                + "&7，还需要 &e" + left + " &7次（2 分钟内连发同一条命令）：");
+        send(sender, "&7  &f" + (action.startsWith("create") ? "/gw create no-preserve-world " : "/gw delete no-preserve-world ")
+                + name);
+        return false;
+    }
+
+    /**
+     * `/gw create room <模板> [房间名]` —— 从模板**复制**一份房间。
+     *
+     * <p>逻辑全在 {@code MiniGameLib.RoomManager}：复制模板（异步）→ 删世界身份 →
+     * 主线程 createWorld → 套规则 → 注册区域 → 记账。这里只做命令解析和回执，
+     * **不复制任何房间逻辑**（复制一份就等于又造了个"两处实现"）。
+     */
+    private void createRoom(CommandSender sender, String[] args) {
+        if (args.length < 3) {
+            send(sender, "&c用法：/gw create room <模板> [房间名]");
+            send(sender, "&7可用模板：&f/gw list &7里的 &b[模板]&7 项，或 &f/hub room templates");
+            return;
+        }
+        String tpl = args[2];
+        String desired = args.length >= 4 ? args[3] : null;
+        send(sender, "&7正在从模板 &f" + tpl + " &7复制房间…");
+        com.hub.room.RoomManager.createAsync(tpl, desired, room -> {
+            if (room == null) {
+                send(sender, "&c创建房间失败（模板不存在 / 目录缺失 / 达到上限）。详情见控制台与 /hub doctor。");
+            } else {
+                send(sender, "&a已创建房间 &f" + room.roomId + " &7（游戏 &f"
+                        + room.template.gameKey() + "&7）。"
+                        + "开局：&f/hub start " + room.roomId);
+            }
+        });
+    }
+
     // ---------- 命令 ----------
 
     @Override
@@ -390,25 +465,32 @@ public final class GameWorldsPlugin extends JavaPlugin implements CommandExecuto
                 //   默认          -> 造**模板**：无已知前缀则自动补 tmpl_，**不自动加载**
                 //   --persist     -> 造**持久世界**：名字原样，开服自动加载（主城这类）
                 //   room_ 前缀    -> 一律拒绝（房间世界由 /hub room create 建，引擎会自动回收）
-                boolean persist = false;
-                int nameIdx = 1;
-                while (nameIdx < args.length && args[nameIdx].startsWith("--")) {
-                    String opt = args[nameIdx].toLowerCase(java.util.Locale.ROOT);
-                    if (opt.equals("--persist") || opt.equals("-p")) {
-                        persist = true;
-                    } else {
-                        send(sender, "&c未知选项 &e" + args[nameIdx]
-                                + "&c。用法：/gw create [--persist] <世界名> [void]");
-                        return true;
-                    }
-                    nameIdx++;
-                }
-                if (args.length <= nameIdx) {
-                    send(sender, "&c用法：/gw create [--persist] <世界名> [void]\n"
-                            + "&7  默认造**模板**（自动补 tmpl_，不自动加载）\n"
-                            + "&7  --persist 造**持久世界**（名字原样，开服自动加载）");
+                // 语法（D19 修订）：/gw create <kind> <名字...>
+                //   template          造模板（自动补 tmpl_，不自动加载）
+                //   persist           造持久世界（拒绝 tmpl_/room_ 前缀，开服加载）
+                //   room              从模板复制一个房间（名字可省，由引擎生成）
+                //   no-preserve-world 危险逃生舱：**不做任何前缀限制**（类 rm --no-preserve-root）
+                String kind = args.length >= 2 ? args[1].toLowerCase(java.util.Locale.ROOT) : "";
+                int nameIdx = 2;
+                if (!kind.equals("template") && !kind.equals("persist")
+                        && !kind.equals("room") && !kind.equals("no-preserve-world")) {
+                    send(sender, "&c用法：/gw create <template|persist|room|no-preserve-world> <名字…>\n"
+                            + "&7  &ftemplate&7          造模板（自动补 tmpl_，不自动加载）\n"
+                            + "&7  &fpersist&7           造持久世界（名字原样，开服自动加载）\n"
+                            + "&7  &froom&7              从模板复制一个房间（/gw create room <模板> [房间名]）\n"
+                            + "&7  &fno-preserve-world&7 &c⚠ 危险：不做任何前缀限制，只在明确知道后果时使用");
                     return true;
                 }
+                if (kind.equals("room")) {
+                    createRoom(sender, args);
+                    return true;
+                }
+                if (args.length <= nameIdx) {
+                    send(sender, "&c用法：/gw create " + kind + " <世界名> [void]");
+                    return true;
+                }
+                boolean persist = kind.equals("persist");
+                boolean dangerous = kind.equals("no-preserve-world");
                 String raw = args[nameIdx].toLowerCase(java.util.Locale.ROOT);
                 if (raw.matches(".*[^a-z0-9_\\-].*")) {
                     send(sender, "&c世界名只能包含小写字母、数字、下划线和连字符。");
@@ -418,9 +500,18 @@ public final class GameWorldsPlugin extends JavaPlugin implements CommandExecuto
                 //   room_      任何情况下都拒绝（引擎独占、会被自动回收）
                 //   tmpl_ + --persist  拒绝（持久世界不能是模板）
                 //   world_ + 默认      拒绝（那是持久世界的名字，建成模板会误导）
+                if (dangerous) {
+                    // ⚠ 逃生舱：完全不检查前缀，但必须三次确认（见 dangerGate）。
+                    if (!dangerGate(sender, "create no-preserve-world", raw)) {
+                        return true;
+                    }
+                    World w0 = createManagedWorld(raw, sender, args.length > nameIdx + 1
+                            && args[nameIdx + 1].equalsIgnoreCase("void"));
+                    return true;
+                }
                 if (raw.startsWith(PREFIX_ROOM)) {
-                    send(sender, "&croom_ 前缀是房间引擎独占的（房间会被自动回收），不能用 /gw 创建。"
-                            + "\n&7要开房间请用 &f/hub room create <模板>");
+                    send(sender, "&croom_ 前缀是房间引擎独占的（房间会被自动回收），不能用 /gw create 创建。"
+                            + "\n&7要开房间请用 &f/gw create room <模板>");
                     return true;
                 }
                 if (persist && raw.startsWith(PREFIX_TEMPLATE)) {
@@ -481,12 +572,63 @@ public final class GameWorldsPlugin extends JavaPlugin implements CommandExecuto
             }
             case "delete" -> {
                 if (!admin(sender)) return true;
-                if (args.length < 2) {
-                    send(sender, "&c用法：/gw delete <世界名> confirm（删除托管世界，文件夹与配置一并清除）");
+                // 语法（与 create 对称）：/gw delete <kind> <名字> confirm
+                //   kind 是**安全断言**：你声明它属于哪一类；名字对不上就拒绝。
+                //   no-preserve-world = 不做任何检查的强制删除（危险）。
+                String kind = args.length >= 2 ? args[1].toLowerCase(java.util.Locale.ROOT) : "";
+                boolean kindKnown = kind.equals("template") || kind.equals("persist")
+                        || kind.equals("room") || kind.equals("no-preserve-world");
+                String name;
+                boolean confirm;
+                if (kindKnown) {
+                    if (args.length < 3) {
+                        send(sender, "&c用法：/gw delete " + kind + " <名字> confirm");
+                        return true;
+                    }
+                    name = args[2].toLowerCase();
+                    confirm = args.length >= 4 && args[3].equalsIgnoreCase("confirm");
+                    if (!kind.equals("no-preserve-world")) {
+                        String actual = switch (com.hub.world.WorldNames.classify(name)) {
+                            case TEMPLATE -> "template";
+                            case ROOM -> "room";
+                            case PERSISTENT -> "persist";
+                        };
+                        if (!actual.equals(kind)) {
+                            send(sender, "&c类目不匹配：&e" + name + "&c 实际是 &e" + actual
+                                    + "&c，你声明的是 &e" + kind + "&c。");
+                            send(sender, "&7（这是安全断言：写错就拒绝，避免误删）");
+                            return true;
+                        }
+                    } else {
+                        // 危险删除同样三次确认；通过后视为已 confirm，不再要求 confirm 关键字
+                        if (!dangerGate(sender, "delete no-preserve-world", name)) {
+                            return true;
+                        }
+                        confirm = true;
+                    }
+                } else {
+                    // 兼容旧用法：/gw delete <世界名> [confirm]（按名字自动判定种类）
+                    if (args.length < 2) {
+                        send(sender, "&c用法：/gw delete <template|persist|room|no-preserve-world> <名字> confirm");
+                        return true;
+                    }
+                    name = args[1].toLowerCase();
+                    confirm = args.length >= 3 && args[2].equalsIgnoreCase("confirm");
+                    kind = "auto";
+                }
+                // 房间必须交给房间引擎删：它要先踢人 → unload → 删目录 → 撤销区域注册
+                if (com.hub.world.WorldNames.isRoom(name)) {
+                    if (!confirm) {
+                        send(sender, "&c删除房间会清空该房间的所有内容且不可恢复！确认请再次输入：");
+                        send(sender, "&e/gw delete room " + name + " confirm");
+                        return true;
+                    }
+                    boolean ok = com.hub.room.RoomManager.delete(name);
+                    send(sender, ok ? "&a房间 &e" + name + "&a 已删除（世界、目录与区域注册一并清除）。"
+                            : "&c房间 &e" + name + "&c 不在房间引擎的登记里（可能是手工建的世界，"
+                            + "用 /gw delete no-preserve-world " + name + " confirm 强删）。");
                     return true;
                 }
-                String name = args[1].toLowerCase();
-                boolean confirm = args.length >= 3 && args[2].equalsIgnoreCase("confirm");
                 if (!managed.containsKey(name)) {
                     send(sender, "&c世界 &e" + name + "&c 不是 GameWorlds 托管的世界（主城等系统世界不可删除）。");
                     return true;
@@ -498,7 +640,8 @@ public final class GameWorldsPlugin extends JavaPlugin implements CommandExecuto
                 }
                 if (!confirm) {
                     send(sender, "&c删除世界将清空该世界所有内容且不可恢复！确认请再次输入：");
-                    send(sender, "&e/gw delete " + name + " confirm");
+                    send(sender, "&e/gw delete " + (kind.equals("auto") ? "no-preserve-world" : kind)
+                            + " " + name + " confirm");
                     return true;
                 }
                 File folder = w != null ? w.getWorldFolder()
