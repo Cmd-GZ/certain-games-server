@@ -91,6 +91,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
         // 每秒刷新观战提示；被观战的对局一结束就把观众送回大厅
         getServer().getScheduler().runTaskTimer(this, manager::tickSpectate, 20L, 20L);
 
+        com.hub.gui.RoomGui.init(this);
         getLogger().info("HubCore 已启用。大厅：" + manager.getLobby());
     }
 
@@ -633,6 +634,17 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
         }
         String sub = args.length < 2 ? "list" : args[1].toLowerCase();
         switch (sub) {
+            case "actions", "act" -> {
+                // 房间动作页的文本版（GUI 里是点出来的；控制台用它来验证内容）
+                if (args.length < 3) {
+                    sender.sendMessage(LEGACY.deserialize("&c用法：/hub room actions <房间名>"));
+                    return;
+                }
+                for (String line : com.hub.gui.RoomGui.describe(
+                        null, com.hub.gui.RoomGui.Mode.ROOM_ACTIONS, args[2])) {
+                    sender.sendMessage(LEGACY.deserialize(line));
+                }
+            }
             case "gui", "ui" -> {
                 // 选房 UI：玩家打开箱子界面；控制台输出同样的文本版（无客户端也能验证）
                 String game = args.length >= 3 ? args[2] : null;

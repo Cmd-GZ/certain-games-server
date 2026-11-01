@@ -42,18 +42,27 @@ public final class RoomGui {
         /** 房间列表。 */
         ROOMS,
         /** 模板列表（点一个建房间）。 */
-        TEMPLATES
+        TEMPLATES,
+        /** 单个房间的动作页：加入 / 开始 / 停止 / 删除。 */
+        ROOM_ACTIONS
     }
 
     /** 打开中的界面。 */
     public static final class Holder implements InventoryHolder {
         public final String gameKey;
         public final Mode mode;
+        /** ROOM_ACTIONS 页对应的房间；其它页为 null。 */
+        public final String roomId;
         private Inventory inventory;
 
         public Holder(String gameKey, Mode mode) {
+            this(gameKey, mode, null);
+        }
+
+        public Holder(String gameKey, Mode mode, String roomId) {
             this.gameKey = gameKey;
             this.mode = mode;
+            this.roomId = roomId;
         }
 
         public void setInventory(Inventory inv) {
@@ -66,7 +75,23 @@ public final class RoomGui {
         }
     }
 
+    /** HubCore 实例（用于读 games.yml 的 join/start/stop 映射）。 */
+    private static org.bukkit.plugin.Plugin plugin;
+
+    public static void init(org.bukkit.plugin.Plugin pl) {
+        plugin = pl;
+    }
+
     private RoomGui() {
+    }
+
+    /** 读 plugins/HubCore/games.yml；缺失时返回空配置（调用方按"没配置"处理）。 */
+    private static org.bukkit.configuration.file.FileConfiguration games() {
+        if (plugin == null) {
+            return new org.bukkit.configuration.file.YamlConfiguration();
+        }
+        java.io.File f = new java.io.File(plugin.getDataFolder(), "games.yml");
+        return org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(f);
     }
 
     // ---------- 文本版（控制台用 / 也是 GUI 的内容来源） ----------
@@ -75,6 +100,11 @@ public final class RoomGui {
      * 把某一页的内容描述成若干行（控制台可读、GUI 的 lore 与之一致）。
      */
     public static List<String> describe(String gameKey, Mode mode) {
+        return describe(gameKey, mode, null);
+    }
+
+    /** 文本版（含 ROOM_ACTIONS 需要 roomId）。 */
+    public static List<String> describe(String gameKey, Mode mode, String roomId) {
         List<String> out = new ArrayList<>();
         if (mode == Mode.ROOMS) {
             var rooms = RoomManager.rooms().stream()
@@ -90,6 +120,24 @@ public final class RoomGui {
             if (rooms.isEmpty()) {
                 out.add("&7（还没有房间；点第一格从模板创建）");
             }
+        } else if (mode == Mode.ROOM_ACTIONS) {
+            var room = RoomManager.room(roomId);
+            if (room == null) {
+                out.add("&c房间 &f" + roomId + " &c不存在");
+                return out;
+            }
+            out.add("&b[房间动作] &f" + room.roomId + " &7（模板 &f" + room.template.key()
+                    + "&7，游戏 &f" + room.template.gameKey() + "&7）");
+            out.add("&7  人=&f" + room.playerCount() + " &7空置=&f" + room.idleSeconds() + "s");
+            var cfg = games();
+            for (String[] a : new String[][]{
+                    {"进入并加入", "join"}, {"开始一局", "start"}, {"停止", "stop"}}) {
+                String cmd = cfg.getString("games." + room.template.gameKey() + "." + a[1] + "-command");
+                out.add("&7  - &f" + a[0] + "&7："
+                        + (cmd == null || cmd.isBlank() ? "&c未配置（" + a[1] + "-command）" : "&f/" + cmd));
+            }
+            out.add("&7  - &4删除房间&7：会踢人、卸载、删目录、撤销区域注册");
+            return out;
         } else {
             var tpls = RoomManager.templates().stream()
                     .filter(t -> gameKey == null || t.gameKey().equals(gameKey))
@@ -113,10 +161,19 @@ public final class RoomGui {
 
     /** 给玩家打开某一页。 */
     public static void open(Player p, String gameKey, Mode mode) {
-        Holder holder = new Holder(gameKey, mode);
-        String title = mode == Mode.ROOMS
-                ? "&8房间 · " + (gameKey == null ? "全部" : gameKey)
-                : "&8选地图 · " + (gameKey == null ? "全部" : gameKey);
+        open(p, gameKey, mode, null);
+    }
+
+    /** 给玩家打开某一页（ROOM_ACTIONS 需要 roomId）。 */
+    public static void open(Player p, String gameKey, Mode mode, String roomId) {
+        Holder holder = mode == Mode.ROOM_ACTIONS
+                ? new Holder(gameKey, mode, roomId)
+                : new Holder(gameKey, mode);
+        String title = switch (mode) {
+            case ROOMS -> "&8房间 · " + (gameKey == null ? "全部" : gameKey);
+            case TEMPLATES -> "&8选地图 · " + (gameKey == null ? "全部" : gameKey);
+            case ROOM_ACTIONS -> "&8房间 · " + roomId;
+        };
         Inventory inv = Bukkit.createInventory(holder, 27, LEGACY.deserialize(title));
         holder.setInventory(inv);
 
@@ -131,6 +188,20 @@ public final class RoomGui {
                     break;
                 }
                 inv.setItem(slot++, roomItem(r));
+            }
+        } else if (mode == Mode.ROOM_ACTIONS) {
+            var room = RoomManager.room(roomId);
+            inv.setItem(0, actionItem(Material.LIME_WOOL, "&a&l进入并加入", "&7传送到房间世界并加入等待队列"));
+            boolean canManage = p.hasPermission("hub.admin");
+            inv.setItem(2, actionItem(Material.REDSTONE_BLOCK, "&c&l开始一局",
+                    canManage ? "&7执行该游戏的 start-command（/hub start 同款）" : "&c需要管理员权限"));
+            inv.setItem(4, actionItem(Material.BARRIER, "&e&l停止",
+                    canManage ? "&7执行该游戏的 stop-command" : "&c需要管理员权限"));
+            inv.setItem(6, actionItem(Material.TNT, "&4&l删除房间",
+                    canManage ? "&c会踢人、卸载、删目录、撤销区域注册" : "&c需要管理员权限"));
+            inv.setItem(8, actionItem(Material.ARROW, "&7返回房间列表", "&8回到上一页"));
+            if (room != null) {
+                inv.setItem(13, roomItem(room));
             }
         } else {
             int slot = 0;
@@ -159,7 +230,40 @@ public final class RoomGui {
                     .toList();
             int idx = slot - 1;
             if (idx >= 0 && idx < rooms.size()) {
-                joinRoom(p, rooms.get(idx).roomId);
+                open(p, holder.gameKey, Mode.ROOM_ACTIONS, rooms.get(idx).roomId);
+            }
+            return true;
+        }
+        if (holder.mode == Mode.ROOM_ACTIONS) {
+            switch (slot) {
+                case 0 -> joinRoom(p, holder.roomId);
+                case 2 -> {
+                    if (!p.hasPermission("hub.admin")) {
+                        p.sendMessage(LEGACY.deserialize("&c需要管理员权限。"));
+                        return true;
+                    }
+                    dispatchGameCommand(p, holder.roomId, "start");
+                }
+                case 4 -> {
+                    if (!p.hasPermission("hub.admin")) {
+                        p.sendMessage(LEGACY.deserialize("&c需要管理员权限。"));
+                        return true;
+                    }
+                    dispatchGameCommand(p, holder.roomId, "stop");
+                }
+                case 6 -> {
+                    if (!p.hasPermission("hub.admin")) {
+                        p.sendMessage(LEGACY.deserialize("&c需要管理员权限。"));
+                        return true;
+                    }
+                    p.closeInventory();
+                    boolean ok = RoomManager.delete(holder.roomId);
+                    p.sendMessage(LEGACY.deserialize(ok
+                            ? "&a已删除房间 &f" + holder.roomId
+                            : "&c删除失败（房间不存在）"));
+                }
+                case 8 -> open(p, holder.gameKey, Mode.ROOMS);
+                default -> { }
             }
             return true;
         }
@@ -185,7 +289,12 @@ public final class RoomGui {
         return true;
     }
 
-    /** 进入房间：先传送进房间世界，再让游戏自己把人收进等待队列（走 games.yml 的 join-command）。 */
+    /**
+     * 进入房间：传送进房间世界 + **让游戏把人收进等待队列**（走 games.yml 的 join-command）。
+     *
+     * <p>只传送是不够的：玩家站在房间里但游戏不知道他来了，什么都不会发生。
+     * 这一步才是 R3 与 N2 的接缝。
+     */
     private static void joinRoom(Player p, String roomId) {
         var room = RoomManager.room(roomId);
         if (room == null || room.world == null) {
@@ -194,8 +303,46 @@ public final class RoomGui {
         }
         p.closeInventory();
         p.teleport(room.world.getSpawnLocation());
-        p.sendMessage(LEGACY.deserialize("&a已进入房间 &f" + roomId
-                + " &7（模板 &f" + room.template.key() + "&7）"));
+        String join = games().getString("games." + room.template.gameKey() + ".join-command");
+        if (join != null && !join.isBlank()) {
+            join = join.replace("{arena}", "").trim();
+            p.performCommand(join);
+            p.sendMessage(LEGACY.deserialize("&a已进入房间 &f" + roomId
+                    + " &7并加入 &f/" + join + "&7（模板 &f" + room.template.key() + "&7）"));
+        } else {
+            p.sendMessage(LEGACY.deserialize("&a已进入房间 &f" + roomId
+                    + " &7（游戏 &f" + room.template.gameKey() + "&7 没配 join-command，"
+                    + "见 plugins/HubCore/games.yml）"));
+        }
+    }
+
+    /** 以控制台身份执行某房间对应游戏的 start/stop 命令（与 /hub start|stop 同源）。 */
+    private static void dispatchGameCommand(Player p, String roomId, String phase) {
+        var room = RoomManager.room(roomId);
+        if (room == null) {
+            p.sendMessage(LEGACY.deserialize("&c房间不存在。"));
+            return;
+        }
+        String key = "games." + room.template.gameKey() + "." + phase + "-command";
+        String cmd = games().getString(key);
+        if (cmd == null || cmd.isBlank()) {
+            p.sendMessage(LEGACY.deserialize("&c游戏 &f" + room.template.gameKey()
+                    + " &c没有配置 " + phase + "-command（" + key + "）。"));
+            return;
+        }
+        cmd = cmd.replace("{arena}", "").trim();
+        p.closeInventory();
+        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
+        p.sendMessage(LEGACY.deserialize("&a已执行 &f/" + cmd + " &7（房间 &f" + roomId + "&7）"));
+    }
+
+    private static ItemStack actionItem(Material mat, String name, String lore) {
+        ItemStack it = new ItemStack(mat);
+        ItemMeta meta = it.getItemMeta();
+        meta.displayName(noItalic(name));
+        meta.lore(List.of(noItalic(lore)));
+        it.setItemMeta(meta);
+        return it;
     }
 
     private static ItemStack createButton() {
