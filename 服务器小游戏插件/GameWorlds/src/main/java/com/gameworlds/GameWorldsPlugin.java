@@ -338,6 +338,24 @@ public final class GameWorldsPlugin extends JavaPlugin implements CommandExecuto
                     send(sender, tag + " &f" + w.getName() + " &7(pvp=" + w.getPVP()
                             + " 难度=" + w.getDifficulty() + " 玩家=" + w.getPlayers().size() + ")");
                 }
+                // 已登记但**没加载**的世界（模板默认就是这种）也要列出来，
+                // 否则设计者 /gw list 根本看不到自己能编辑哪些地图。
+                ConfigurationSection cfgSec = getConfig().getConfigurationSection("worlds");
+                if (cfgSec != null) {
+                    java.util.List<String> unloaded = new java.util.ArrayList<>();
+                    for (String name : cfgSec.getKeys(false)) {
+                        if (Bukkit.getWorld(name) == null) {
+                            unloaded.add(name);
+                        }
+                    }
+                    if (!unloaded.isEmpty()) {
+                        send(sender, "&7------ 未加载（用 &f/gw tp <名字>&7 自动加载）------");
+                        for (String name : unloaded) {
+                            String tag = isTemplate(name) ? "&b[模板]" : "&7[持久·未加载]";
+                            send(sender, tag + " &f" + name);
+                        }
+                    }
+                }
                 return true;
             }
             case "tp" -> {
@@ -352,8 +370,20 @@ public final class GameWorldsPlugin extends JavaPlugin implements CommandExecuto
                 }
                 World w = Bukkit.getWorld(args[1]);
                 if (w == null) {
-                    send(sender, "&c世界 &e" + args[1] + "&c 不存在（用 /gw list 查看）。");
-                    return true;
+                    // 已登记但未加载（模板默认不加载）→ 自动加载再传送，别让设计者记两条命令
+                    ConfigurationSection ws = getConfig()
+                            .getConfigurationSection("worlds." + args[1]);
+                    if (ws == null) {
+                        send(sender, "&c世界 &e" + args[1] + "&c 不存在（用 /gw list 查看）。");
+                        return true;
+                    }
+                    send(sender, "&7世界 &f" + args[1] + " &7还没加载，正在加载…");
+                    w = loadOrCreate(args[1], ws);
+                    if (w == null) {
+                        send(sender, "&c加载失败，见控制台日志。");
+                        return true;
+                    }
+                    managed.put(args[1], w);
                 }
                 Location spawn = w.getSpawnLocation();
                 p.teleport(spawn);
