@@ -1,5 +1,7 @@
 package com.knockback;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.HubAPI;
 import com.hub.api.ArcadeBridge;
 import com.hub.util.Chat;
@@ -59,6 +61,23 @@ public final class KnockbackManager {
     private final WaitCountdown countdown;
 
     private State state = State.WAITING;
+    /** D22：会话层统一按场地键索引（单图游戏只有一个键）。 */
+    private final java.util.Map<String, KnockbackSession> sessions = new java.util.LinkedHashMap<>();
+    private java.util.Set<UUID> pendingWinners;
+    private String pendingEndMessage;
+    private KnockbackSession session;
+
+    private KnockbackSession ensureSession() {
+        String key = "main";
+        KnockbackSession s = sessions.get(key);
+        if (s == null || s.state().isFinal()) {
+            s = new KnockbackSession(this, key);
+            sessions.put(key, s);
+        }
+        session = s;
+        return s;
+    }
+
     private final Set<UUID> waiting = new LinkedHashSet<>();
     private final Set<UUID> playing = new LinkedHashSet<>();
     private final Set<UUID> eliminated = new LinkedHashSet<>();
@@ -327,6 +346,14 @@ public final class KnockbackManager {
             Chat.send(player, "&c场地还没配置完整（缺 " + arena.missing() + "），请联系管理员。");
             return;
         }
+        // I1（D23）：先挂会话再入队；冲突直接拒绝
+        KnockbackSession sess = ensureSession();
+        if (!sess.join(player)) {
+            if (sess.players().isEmpty()) {
+                sessions.remove("main");
+            }
+            return;
+        }
         waiting.add(id);
         player.getInventory().clear();
         player.setGameMode(GameMode.SURVIVAL);
@@ -432,6 +459,9 @@ public final class KnockbackManager {
         }
         countdown.cancel();
         state = State.RUNNING;
+        if (session != null && !session.state().isFinal()) {
+            session.start();
+        }
         enableWorldPvp();
         playing.clear();
         playing.addAll(ready);
@@ -462,7 +492,23 @@ public final class KnockbackManager {
         endGame(new LinkedHashSet<>(playing), "&e管理员结束了本局。");
     }
 
+    /** 收场入口（I4）：先让会话 end()，再由 onEnd 回到 doEndGame。 */
     public void endGame(Set<UUID> winners, String reason) {
+        pendingWinners = winners;
+        pendingEndMessage = reason;
+        if (session == null || session.state().isFinal()) {
+            doEndGame();
+            return;
+        }
+        session.end(EndReason.ROUND_END);
+    }
+
+    /** 真正的收场逻辑。赢家与文案透传，玩家看到的结算不变。 */
+    void doEndGame() {
+        Set<UUID> winners = pendingWinners;
+        String reason = pendingEndMessage != null ? pendingEndMessage : "&7对局结束。";
+        pendingWinners = null;
+        pendingEndMessage = null;
         if (state != State.RUNNING) {
             return;
         }

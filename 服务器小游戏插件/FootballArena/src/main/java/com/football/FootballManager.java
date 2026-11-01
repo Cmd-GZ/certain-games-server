@@ -1,5 +1,7 @@
 package com.football;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.GameState;
 import com.hub.api.HubAPI;
 import com.hub.data.PlayerStats;
@@ -56,6 +58,20 @@ public class FootballManager {
     private final LiveSidebar liveSidebar;
     private int boardTick;
     private final Map<String, FootballArena> arenas = new LinkedHashMap<>();
+
+    /** D22：每个场地一个会话（多图游戏）。 */
+    private final Map<String, FootballSession> sessions = new LinkedHashMap<>();
+    private FootballArena.Team pendingWinner;
+    private boolean pendingHasWinner;
+
+    private FootballSession ensureSession(String arenaName) {
+        FootballSession s = sessions.get(arenaName);
+        if (s == null || s.state().isFinal()) {
+            s = new FootballSession(this, arenaName);
+            sessions.put(arenaName, s);
+        }
+        return s;
+    }
     private final Map<UUID, String> playerArena = new LinkedHashMap<>();
     private final Map<String, FootballBall> balls = new LinkedHashMap<>();      // 场名 -> 球
     private final Map<String, BukkitTask> pauseTasks = new LinkedHashMap<>();   // 场名 -> 进球定格任务
@@ -306,6 +322,13 @@ public class FootballManager {
             return false;
         }
         playerArena.put(id, arenaName);
+        FootballSession sess = ensureSession(arenaName);
+        if (!sess.join(p)) {
+            if (sess.players().isEmpty()) {
+                sessions.remove(arenaName);
+            }
+            return false;
+        }
         a.getPlayers().add(id);
         p.getInventory().clear();
         p.setGameMode(GameMode.SURVIVAL);
@@ -416,6 +439,10 @@ public class FootballManager {
             return;
         }
         a.setState(FootballArena.State.RUNNING);
+        FootballSession started = sessions.get(a.getName());
+        if (started != null && !started.state().isFinal()) {
+            started.start();
+        }
         a.resetMatch();
         cancelWait(a);
         balanceTeams(a);
@@ -1070,7 +1097,27 @@ public class FootballManager {
         }
     }
 
+    /** 收场入口（I4）：先让会话 end()，再由 onEnd 回到 doEndMatch。 */
     private void endMatch(FootballArena a, FootballArena.Team winner) {
+        pendingWinner = winner;
+        pendingHasWinner = winner != null;
+        FootballSession sess = sessions.get(a.getName());
+        if (sess == null || sess.state().isFinal()) {
+            doEndMatch(a.getName());
+            return;
+        }
+        sess.end(EndReason.ROUND_END);
+    }
+
+    /** 真正的收场逻辑。赢家透传，玩家看到的结算不变。 */
+    void doEndMatch(String arenaName) {
+        FootballArena a = arenas.get(arenaName);
+        if (a == null) {
+            return;
+        }
+        FootballArena.Team winner = pendingHasWinner ? pendingWinner : null;
+        pendingWinner = null;
+        pendingHasWinner = false;
         liveSidebar.hide("football:" + a.getName());
         cancelPause(a);
         kickoffDeadline.remove(a.getName());
