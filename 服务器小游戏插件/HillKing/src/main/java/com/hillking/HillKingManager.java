@@ -45,6 +45,9 @@ import java.util.UUID;
 /** 高台之王核心：台面每秒得分、咸鱼击退、掉台自动回场、限时结算前三名。 */
 public final class HillKingManager {
 
+    /** 本游戏的 key（房间/会话都用它做标识）。 */
+    private static final String GAME_KEY = "hillking";
+
     public static final String GAME = "高台之王";
     public static final String ARENA = "主场地";
 
@@ -385,8 +388,28 @@ public final class HillKingManager {
 
     // ---------- 加入 / 离开 ----------
 
+    /**
+     * 房间化（R1.5 / D25）：如果这个游戏当前挂着**一个**房间，就把场地换绑到房间世界。
+     *
+     * <p>这样"同一套坐标"跑在从模板复制出来的房间实例上，而不是配置里那块静态场地。
+     * 房间与对局 1:1（D25），所以换绑时机是"玩家进来 / 开局前"。
+     */
+    private void bindRoomIfAny() {
+        var room = com.hub.room.RoomManager.activeFor(GAME_KEY);
+        if (room == null || room.world == null) {
+            return;
+        }
+        if (arena.center() != null && room.world.equals(arena.center().getWorld())) {
+            return;   // 已经绑过了
+        }
+        arena.rebind(room.world);
+        plugin.getLogger().info("[HillKing] 已绑定房间 " + room.roomId
+                + "（世界 " + room.world.getName() + "）");
+    }
+
     public void join(Player player) {
         UUID id = player.getUniqueId();
+        bindRoomIfAny();
         // 上一局结束后会话停在 ENDED（终态），必须换新的，否则这里会被判成"对局进行中"而拒绝加入
         ensureSession();
         if (!isWaitingState()) {
@@ -621,6 +644,25 @@ public final class HillKingManager {
         reportArena();
     }
 
+    /**
+     * D25：房间与对局 1:1 —— 这一局结束，房间就该销毁。
+     *
+     * <p>延迟 3 秒，让结算消息/回主城先发出去，再拆世界。
+     * 破坏性游戏（TNTBattle 那种改地形的）尤其依赖这条：**每局一个新房间**才是干净的地形。
+     */
+    private void destroyRoomAfterMatch() {
+        var room = com.hub.room.RoomManager.activeFor(GAME_KEY);
+        if (room == null) {
+            return;
+        }
+        final String roomId = room.roomId;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            boolean ok = com.hub.room.RoomManager.delete(roomId);
+            plugin.getLogger().info("[HillKing] 对局结束，销毁房间 " + roomId
+                    + (ok ? "（成功）" : "（失败：房间已不存在）"));
+        }, 60L);
+    }
+
     /** 请求结束对局：交给 session（唯一出口，幂等），文案暂存给 doEndGame。 */
     private void endGame(EndReason why, String message) {
         this.endMessage = message;
@@ -634,6 +676,7 @@ public final class HillKingManager {
      * 所以**必然只执行一次**（框架保证），这里不再需要"是否在 RUNNING"的守卫。
      */
     void doEndGame(EndReason why) {
+        destroyRoomAfterMatch();
         String reason = endMessage;
         cancelTasks();
         liveSidebar.hide("hillking");

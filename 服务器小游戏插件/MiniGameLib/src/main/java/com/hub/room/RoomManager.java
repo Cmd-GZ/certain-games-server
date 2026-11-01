@@ -249,6 +249,30 @@ public final class RoomManager {
         return null;
     }
 
+    /**
+     * 某个游戏**当前唯一活跃的房间**（房间化 R1.5 用）。
+     *
+     * <p>为什么是"唯一"：现在的游戏都还是**单局结构**（一份等待队列、一块场地），
+     * 同时开两个房间它们会互相覆盖。所以先按"一个游戏同时只接一个房间"来做；
+     * 等游戏内部状态按房间拆开（D22 的后半段）之后，这里换成"按房间 id 取"。
+     *
+     * @return 恰好有一个房间时返回它；0 个或多个都返回 null（多个时调用方必须显式指定房间）
+     */
+    public static Room activeFor(String gameKey) {
+        if (gameKey == null) {
+            return null;
+        }
+        Room only = null;
+        int n = 0;
+        for (Room room : ROOMS.values()) {
+            if (room.world != null && room.template.gameKey().equals(gameKey)) {
+                only = room;
+                n++;
+            }
+        }
+        return n == 1 ? only : null;
+    }
+
     /** 房间世界名 → 模板键；不是房间世界则返回 {@code null}。 */
     public static String templateKeyOfRoomWorld(String worldName) {
         if (worldName == null) {

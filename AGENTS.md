@@ -74,7 +74,7 @@ tools/smoke-arcade-party.txt  # 派对冒烟的命令脚本（配合 --fake-play
 # /gw 的别名是 [gworlds, world]；**没有** /gameworld（不存在）。子命令见 docs/交接.md §2.9
 ```
 
-### 0.5 八条硬规则（不遵守会浪费一整轮）
+### 0.5 九条硬规则（不遵守会浪费一整轮）
 
 1. **`build.sh` 必须 clean。** 增量构建会复用 `target/classes` 留下半成品 jar
    （类里带 ECJ 的 `Unresolved compilation problems`，插件一启用就 `java.lang.Error`）。
@@ -105,7 +105,17 @@ tools/smoke-arcade-party.txt  # 派对冒烟的命令脚本（配合 --fake-play
    真实教训：重构了几天，差点不知道"游戏是通过**主城背包里的指南针**打开的"。
    玩家可见的还有：等待室道具、tab 分区、观战（末影之眼/旁观模式/聊天栏退出按钮）、
    头衔、公屏加入播报 —— 这些**不在游戏插件里**，很容易在重构中被漏掉。
-8. **机制不确定就去读字节码**（`javap -c`），别凭 javadoc 印象下结论。
+8. **服务器正在跑时，绝对不要 `--deploy`。** `smoke.sh --deploy` / `serve.sh --deploy` 会覆盖
+   run 目录里的 `plugins/*.jar`；JVM 已经把旧 jar 加载进内存，换文件之后新代码会引用到
+   **旧 jar 里不存在的类**，表现为：
+   ```
+   NoClassDefFoundError: com/hub/session/PlayerSessions
+       at com.hub.session.GameSession.join(...)
+   ```
+   看起来像代码 bug，实际上是"运行时换 jar"。**已给两个脚本加了 `session.lock` 守卫**，
+   但仍要记住：`build.sh --deploy` 只写 `.server/deploy/`（安全），
+   真正落地到 run 目录的是 smoke/serve。
+9. **机制不确定就去读字节码**（`javap -c`），别凭 javadoc 印象下结论。
    真实教训：我曾误判 `createSection` 会保留旧键 → 编出一个不存在的"删场地复活"bug。
 
 ### 0.6 环境事实（省得每次重新测）

@@ -71,6 +71,22 @@ if [ -z "$SERVER" ] || [ ! -f "$SERVER/server.jar" ]; then
   exit 1
 fi
 
+
+# 部署守卫：服务器正在跑时**绝不能**覆盖 plugins/*.jar。
+# 真实事故：JVM 已把旧 jar 加载进内存，文件被换掉后新代码引用到旧 jar 没有的类，
+# 表现为 NoClassDefFoundError（像代码 bug，其实是运行时换了 jar）。
+server_is_running() {
+  local dir="$1" lock
+  lock=$(ls "$dir"/world/session.lock 2>/dev/null | head -1)
+  if [ -n "$lock" ] && [ -f "$lock" ] && ! flock -n "$lock" true 2>/dev/null; then
+    return 0
+  fi
+  if pgrep -f "server.jar nogui" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
 if [ "$DEPLOY" = 1 ]; then
   src="$ROOT/.server/deploy/plugins"
   if [ ! -d "$src" ]; then
@@ -78,6 +94,11 @@ if [ "$DEPLOY" = 1 ]; then
     exit 1
   fi
   n=0
+  if server_is_running "$SERVER"; then
+    echo "❌ 服务器正在运行（session.lock 被占用），不能覆盖 jar。" >&2
+    echo "   先关服再部署 —— 运行时换 jar 会导致 NoClassDefFoundError。" >&2
+    exit 1
+  fi
   for j in "$src"/*.jar; do cp "$j" "$SERVER/plugins/"; n=$((n+1)); done
   echo "== 已部署 $n 个 jar 到 $SERVER/plugins"
 fi

@@ -28,6 +28,55 @@ public final class HillKingArena {
         this.plugin = plugin;
     }
 
+    /**
+     * 把自己**换绑到另一个世界**（房间化用）。
+     *
+     * <p>为什么需要：R1.5 之后游戏跑在"从模板复制出来的房间世界"里，
+     * 而配置里的坐标写的是模板世界（或 `tpl:` 令牌）。房间一建好，
+     * 就把同一组 x/y/z 套到房间世界上 —— 坐标语义不变，只是换了个世界实例。
+     *
+     * @param world 房间世界；null 表示换回配置原本解析到的世界
+     */
+    public void rebind(org.bukkit.World world) {
+        if (world == null) {
+            load();
+            return;
+        }
+        FileConfiguration cfg = plugin.getConfig();
+        center = parseInto(cfg.getString("arena.center", ""), world);
+        lobby = parseInto(cfg.getString("arena.lobby", ""), world);
+        spawns.clear();
+        for (String raw : cfg.getStringList("arena.spawns")) {
+            Location loc = parseInto(raw, world);
+            if (loc != null) {
+                spawns.add(loc);
+            }
+        }
+        publishRegion();
+        plugin.getLogger().info("[HillKing] 场地已换绑到房间世界：" + world.getName());
+    }
+
+    /** 解析坐标字符串，但**强制**用给定世界（忽略字符串里的世界段）。 */
+    private static Location parseInto(String raw, org.bukkit.World world) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String[] parts = raw.split(",");
+        if (parts.length < 4) {
+            return null;
+        }
+        try {
+            double x = Double.parseDouble(parts[1].trim());
+            double y = Double.parseDouble(parts[2].trim());
+            double z = Double.parseDouble(parts[3].trim());
+            float yaw = parts.length > 4 ? Float.parseFloat(parts[4].trim()) : 0f;
+            float pitch = parts.length > 5 ? Float.parseFloat(parts[5].trim()) : 0f;
+            return new Location(world, x, y, z, yaw, pitch);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
     public void load() {
         FileConfiguration cfg = plugin.getConfig();
         center = parse(cfg.getString("arena.center", ""));

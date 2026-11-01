@@ -73,7 +73,42 @@ fi
 
 echo "== 服务器: $SERVER"
 
+
+# ---------------------------------------------------------------------------
+# 部署前的守卫：**服务器正在跑的时候绝不能覆盖 plugins/*.jar**
+#
+# 真实事故：服务器开着，我跑了 build.sh --deploy 覆盖了 run 目录里的 jar。
+# JVM 已经把旧 jar 加载进内存，文件被换掉之后新代码引用到旧 jar 里没有的类，
+# 于是玩家点菜单就炸：
+#   NoClassDefFoundError: com/hub/session/PlayerSessions
+#   at com.hub.session.GameSession.join(...)
+# 这种错看起来像代码 bug，其实是"运行时换了 jar"，极难排查。
+#
+# 判据：Paper 启动时会对 world/session.lock 加锁；`flock -n` 试一下就知道有没有人在用。
+# ---------------------------------------------------------------------------
+server_is_running() {
+  local dir="$1"
+  local lock
+  lock=$(ls "$dir"/world/session.lock 2>/dev/null | head -1)
+  if [ -n "$lock" ] && [ -f "$lock" ]; then
+    if ! flock -n "$lock" true 2>/dev/null; then
+      return 0     # 锁不住 = 有人在用
+    fi
+  fi
+  # 兜底：有 java 进程的工作目录是这个服务器目录
+  if pgrep -f "server.jar nogui" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
 if [ "$DEPLOY" = 1 ]; then
+  if server_is_running "$SERVER"; then
+    echo "❌ 这台服务器看起来正在运行（world/session.lock 被占用）。" >&2
+    echo "   覆盖 plugins/*.jar 会让运行中的 JVM 引用到不存在的类（NoClassDefFoundError）。" >&2
+    echo "   先关服再跑；只想构建不部署就用 tools/build.sh（不带 --deploy）。" >&2
+    exit 1
+  fi
   src="$ROOT/.server/deploy/plugins"
   if [ ! -d "$src" ]; then echo "--deploy 但 $src 不存在，先跑 tools/build.sh --deploy" >&2; exit 1; fi
   n=0
