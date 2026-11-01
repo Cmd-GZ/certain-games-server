@@ -89,7 +89,8 @@ public class Arena {
             return;
         }
         String worldName = cs.getString("world");
-        world = (worldName == null || worldName.isEmpty()) ? null : Bukkit.getWorld(worldName);
+        // R2：world 段可能是 tpl: 令牌
+        world = (worldName == null || worldName.isEmpty()) ? null : com.hub.world.Worlds.resolve(worldName);
         if (world == null) {
             min = max = spawn = null;
             return;
@@ -152,7 +153,7 @@ public class Arena {
         captureSnapshot();
 
         String prefix = "arenas." + name + ".";
-        plugin.getConfig().set(prefix + "world", w.getName());
+        plugin.getConfig().set(prefix + "world", com.hub.world.Worlds.tokenOf(w));
         plugin.getConfig().set(prefix + "pos1", List.of(x1, y1, z1));
         plugin.getConfig().set(prefix + "pos2", List.of(x2, y2, z2));
         plugin.getConfig().set(prefix + "spawn",

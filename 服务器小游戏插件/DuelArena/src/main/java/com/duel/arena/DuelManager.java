@@ -1488,7 +1488,8 @@ public class DuelManager {
             return null;
         }
         try {
-            var world = Bukkit.getWorld(parts[0]);
+            // R2：支持 tpl: 令牌
+            var world = com.hub.world.Worlds.resolve(parts[0]);
             if (world == null) {
                 return null;
             }

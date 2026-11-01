@@ -84,7 +84,7 @@ public class ArenaManager {
         ConfigurationSection old = config.getConfigurationSection("arena");
         if (old != null) {
             String wname = old.getString("world", "");
-            World w = wname.isEmpty() ? null : Bukkit.getWorld(wname);
+            World w = wname.isEmpty() ? null : com.hub.world.Worlds.resolve(wname);
             List<Integer> p1 = old.getIntegerList("pos1");
             List<Integer> p2 = old.getIntegerList("pos2");
             if (w != null && p1.size() >= 3 && p2.size() >= 3 && volume(p1, p2) >= 16) {

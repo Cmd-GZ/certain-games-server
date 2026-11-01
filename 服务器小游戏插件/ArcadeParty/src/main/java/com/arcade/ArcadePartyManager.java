@@ -1775,7 +1775,8 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         if (parts.length < 4) {
             return null;
         }
-        World world = Bukkit.getWorld(parts[0].trim());
+        // R2：坐标里的世界段可能是 tpl: 令牌（房间化后）
+        World world = com.hub.world.Worlds.resolve(parts[0].trim());
         if (world == null) {
             return null;
         }
