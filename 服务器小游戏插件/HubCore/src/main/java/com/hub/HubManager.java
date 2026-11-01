@@ -666,8 +666,31 @@ public class HubManager implements HubService {
         }
     }
 
+    /**
+     * 这个游戏是否已经"房间化"（登记了模板）。
+     *
+     * <p>返回已登记模板的 gameKey；null = 还没模板，调用方保持旧的静态场地行为。
+     * 菜单里是**显示名**（"建筑猜猜乐"），模板登记的是 gameKey（"gtb"），
+     * 所以先让注册表把显示名解析成 id，再按 id 匹配。
+     */
+    private String matchRoomGame(String game) {
+        com.hub.gui.RoomGui.init(plugin);
+        var regInfo = plugin.getRegistry().get(game);
+        String gameKey = regInfo == null ? null : regInfo.id();
+        return com.hub.gui.RoomGui.matchTemplateGame(gameKey);
+    }
+
     /** 点游戏图标：只有 1 个场地才直接进，多个（或还没有场地信息）都打开场地子菜单。 */
     private void clickGame(Player p, String game) {
+        // R3：房间化分流要放在**这一层**，不能只在 joinArena 里做 ——
+        // 因为"只有 1 个场地"的游戏会走到下面的 bestJoinCommand + dispatchCommand，
+        // 那条路径**根本不经过 joinArena**（曾经因此让房间流程在最常见的入口上失效）。
+        String matched = matchRoomGame(game);
+        if (matched != null) {
+            p.closeInventory();
+            com.hub.gui.RoomGui.open(p, matched, com.hub.gui.RoomGui.Mode.ROOMS);
+            return;
+        }
         Map<String, ArenaInfo> arenas = arenasOf(game);
         if (arenas.size() != 1) {
             p.closeInventory();
@@ -697,10 +720,7 @@ public class HubManager implements HubService {
         // 没有模板的游戏保持旧行为 —— 这样房间化可以按游戏逐个开启，不用一次性全切。
         // 菜单里是**显示名**（"建筑猜猜乐"），模板登记的是 gameKey（"gtb"）——
         // 先让注册表把显示名解析成 id，再按 id 找模板（大小写不敏感）。
-        com.hub.gui.RoomGui.init(plugin);
-        var regInfo = plugin.getRegistry().get(game);
-        String gameKey = regInfo == null ? null : regInfo.id();
-        String matched = com.hub.gui.RoomGui.matchTemplateGame(gameKey);
+        String matched = matchRoomGame(game);
         if (matched != null) {
             p.closeInventory();
             com.hub.gui.RoomGui.open(p, matched, com.hub.gui.RoomGui.Mode.ROOMS);
