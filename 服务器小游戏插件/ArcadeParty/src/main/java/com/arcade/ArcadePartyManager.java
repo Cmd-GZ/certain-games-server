@@ -671,6 +671,10 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             return;
         }
         stars.remove(id);
+        // [上游 c80b1a6] 退出时把过渡/本局名单一起清掉，否则残留会让下一局"跳过"人
+        transitionParticipants.remove(id);
+        transitionSpectators.remove(id);
+        roundParticipants.remove(id);
         clearGameState(player);
         restoreSidebar(player);
         HubAPI.clearGame(id);
@@ -691,6 +695,22 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         reportArena();
     }
 
+    /**
+     * 派对进行中玩家主动 {@code /hub} 或右键回城道具：立即退出整个派对。
+     *
+     * <p>[上游 c80b1a6] 只处理玩家主动回城；小游戏结算时的 {@code teleportToLobby}
+     * 是框架/游戏自己发的，不会走到这里，所以不会误伤"正常结算后回主城"。
+     */
+    public void handleHubCommand(Player player) {
+        if (!isInParty(player)) {
+            return;
+        }
+        if (state == State.WAITING) {
+            return;   // 等待阶段交给 lobby 回调统一处理
+        }
+        leave(player, true);
+    }
+
     public void handleQuit(Player player) {
         UUID id = player.getUniqueId();
         boolean wasWaiting = waiting.remove(id);
@@ -699,6 +719,9 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             return;
         }
         stars.remove(id);
+        transitionParticipants.remove(id);
+        transitionSpectators.remove(id);
+        roundParticipants.remove(id);
         HubAPI.clearGame(id);
         if (session != null) {
             session.leave(player);
@@ -964,6 +987,20 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         String start = plugin.getConfig().getString("games." + currentGameKey + ".start-command", "");
         if (currentArena != null) {
             start = start == null ? null : start.replace("{arena}", currentArena);
+        }
+        // [上游 c80b1a6] 上一局结算后可能延迟把玩家传回主城，回城会触发各游戏的 lobby 回调，
+        // 把已经加入本局等待区的玩家踢掉。开局前重新 join 一次，确保队列里确实有人。
+        String rejoin = plugin.getConfig().getString("games." + currentGameKey + ".join-command", "");
+        if (currentArena != null && rejoin != null) {
+            rejoin = rejoin.replace("{arena}", currentArena);
+        }
+        if (rejoin != null && !rejoin.isBlank()) {
+            for (UUID id : new ArrayList<>(roundParticipants)) {
+                Player p = Bukkit.getPlayer(id);
+                if (p != null) {
+                    p.performCommand(rejoin);
+                }
+            }
         }
         if (roundParticipants.isEmpty() || start == null || start.isBlank()) {
             Chat.broadcast("&c小游戏 " + displayOf(currentGameKey) + " 启动失败，跳过本局。");

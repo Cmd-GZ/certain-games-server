@@ -16,6 +16,9 @@
   3. **小游戏局**：把参赛玩家用各游戏的 `join-command` 拉进场，再用 `start-command` 开局；人数超过该游戏 `max-players` 的玩家本局旁观并拿 `stars.spectator-bonus`（默认 1 星）。**兜底**：开局 15 秒后如果场地连续 3 秒回到「等待中」，说明游戏没正常回报结果（或没开起来），派对按无人得分结束本局并继续下一个，不会卡到 600 秒超时。
   4. 小游戏结算时通过 `ArcadeBridge.report(key, 前三名)` 回报，派对发星并**只播报本局前三名**（★）；**累计星星不写聊天栏**，只在过渡阶段的右侧计分板显示，留到颁奖典礼揭晓。
   5. 打完全部小游戏 → **颁奖**：全体传到观众席，前三名隐身站上各自颁奖台（**揭晓前锁住移动，轮到自己的名次才解锁**），按 第三名 → 第二名 → 第一名 依次**只用 title** 现身（名字 + ★N）+ 烟花；三个人都揭晓后，聊天栏才一次性公布「颁奖结果」三行，然后全体回主城。
+- **1.3.9 修复**：
+  - 有些小游戏上报结果后还会**延迟 teleportToLobby**，回城会触发所有游戏的 lobby 回调，把已经加入下一局等待区的玩家踢掉 → 派对误判「没人/没回报」跳过下一局。现在**每局 `start-command` 前重新 join 一次**，并在派对进行中**拦截小游戏发起的回城传送**（玩家主动 `/hub` 不受影响）。
+  - 派对进行中玩家 `/hub`（或右键回城道具）现在会**退出整个派对**，不再只是退出当前小游戏、随后又被传送到下一局场地。
 - **命令**：
   - 玩家：`/arcade join`、`leave`、`list`、`stars [玩家]`
   - OP：`menu`（设置菜单）、**`flow <party|single> [小游戏key|-]`**（编排属性）、`start`、`stop`、`setlobby`、`setaudience`、`setpodium <first|second|third>`、**`addfirework`**（把脚下这格设为烟花发射点，可多次添加）、`clearfireworks`、`fireworks`（查看已配置的点）、`save`、`reload`
@@ -35,7 +38,7 @@
   - `scoreboard.enabled/title/line`
   - `games.<key>`：`display` / `enabled` / `arena-aware` / `max-players` / `join-command` / `start-command`
   - **多场地游戏**：`arena-aware: true` 时命令里写 `{arena}`（如 `dig join {arena}` / `dig start {arena}`）；派对会自动查主城登记的空场（状态为等待中）并替换。**抽到的游戏如果当时没有空场，会从本局清单里去掉并换下一个**，不会把带 `{arena}` 的命令空跑；开局前也会再检查一次。
-- **已接入的小游戏**（会通过 `ArcadeBridge` 回报前三名）：`digtobottom`（一掘到底）、`anvilbattle`（铁砧掘战）、`animalslaughter`（动物屠宰）、`snakeparty`（蛇行派对）、`hotpotato`（烫手山芋）、`tntrun`（雪塔大作战）、`colorparty`（色盲派对）、`grouprace`（群友竞速）、`knockback`（击退大战）、`landclaim`（占地风云1）、`jumpfill`（花落水家）、`memoryflip`（记忆翻牌）、`hillking`（高台之王）、`oneshot`（One Shot）。
+- **已接入的小游戏**（会通过 `ArcadeBridge` 回报前三名）：`digtobottom`（一掘到底）、`anvilbattle`（铁砧掘战）、`animalslaughter`（动物屠宰）、`snakeparty`（蛇行派对）、`hotpotato`（烫手山芋）、`tntrun`（雪塔大作战）、`colorparty`（色盲派对）、`grouprace`（群友竞速）、`knockback`（击退大战）、`landclaim`（占地风云1）、`jumpfill`（花落水家）、`memoryflip`（记忆翻牌）、`hillking`（高台之王）、`oneshot`（One Shot）、`firejumper`（跃火者）。
 - **接入一个新小游戏**：
   1. 在它的结算处（算好前三名之后）调用
      `com.hub.api.ArcadeBridge.report("<key>", firsts, seconds, thirds);`

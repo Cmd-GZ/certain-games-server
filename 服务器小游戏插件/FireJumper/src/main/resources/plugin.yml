@@ -1,0 +1,28 @@
+name: FireJumper
+version: '1.0.5'
+main: com.firejumper.FireJumperPlugin
+api-version: '1.21'
+description: 跃火者：跳过横扫场地的火焰线，最后存活者获胜
+
+depend: [MiniGameLib, HubCore]
+softdepend: [GameWorlds]
+
+minigame-game: true
+minigame:
+  name: 跃火者
+  icon: BLAZE_POWDER
+  color: '6'
+
+commands:
+  firejumper:
+    description: 跃火者小游戏
+    usage: /firejumper help
+    aliases: [fj]
+
+permissions:
+  firejumper.play:
+    description: 允许加入跃火者
+    default: true
+  firejumper.admin:
+    description: 允许配置和管理跃火者
+    default: op

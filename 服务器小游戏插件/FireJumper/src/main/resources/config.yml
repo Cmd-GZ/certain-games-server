@@ -1,0 +1,132 @@
+# ============================================================
+# 跃火者（FireJumper）配置文件
+# 修改后在非对局状态执行 /firejumper reload，或重启服务器
+# 注意：YAML 的冒号后面必须有空格，缩进必须用空格（不能用 Tab）
+# ============================================================
+
+# ---------- 人数 ----------
+# 最少开局人数（至少 2）
+min-players: 2
+# 最多人数
+max-players: 16
+
+# ---------- 对局 ----------
+# 一局时长（秒）；时间到仍存活的玩家并列获胜
+game-seconds: 180
+# 开局后多少秒出现第一条线
+start-delay-seconds: 3
+# 跳跃提升等级（2 = 跳跃提升 II；跳跃提升 II 的滞空约 0.8 秒）
+jump-boost-level: 2
+# 离开场地 XZ 范围、或掉到地面以下是否直接淘汰
+out-of-bounds-eliminate: true
+# 结算后等待多少秒回大厅
+end-delay-seconds: 3
+# true = 每次出线在控制台打印起点/终点/判定高度（排查看不见线用）
+debug-lines: false
+
+# ---------- 火线粒子 ----------
+# 原版粒子的存留时间由客户端固定，服务端改不了；拖尾长度 ≈ 线速度 × 粒子寿命。
+# 想缩短拖尾：rows 保持 1、调大 spacing / interval-ticks，或换更短寿命的 type。
+particles:
+  # 粒子类型（只支持不需要额外参数的）：FLAME / SMALL_FLAME / SOUL_FIRE_FLAME /
+  # ELECTRIC_SPARK / CRIT / ENCHANTED_HIT / FIREWORK / END_ROD / SMOKE / LAVA
+  type: FLAME
+  # 火墙层数：1 = 只有一层
+  rows: 1
+  # 多层时的竖直间距（格）
+  row-gap: 0.6
+  # 沿线每隔多少格放一个粒子（越大越稀疏）
+  spacing: 1.0
+  # 每多少 tick 发一次（越大拖尾越稀疏；默认 3）
+  interval-ticks: 3
+  # 每个点发几个粒子
+  count: 1
+
+# ---------- 轮次 ----------
+# 一轮结束到下一轮开始之间的随机间隔（秒）
+round-gap-min-seconds: 1.5
+round-gap-max-seconds: 3.0
+
+# ---------- 线的出现方式（可自由增删，按轮次决定哪些能出现） ----------
+# from-round / to-round：第几轮之后 / 之前可能出现（含）
+# lines：这一轮一共出几条线
+# gap-seconds：多条线之间的间隔（秒）
+# speed：线的移动速度（格/秒）
+line-types:
+  # 1 条线，中等速度：第 1~9 轮
+  - id: normal
+    enabled: true
+    from-round: 1
+    to-round: 9
+    lines: 1
+    gap-seconds: 0
+    speed: 6.0
+  # 3 条线，每条间隔 1.5 秒，慢速：第 5~9 轮
+  - id: triple-slow
+    enabled: true
+    from-round: 5
+    to-round: 9
+    lines: 3
+    gap-seconds: 1.5
+    speed: 3.0
+  # 1 条线，快速：第 10 轮之后
+  - id: fast
+    enabled: true
+    from-round: 10
+    to-round: 9999
+    lines: 1
+    gap-seconds: 0
+    speed: 11.0
+  # 4 条线，每条间隔 2 秒，较快：第 10 轮之后
+  - id: quad
+    enabled: true
+    from-round: 10
+    to-round: 9999
+    lines: 4
+    gap-seconds: 2.0
+    speed: 8.0
+
+# ---------- 场地 ----------
+# 用指令设置，不要手写坐标；设置完成后 /firejumper save
+arena:
+  world: world
+  # 区域两个对角（只取 X/Z）；pos1 的脚部 Y 会记录为地面高度
+  pos1: ''
+  pos2: ''
+  # 等待点（/firejumper setlobby 写）
+  lobby: ''
+  # 固定出生点（/firejumper setspawn / addspawn 写）
+  # 开局会把这些点打乱后依次分配；人数多于出生点时循环复用
+  spawns: []
+  # 地面高度（玩家站立时的脚部 Y）；-999 = 未设置，自动用 pos1 的 Y
+  ground-y: -999
+  # 线的移动方向：x+ / x- / z+ / z-
+  # 线本身沿垂直方向展开：方向是 x 时线沿 Z 展开，方向是 z 时线沿 X 展开
+  direction: 'x+'
+  # 线的长度（格）；0 = 场地垂直方向总长
+  line-length: 0
+  # 线的移动距离（格）；0 = 场地移动方向总长
+  travel-range: 0
+  # 线的判定高度（从地面算）：玩家脚部低于这个高度且碰到线就淘汰
+  # 跳跃提升 II 最高约 2.5 格，默认 1.0 足够跳过
+  line-height: 1.0
+
+# ---------- 右侧计分板 ----------
+sidebar:
+  enabled: true
+  title: '&6&l跃火者 · 存活'
+
+# ---------- 等待室道具 ----------
+wait-items:
+  return:
+    material: RED_BED
+    name: '&a&l返回大厅 &7(右键)'
+    lore:
+      - '&7点击返回大厅'
+    slot: 8
+  start:
+    material: PAPER
+    name: '&a&l开始游戏 &7(右键)'
+    lore:
+      - '&7点击立刻开始本局'
+    slot: 4

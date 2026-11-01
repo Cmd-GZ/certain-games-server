@@ -193,5 +193,13 @@ games:
     join-command: 'oneshot join'
     start-command: 'oneshot start'
 
+  firejumper:
+    display: 跃火者
+    enabled: true
+    arena-aware: false
+    max-players: 16
+    join-command: 'fj join'
+    start-command: 'fj start'
+
 # 配置版本（迁移用，不要手改）
 config-version: 1
