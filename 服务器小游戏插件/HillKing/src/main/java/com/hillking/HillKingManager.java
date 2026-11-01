@@ -66,6 +66,9 @@ public final class HillKingManager {
     /** 收场时给玩家看的文案（end(reason) 不带文案，所以暂存在这）。 */
     private String endMessage;
     private final Set<UUID> waiting = new LinkedHashSet<>();
+    /** 加入时的服务器 tick 与同 tick 内的随机名次（D21：同 tick 的人随机决定谁是主持人）。 */
+    private final java.util.Map<UUID, Long> joinTick = new java.util.HashMap<>();
+    private final java.util.Map<UUID, Long> joinSeed = new java.util.HashMap<>();
     private final Set<UUID> playing = new LinkedHashSet<>();
     private final Map<UUID, Integer> scores = new HashMap<>();
 
@@ -150,7 +153,15 @@ public final class HillKingManager {
 
             @Override
             public java.util.List<UUID> waitingOrder() {
-                return new ArrayList<>(waiting); // waiting 是 LinkedHashSet，顺序 = 加入顺序
+                // 顺序 = (加入 tick, 该 tick 内的随机名次)。
+                // 为什么要随机名次：同一 tick 进来的几个人，谁先谁后是网络处理顺序，
+                // 没有任何意义；随机抽一个当主持人比"碰巧第一个包先到"更公平，
+                // 而且**在加入时就定下**，不会每次查询都变（否则主持人会来回跳）。
+                List<UUID> order = new ArrayList<>(waiting);
+                order.sort(java.util.Comparator
+                        .comparingLong((UUID id) -> joinTick.getOrDefault(id, 0L))
+                        .thenComparingLong(id -> joinSeed.getOrDefault(id, 0L)));
+                return order;
             }
 
             @Override
@@ -198,6 +209,11 @@ public final class HillKingManager {
 
     /** 发送者是否是当前主持人（D21：最早的等待者）。 */
     public boolean isHost(org.bukkit.command.CommandSender sender) {
+        // 只有启用了主持人流程（flow: host）时"主持人"才存在；
+        // 上游流程下第一个等待者不该因此获得提前开局的权力。
+        if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
+            return false;
+        }
         if (!(sender instanceof Player p)) {
             return false;
         }
@@ -390,6 +406,8 @@ public final class HillKingManager {
             return;
         }
         waiting.add(id);
+        joinTick.put(id, (long) Bukkit.getCurrentTick());
+        joinSeed.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
         // I1：把玩家挂到会话的归属链上（否则 doctor 的 [归属] 永远是 0 人、I1 只是名义成立）
         if (session != null && !session.join(player)) {
             plugin.getLogger().warning("[HillKing] " + player.getName() + " 加入归属链失败（见 [被吞异常]）");

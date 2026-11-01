@@ -46,11 +46,21 @@ public final class HillKingCommand implements CommandExecutor, TabCompleter {
             case "list" -> list(sender);
             case "stats" -> stats(sender, args);
             case "start" -> {
-                // D21：主持人流程下，**当前主持人**也能开始（开始权在主持人手上）
-                if (!admin(sender) && !manager.isHost(sender)) {
-                    Chat.send(sender, "&c只有本局**主持人**或管理员可以开始。"
-                            + "&7（主持人 = 最早加入等待队列的人）");
-                    return true;
+                // D21：开始权在主持人手上，但**主持人不享受管理员的特权**：
+                //   - 管理员可以强制开（人不够也开）；
+                //   - 主持人必须等人数达到 minPlayers 才能开，也不能在人数不足时启动倒计时。
+                boolean isAdmin = !(sender instanceof Player sp) || manager.isAdmin(sp);
+                if (!isAdmin) {
+                    if (!manager.isHost(sender)) {
+                        Chat.send(sender, "&c只有本局**主持人**或管理员可以开始。"
+                                + "&7（主持人 = 最早加入等待队列的人）");
+                        return true;
+                    }
+                    if (manager.waitingCount() < manager.minPlayers()) {
+                        Chat.send(sender, "&c人数还没达到 &f" + manager.minPlayers()
+                                + " 人&c，主持人也不能开始（管理员可以强制开始）。");
+                        return true;
+                    }
                 }
                 if (manager.state() != HillKingManager.State.WAITING) {
                     Chat.send(sender, "&e对局已经在进行中。");
