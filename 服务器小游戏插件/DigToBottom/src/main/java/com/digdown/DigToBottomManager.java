@@ -1,5 +1,7 @@
 package com.digdown;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.ArcadeBridge;
 import com.hub.api.GameState;
 import com.hub.api.HubAPI;
@@ -71,6 +73,18 @@ public class DigToBottomManager {
     private final Random random = new Random();
 
     private final Map<String, DigToBottomArena> arenas = new LinkedHashMap<>();
+
+    /** D22：每个场地一个会话（多图游戏）。 */
+    private final Map<String, DigToBottomSession> sessions = new LinkedHashMap<>();
+
+    private DigToBottomSession ensureSession(String arenaName) {
+        DigToBottomSession s = sessions.get(arenaName);
+        if (s == null || s.state().isFinal()) {
+            s = new DigToBottomSession(this, arenaName);
+            sessions.put(arenaName, s);
+        }
+        return s;
+    }
     private final Map<UUID, String> playerArena = new LinkedHashMap<>();
     private final Map<String, WaitCountdown> waits = new LinkedHashMap<>();
     private final Map<String, BukkitTask> timers = new LinkedHashMap<>();
@@ -543,6 +557,16 @@ public class DigToBottomManager {
             msg(p, "&c人数已满（坑位 &e" + a.getLanes() + "&c，人数上限 &e" + max + "&c）。");
             return false;
         }
+        // I1（D23）：先挂会话再入队；冲突直接拒绝，避免半加入状态
+        DigToBottomSession sess = ensureSession(arenaName);
+        if (!sess.join(p)) {
+            // 刚建出来的空会话不能留着 —— 否则 doctor 里会多出一个"0 人的等待中场地"，
+            // 看起来像场地被占了，其实谁也没进去
+            if (sess.players().isEmpty()) {
+                sessions.remove(arenaName);
+            }
+            return false;
+        }
         playerArena.put(id, arenaName);
         a.getPlayers().add(id);
         a.getNames().put(id, p.getName());
@@ -966,7 +990,27 @@ public class DigToBottomManager {
      *
      * @param timeUp true = 时间到（未完成者按已挖深度排名）
      */
+        /** 收场入口（I4）：先让该场地的会话 end()，再由 onEnd 回到 doEndGame。 */
     private void endGame(DigToBottomArena a, boolean timeUp) {
+        pendingTimeUp = timeUp;
+        DigToBottomSession sess = sessions.get(a.getName());
+        if (sess == null || sess.state().isFinal()) {
+            doEndGame(a.getName());
+            return;
+        }
+        sess.end(EndReason.ROUND_END);
+    }
+
+    /** 收场参数暂存（玩家看到的结算不能变）。 */
+    private boolean pendingTimeUp;
+
+    /** 真正的收场逻辑（由 session.onEnd 回调）。 */
+    void doEndGame(String arenaName) {
+        DigToBottomArena a = arenas.get(arenaName);
+        if (a == null) {
+            return;
+        }
+        boolean timeUp = pendingTimeUp;
         liveSidebar.hide("digtobottom:" + a.getName());
         if (a.getState() != DigToBottomArena.State.RUNNING) {
             return;
