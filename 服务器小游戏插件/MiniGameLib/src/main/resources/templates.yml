@@ -1,36 +1,400 @@
-# ================= 房间引擎：模板登记 =================
-# 设计见 docs/房间引擎设计.md
-#
-# 模板 = 一个「只读的世界目录」，放在  world/dimensions/minecraft/  下（Paper Moonrise 布局）。
-# 房间 = 模板的一份实例拷贝（room_<游戏>_<序号>），玩家真正玩的是房间；用完即删。
-#
-# 约定：
-#   - 模板目录名以 tmpl_ 开头，房间目录名以 room_ 开头
-#   - 设计者编辑模板，玩家永远不直接进模板
-#   - 区域的坐标是「模板内坐标」，实例化时自动把世界名换成房间名
-
 limits:
-  # 每游戏 8 个：因为选房 UI 是 9x3 箱子，第一排第一格固定是"创建新房间"，
-  # 其余 8 格动态放现有房间（决策 D2，见根 AGENTS.md §0.7）
+  max-rooms: 24
   max-per-game: 8
-  max-rooms: 0           # 全服上限；0 = 不限制（暂时不做全服限制，理由见 AGENTS.md D2）
-  idle-seconds: 300      # 空置多少秒后回收（60s 扫一次）
-
-# 模板登记。键 = 模板标识，下面各字段按需填。
-# 目前仓库里没有真实模板，先在服务器上放一个目录再登记；示例：
-#
-# templates:
-#   hillking_test:
-#     game: hillking
-#     folder: tmpl_hillking_test
-#     rules:
-#       pvp: true
-#       difficulty: NORMAL
-#       mob-spawning: false
-#       keep-inventory: false
-#       fixed-time: 6000
-#     regions:
-#       - name: ""
-#         x1: 620   y1: 40   z1: 300
-#         x2: 700   y2: 90   z2: 380
-templates: {}
+  idle-seconds: 300
+templates:
+  hillking_test:
+    game: hillking
+    folder: tmpl_hillking_test
+    rules:
+      pvp: true
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: ''
+      x1: -23
+      y1: 120
+      z1: -130
+      x2: -9
+      y2: 150
+      z2: -116
+  duel_sumo:
+    game: duel
+    folder: tmpl_duel_sumo
+    rules:
+      pvp: true
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: true
+      fixed-time: 6000
+    regions:
+    - name: 相扑
+      x1: 20
+      y1: 57
+      z1: -9
+      x2: 33
+      y2: 63
+      z2: 3
+  colorparty_duel:
+    game: colorparty
+    folder: tmpl_colorparty_duel
+    rules:
+      pvp: false
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: 玻璃
+      x1: 60
+      y1: 100
+      z1: -101
+      x2: 96
+      y2: 100
+      z2: -65
+  duel_duel:
+    game: duel
+    folder: tmpl_duel_duel
+    rules:
+      pvp: true
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: 重锤
+      x1: 0
+      y1: -1
+      z1: 0
+      x2: 35
+      y2: 31
+      z2: 34
+  football_duel:
+    game: football
+    folder: tmpl_football_duel
+    rules:
+      pvp: true
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: 足球场
+      x1: 164
+      y1: -5
+      z1: 4
+      x2: 240
+      y2: 13
+      z2: 110
+  buildrun_gtb:
+    game: buildrun
+    folder: tmpl_buildrun_gtb
+    rules:
+      pvp: false
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: 红地板
+      x1: -23
+      y1: 127
+      z1: -130
+      x2: -9
+      y2: 146
+      z2: -116
+  hotpotato_hp:
+    game: hotpotato
+    folder: tmpl_hotpotato_hp
+    rules:
+      pvp: false
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: 群系
+      x1: -9
+      y1: 2
+      z1: -96
+      x2: 31
+      y2: 29
+      z2: -56
+  luckypillar_lp:
+    game: luckypillar
+    folder: tmpl_luckypillar_lp
+    rules:
+      pvp: false
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: 虚空
+      x1: 47
+      y1: 102
+      z1: 42
+      x2: 111
+      y2: 126
+      z2: 106
+  animalslaughter_mini_game:
+    game: animalslaughter
+    folder: tmpl_animalslaughter_mini_game
+    rules:
+      pvp: true
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: ''
+      x1: -8
+      y1: 50
+      z1: 282
+      x2: 32
+      y2: 74
+      z2: 322
+  anvilbattle_mini_game:
+    game: anvilbattle
+    folder: tmpl_anvilbattle_mini_game
+    rules:
+      pvp: true
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: ''
+      x1: 579
+      y1: 58
+      z1: -215
+      x2: 649
+      y2: 105
+      z2: -144
+  digdown_mini_game:
+    game: digdown
+    folder: tmpl_digdown_mini_game
+    rules:
+      pvp: false
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: 一号场
+      x1: 627
+      y1: 45
+      z1: -1
+      x2: 667
+      y2: 69
+      z2: 39
+  firejumper_mini_game:
+    game: firejumper
+    folder: tmpl_firejumper_mini_game
+    rules:
+      pvp: false
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: ''
+      x1: 624
+      y1: 78
+      z1: 573
+      x2: 642
+      y2: 78
+      z2: 592
+  grouprace_mini_game:
+    game: grouprace
+    folder: tmpl_grouprace_mini_game
+    rules:
+      pvp: false
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: ''
+      x1: -283
+      y1: 28
+      z1: -221
+      x2: -247
+      y2: 36
+      z2: 27
+  hillking_mini_game:
+    game: hillking
+    folder: tmpl_hillking_mini_game
+    rules:
+      pvp: false
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: ''
+      x1: 620
+      y1: 53
+      z1: 300
+      x2: 634
+      y2: 77
+      z2: 314
+  jumpfill_mini_game:
+    game: jumpfill
+    folder: tmpl_jumpfill_mini_game
+    rules:
+      pvp: false
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: ''
+      x1: 18
+      y1: 0
+      z1: 18
+      x2: 26
+      y2: 0
+      z2: 26
+  knockback_mini_game:
+    game: knockback
+    folder: tmpl_knockback_mini_game
+    rules:
+      pvp: true
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: ''
+      x1: 233
+      y1: 30
+      z1: -238
+      x2: 302
+      y2: 30
+      z2: -164
+  landclaim_mini_game:
+    game: landclaim
+    folder: tmpl_landclaim_mini_game
+    rules:
+      pvp: false
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: ''
+      x1: 10
+      y1: -14
+      z1: -217
+      x2: 30
+      y2: 10
+      z2: -197
+  snakeparty_mini_game:
+    game: snakeparty
+    folder: tmpl_snakeparty_mini_game
+    rules:
+      pvp: false
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: ''
+      x1: 198
+      y1: 34
+      z1: 236
+      x2: 318
+      y2: 58
+      z2: 356
+  tntbattle_mini_game:
+    game: tntbattle
+    folder: tmpl_tntbattle_mini_game
+    rules:
+      pvp: true
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: 双岛
+      x1: 191
+      y1: 57
+      z1: -32
+      x2: 334
+      y2: 57
+      z2: 101
+  murdermystery_mm:
+    game: murdermystery
+    folder: tmpl_murdermystery_mm
+    rules:
+      pvp: false
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: 圣诞工厂
+      x1: -81
+      y1: 67
+      z1: -60
+      x2: 76
+      y2: 151
+      z2: 60
+    - name: ship
+      x1: 110
+      y1: 73
+      z1: -269
+      x2: 183
+      y2: 133
+      z2: -48
+    - name: 档案室顶层
+      x1: 402
+      y1: 44
+      z1: -261
+      x2: 578
+      y2: 104
+      z2: -103
+    - name: 别墅
+      x1: -114
+      y1: 121
+      z1: 219
+      x2: 33
+      y2: 164
+      z2: 352
+  tntbattle_tnt:
+    game: tntbattle
+    folder: tmpl_tntbattle_tnt
+    rules:
+      pvp: true
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: 废墟
+      x1: 8
+      y1: 174
+      z1: 7
+      x2: 218
+      y2: 174
+      z2: 234
+  tntrun_tr:
+    game: tntrun
+    folder: tmpl_tntrun_tr
+    rules:
+      pvp: false
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: TNTRUNround
+      x1: 0
+      y1: -2
+      z1: 1
+      x2: 34
+      y2: 47
+      z2: 34
