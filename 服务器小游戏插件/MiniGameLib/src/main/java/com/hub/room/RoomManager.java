@@ -46,6 +46,10 @@ public final class RoomManager {
      * <p>为什么房间需要多个：派对的一张地图散在 3 个世界（`world_mini_game` / `world_pvp_mini_games` /
      * `world_tr`），一个派对房间必须同时持有它们。
      */
+    /** 房间里的一个"场地槽"：属于某个子游戏的一块区域 + 它所在的世界实例。 */
+    public record ArenaSlot(String arenaName, World world, GameMap.RegionPlan plan) {
+    }
+
     public static final class WorldInstance {
         public final String templateKey;
         /** 该世界要用的区域与规则（来自 {@link GameMap.WorldPlan}）；旧路径可能为 null。 */
@@ -159,6 +163,46 @@ public final class RoomManager {
             return null;
         }
 
+        /**
+         * 这张房间（这套地图）里，属于某个**子游戏**的场地清单。
+         *
+         * <p>派对用它：换关到 hillking 时，从这里拿"hillking 在这张地图里的场地名 + 所在世界"，
+         * 而不是去查 hillking 自己的静态场地配置。
+         *
+         * @return 每项 = { 场地名（arenaName）, 世界实例 }；没有该子游戏的场地则空列表
+         */
+        public java.util.List<ArenaSlot> arenasOf(String gameKey) {
+            java.util.List<ArenaSlot> out = new java.util.ArrayList<>();
+            for (WorldInstance wi : instances) {
+                if (wi.plan == null || wi.world == null) {
+                    continue;
+                }
+                for (GameMap.RegionPlan rp : wi.plan.regions()) {
+                    if (gameKey != null && gameKey.equals(rp.gameOr(game))) {
+                        out.add(new ArenaSlot(rp.name(), wi.world, rp));
+                    }
+                }
+            }
+            return out;
+        }
+
+        /** 这张地图里出现的所有子游戏（派对按它来排关卡）。 */
+        public java.util.List<String> subGames() {
+            java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
+            for (WorldInstance wi : instances) {
+                if (wi.plan == null) {
+                    continue;
+                }
+                for (GameMap.RegionPlan rp : wi.plan.regions()) {
+                    String g = rp.gameOr(game);
+                    if (g != null && !g.isBlank()) {
+                        seen.add(g);
+                    }
+                }
+            }
+            return new java.util.ArrayList<>(seen);
+        }
+
         /** 所有世界实例里的世界（含主世界）。 */
         public java.util.List<World> allWorlds() {
             java.util.List<World> out = new java.util.ArrayList<>();
@@ -187,10 +231,12 @@ public final class RoomManager {
         }
 
         public String describe() {
+            String sg = subGames().isEmpty() ? "" : " 子游戏=" + subGames();
             return roomId + " ← " + template.key()
                     + " [" + (world == null ? "未加载" : world.getName()) + "]"
                     + (arena == null || arena.isBlank() ? "" : " 地图=" + arena)
-                    + " 人=" + playerCount() + " 年龄=" + ageSeconds() + "s 空置=" + idleSeconds() + "s";
+                    + " 人=" + playerCount() + " 年龄=" + ageSeconds() + "s 空置=" + idleSeconds() + "s"
+                    + sg;
         }
     }
 

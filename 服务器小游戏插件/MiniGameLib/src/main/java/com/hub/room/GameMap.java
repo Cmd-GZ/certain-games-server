@@ -37,7 +37,19 @@ public record GameMap(String game, String name, List<WorldPlan> worlds, Entry en
      * 因为同一个世界里"高台之王"要 pvp、隔壁"蛇行"不要 pvp。
      */
     public record RegionPlan(String name, double x1, double y1, double z1,
-                             double x2, double y2, double z2, WorldTemplate.Rules rules) {
+                             double x2, double y2, double z2, WorldTemplate.Rules rules,
+                             String game) {
+
+        /**
+         * 这块区域属于哪个**子游戏**。
+         *
+         * <p>为什么需要：派对一张地图里有多个小游戏的场地，派对换关时要按子游戏找场地；
+         * 而地图本身属于 `arcadeparty`。所以区域要能标注"它是给 hillking 用的还是给 tntrun 用的"。
+         * 为空表示"等于地图所属的游戏"（普通单游戏地图都是这种情况）。
+         */
+        public String gameOr(String fallback) {
+            return game == null || game.isBlank() ? fallback : game;
+        }
 
         /** 实际生效的规则：自己有就用自己，否则用世界的。 */
         public WorldTemplate.Rules effectiveRules(WorldTemplate.Rules worldRules) {

@@ -68,7 +68,8 @@ public final class GameMaps {
                                     str(r.get("name")) == null ? "" : str(r.get("name")),
                                     dbl(box.get("x1")), dbl(box.get("y1")), dbl(box.get("z1")),
                                     dbl(box.get("x2")), dbl(box.get("y2")), dbl(box.get("z2")),
-                                    r.get("rules") == null ? null : rules(r.get("rules"), rules)));
+                                    r.get("rules") == null ? null : rules(r.get("rules"), rules),
+                                    str(r.get("game"))));
                         }
                     }
                     plans.add(new GameMap.WorldPlan(tpl, rules, regions));

@@ -23,6 +23,7 @@ maps:
           x2: 318.5
           y2: 58
           z2: 356.5
+          game: snakeparty
   animalslaughter:
     animalslaughter_mini_game:
       entry:
@@ -47,6 +48,7 @@ maps:
           x2: 32.5
           y2: 74
           z2: 321.5
+          game: animalslaughter
   anvilbattle:
     anvilbattle_mini_game:
       entry:
@@ -292,6 +294,7 @@ maps:
           x2: 30.8
           y2: 29
           z2: -56.5
+          game: hotpotato
   football:
     足球场:
       entry:
@@ -453,6 +456,7 @@ maps:
           x2: 634.5
           y2: 77
           z2: 314.5
+          game: hillking
   luckypillar:
     虚空:
       entry:
@@ -500,6 +504,7 @@ maps:
           x2: 34.4
           y2: 47
           z2: 34.5
+          game: tntrun
   knockback:
     knockback_mini_game:
       entry:
