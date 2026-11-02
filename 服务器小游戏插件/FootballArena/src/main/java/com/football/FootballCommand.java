@@ -89,6 +89,15 @@ public class FootballCommand implements CommandExecutor, TabCompleter {
                     case "goal-red-1" -> a.setGoalRedPos1(loc);
                     case "goal-red-2" -> a.setGoalRedPos2(loc);
                     case "goal-blue-1" -> a.setGoalBluePos1(loc);
+                    case "reload" -> {
+                        // 框架会在 /hub join 时调用它做**场地懒加载**：
+                        // 配置里的 `tpl:<模板键>` 只有存活房间才解析得出来，插件启用时解析必然失败。
+                        plugin.reloadConfig();
+                        if (plugin.getManager() != null) {
+                            plugin.getManager().load();
+                        }
+                        sender.sendMessage(net.kyori.adventure.text.Component.text("配置已重新载入。"));
+                    }
                     default -> a.setGoalBluePos2(loc);
                 }
                 Chat.send(sender, "&a已设置 &e" + a.getName() + "&a 的 " + sub
