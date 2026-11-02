@@ -603,30 +603,9 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
         }
         String game = args[1];
         String map = args[2];
-        // 解析 <地图>：
-        //   ① 先看它是不是某个模板里声明的**场地名**（模板 regions[].name）——
-        //      这是"一个模板世界装多张地图"的正解（如 world_mini_game 里的 群系 / hillking）；
-        //   ② 再退回按模板键 / 目录名匹配（单图模板的常见写法）。
-        String templateKey = null;
-        String arenaName = "";
-        for (com.hub.room.WorldTemplate t : com.hub.room.RoomManager.templates()) {
-            boolean gameOk = t.serves(game) || t.serves(registry.canonicalName(game));
-            if (!gameOk) {
-                continue;
-            }
-            for (com.hub.room.WorldTemplate.Box box : t.regions()) {
-                if (box.arenaName() != null && box.arenaName().equalsIgnoreCase(map)) {
-                    templateKey = t.key();
-                    arenaName = box.arenaName();
-                    break;
-                }
-            }
-            if (templateKey != null) {
-                break;
-            }
-        }
-        // ① 先查**地图登记表**（maps.yml）：这是新模型，(game, map) 直接给出"需要哪些世界"。
-        //    一张地图可能散在多个世界（派对），所以这里可能一次造出好几个世界实例。
+
+        // ① **地图登记表**（maps.yml）优先：新模型下这是唯一事实源。
+        //    一张地图可能散在多个世界（派对就是 3 个），所以这里可能一次造出多个世界实例。
         com.hub.room.GameMap gameMap = com.hub.room.GameMaps.get(game, map);
         if (gameMap == null) {
             String canonical = registry.canonicalName(game);
@@ -635,29 +614,30 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             }
         }
         if (gameMap != null) {
-            final com.hub.room.GameMap gm = gameMap;
             final String desiredId = args.length >= 4 ? args[3] : null;
             sender.sendMessage(LEGACY.deserialize("&7正在按地图 &f" + map + " &7创建房间（"
-                    + gm.worlds().size() + " 个世界）…"));
+                    + gameMap.worlds().size() + " 个世界）…"));
             com.hub.room.RoomManager.Room room =
-                    com.hub.room.RoomManager.createForMap(gm, desiredId);
+                    com.hub.room.RoomManager.createForMap(gameMap, desiredId);
             if (room == null) {
                 sender.sendMessage(LEGACY.deserialize("&c创建失败（详情见控制台）：&f" + map));
                 return;
             }
             sender.sendMessage(LEGACY.deserialize("&a已创建房间 &f" + room.roomId
-                    + "&a（地图 &f" + map + "&a，&f" + room.instances().size() + "&a 个世界）。加入：&f/hub join "
-                    + room.roomId));
+                    + "&a（地图 &f" + map + "&a，&f" + room.instances().size()
+                    + "&a 个世界）。加入：&f/hub join " + room.roomId));
             return;
         }
 
+        // 解析 <地图>：
+        //   ① 先看它是不是某个模板里声明的**场地名**（模板 regions[].name）——
+        //      这是"一个模板世界装多张地图"的正解（如 world_mini_game 里的 群系 / hillking）；
+        //   ② 再退回按模板键 / 目录名匹配（单图模板的常见写法）。
+        String templateKey = null;
+        String arenaName = "";
         if (templateKey == null) {
+            // 兼容旧用法：把 <map> 当作**模板键或目录名**直接匹配（模板已不属于任何游戏）
             for (com.hub.room.WorldTemplate t : com.hub.room.RoomManager.templates()) {
-                boolean gameOk = t.gameKey().equalsIgnoreCase(game)
-                        || registry.canonicalName(game).equalsIgnoreCase(t.gameKey());
-                if (!gameOk) {
-                    continue;
-                }
                 if (t.key().equalsIgnoreCase(map) || t.folder().equalsIgnoreCase(map)
                         || t.folder().equalsIgnoreCase("tmpl_" + map) || t.key().equalsIgnoreCase("tmpl_" + map)) {
                     templateKey = t.key();
@@ -715,7 +695,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             sender.sendMessage(LEGACY.deserialize("&c没有这个房间：&f" + roomId + " &7（用 &f/hub room list&7 看）"));
             return;
         }
-        String gameKey = room.template.gameKey();
+        String gameKey = room.game().isEmpty() ? room.template.key() : room.game();
         var cfg = gamesConfig();
         String path = "games." + gameKey + "." + (start ? "start" : "stop") + "-command";
         String cmd = cfg.getString(path);
@@ -846,7 +826,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
                 sender.sendMessage(LEGACY.deserialize("&7模板 " + tpls.size() + " 个："));
                 for (var t : tpls) {
                     sender.sendMessage(LEGACY.deserialize(" &7- &f" + t.key()
-                            + " &7游戏=&f" + t.gameKey()
+                            + " &7服务的地图见 &f/hub room templates"
                             + " &7目录=&f" + t.folder()
                             + " &7体积=&f" + (t.bytes() / 1024 / 1024) + "MB"
                             + (t.dir().isDirectory() ? "" : " &c(目录缺失)")));
@@ -894,7 +874,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
                 }
                 sender.sendMessage(LEGACY.deserialize("&7房间 &f" + room.roomId));
                 sender.sendMessage(LEGACY.deserialize(" &7模板 &f" + room.template.key()
-                        + " &7游戏 &f" + room.template.gameKey()));
+                        + " &7游戏 &f" + (room.game().isEmpty() ? "-" : room.game()) + "&7地图 &f" + room.map()));
                 sender.sendMessage(LEGACY.deserialize(" &7世界 &f"
                         + (room.world == null ? "未加载" : room.world.getName())
                         + " &7人数 &f" + room.playerCount()

@@ -250,24 +250,7 @@ public final class RoomManager {
                     }
                     String folder = t.getString("folder", WorldNames.TEMPLATE + WorldNames.sanitize(key));
                     File dir = new File(base, folder);
-                    ConfigurationSection r = t.getConfigurationSection("rules");
-                    WorldTemplate.Rules rules = r == null ? null
-                            : new WorldTemplate.Rules(
-                            r.getBoolean("pvp", false),
-                            r.getString("difficulty", "NORMAL"),
-                            r.getBoolean("mob-spawning", false),
-                            r.getBoolean("keep-inventory", false),
-                            r.getLong("fixed-time", 6000L));
-                    List<WorldTemplate.Box> boxes = new ArrayList<>();
-                    for (Map<?, ?> raw : t.getMapList("regions")) {
-                        Object nameObj = raw.get("name");
-                        boxes.add(new WorldTemplate.Box(
-                                nameObj == null ? "" : String.valueOf(nameObj),
-                                dbl(raw.get("x1")), dbl(raw.get("y1")), dbl(raw.get("z1")),
-                                dbl(raw.get("x2")), dbl(raw.get("y2")), dbl(raw.get("z2"))));
-                    }
-                    TEMPLATES.put(key, new WorldTemplate(key,
-                            t.getString("game", key), folder, dir, rules, boxes));
+                                        TEMPLATES.put(key, new WorldTemplate(key, folder, dir));   // 体积由 WorldTemplate.bytes() 现算
                     if (!dir.isDirectory()) {
                         lib.getLogger().warning("[房间] 模板 " + key + " 的目录不存在：" + dir.getPath());
                     }
@@ -353,7 +336,7 @@ public final class RoomManager {
     public static int roomCountOf(String gameKey) {
         int n = 0;
         for (Room r : ROOMS.values()) {
-            if (r.template.serves(gameKey)) {
+            if (gameKey.equals(r.game())) {
                 n++;
             }
         }
@@ -401,7 +384,7 @@ public final class RoomManager {
         Room only = null;
         int n = 0;
         for (Room room : ROOMS.values()) {
-            if (room.world != null && room.template.serves(gameKey)) {
+            if (room.world != null && gameKey.equals(room.game())) {
                 only = room;
                 n++;
             }
@@ -619,12 +602,9 @@ public final class RoomManager {
                 return fail("全服房间数已达上限 " + maxRooms + "（先 /hub room delete 或等回收）");
             }
         }
-        if (roomCountOf(tpl.gameKey()) >= maxPerGame) {
-            return fail("游戏 " + tpl.gameKey() + " 的房间数已达上限 " + maxPerGame);
-        }
 
         String roomId = desiredId == null || desiredId.isBlank()
-                ? nextRoomId(tpl.gameKey()) : sanitize(desiredId);
+                ? nextRoomId("room") : sanitize(desiredId);
         if (Bukkit.getWorld(roomId) != null || ROOMS.containsKey(roomId)) {
             return fail("房间名已被占用：" + roomId);
         }
@@ -659,22 +639,8 @@ public final class RoomManager {
             return fail("世界加载失败（已回滚目录）：" + roomId);
         }
 
-        // 5) 套规则 —— 只有模板显式声明了 rules 才覆盖。
-        //    模板文件里的 data/minecraft/game_rules.dat 本身就有规则，拷贝时已经带过来；
-        //    无条件再套一遍等于让配置盖掉设计者的 /gamerule（违反"模板即事实"）。
-        if (tpl.rules() != null) {
-            applyRules(room.world, tpl.rules());
-        }
-
-        // 6) 注册区域（模板内坐标 + 房间世界名）
-        for (WorldTemplate.Box box : tpl.regions()) {
-            try {
-                RegionRegistry.register(new ArenaRegion(tpl.gameKey(), box.arenaName(), roomId,
-                        box.x1(), box.y1(), box.z1(), box.x2(), box.y2(), box.z2()));
-            } catch (RuntimeException ex) {
-                Failures.recordAndWarn("RoomManager.region/" + roomId, ex);
-            }
-        }
+        // 5) 规则与区域**不再来自模板**：模板只是世界目录（拷贝时 game_rules.dat 已经带过来），
+        //    区域/规则由 maps.yml 决定，走 createForMap()。
 
         long tLoad = System.nanoTime();
         ROOMS.put(roomId, room);
@@ -719,13 +685,8 @@ public final class RoomManager {
         }
         final String roomId;
         synchronized (RoomManager.class) {
-            if (roomCountOf(tpl.gameKey()) >= maxPerGame) {
-                log("[房间] 创建失败：游戏 " + tpl.gameKey() + " 房间数已达上限 " + maxPerGame);
-                done.accept(null);
-                return;
-            }
             roomId = desiredRoomId == null || desiredRoomId.isBlank()
-                    ? nextRoomId(tpl.gameKey()) : sanitize(desiredRoomId);
+                    ? nextRoomId("room") : sanitize(desiredRoomId);
             if (Bukkit.getWorld(roomId) != null || ROOMS.containsKey(roomId)) {
                 log("[房间] 创建失败：房间名已被占用 " + roomId);
                 done.accept(null);
@@ -772,17 +733,7 @@ public final class RoomManager {
             log("[房间] 世界加载失败（已回滚目录）：" + roomId);
             return null;
         }
-        if (tpl.rules() != null) {
-            applyRules(room.world, tpl.rules());
-        }
-        for (WorldTemplate.Box box : tpl.regions()) {
-            try {
-                RegionRegistry.register(new ArenaRegion(tpl.gameKey(), box.arenaName(), roomId,
-                        box.x1(), box.y1(), box.z1(), box.x2(), box.y2(), box.z2()));
-            } catch (RuntimeException ex) {
-                Failures.recordAndWarn("RoomManager.region/" + roomId, ex);
-            }
-        }
+        // 区域与规则由 maps.yml 决定（走 createForMap）；旧的按模板造房不登记区域。
         long t2 = System.nanoTime();
         ROOMS.put(roomId, room);
         log("已创建房间 " + room.describe()
@@ -799,7 +750,7 @@ public final class RoomManager {
         }
         Room gone = ROOMS.remove(roomId);
         if (gone != null) {
-            for (WorldInstance wi : gone.instances) {
+            for (WorldInstance wi : gone.instances()) {
                 if (wi.world != null) {
                     WORLD_INDEX.remove(wi.world.getName());
                 }
@@ -823,8 +774,14 @@ public final class RoomManager {
         }
         deleteDir(new File(worldDimDir(), roomId));
         // 只撤这个房间声明的区域（别用 unregisterGame，那会把该游戏的所有区域都清掉）
-        for (WorldTemplate.Box box : room.template.regions()) {
-            RegionRegistry.unregister(room.template.gameKey(), box.arenaName(), roomId);
+        // 按**房间自己的世界实例**里记录的 plan 撤销区域（模板不再携带区域信息）
+        for (WorldInstance wi : room.instances()) {
+            if (wi.plan == null) {
+                continue;
+            }
+            for (GameMap.RegionPlan rp : wi.plan.regions()) {
+                RegionRegistry.unregister(room.game(), rp.name(), roomId);
+            }
         }
         log("已删除房间 " + roomId);
         return true;

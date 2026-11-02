@@ -1,5 +1,6 @@
 package com.hub.gui;
 
+import com.hub.room.GameMaps;
 import com.hub.room.RoomManager;
 import com.hub.room.WorldTemplate;
 import net.kyori.adventure.text.Component;
@@ -106,11 +107,16 @@ public final class RoomGui {
         if (gameId == null) {
             return null;
         }
+        // 模板已经不属于任何游戏（一个模板世界可能服务多个游戏），这里改查**地图表**：
+        // 有地图 = 这个游戏具备房间化条件。
+        if (!com.hub.room.GameMaps.mapNames(gameId).isEmpty()) {
+            return gameId;
+        }
         String norm = gameId.replace("_", "").replace("-", "").toLowerCase(java.util.Locale.ROOT);
-        for (WorldTemplate t : RoomManager.templates()) {
-            String key = t.gameKey().replace("_", "").replace("-", "").toLowerCase(java.util.Locale.ROOT);
+        for (String game : com.hub.room.GameMaps.games()) {
+            String key = game.replace("_", "").replace("-", "").toLowerCase(java.util.Locale.ROOT);
             if (key.equals(norm)) {
-                return t.gameKey();
+                return game;
             }
         }
         return null;
@@ -121,12 +127,7 @@ public final class RoomGui {
         if (gameKey == null) {
             return false;
         }
-        for (WorldTemplate t : RoomManager.templates()) {
-            if (t.gameKey().equals(gameKey)) {
-                return true;
-            }
-        }
-        return false;
+        return !com.hub.room.GameMaps.mapNames(gameKey).isEmpty();
     }
 
     // ---------- 文本版（控制台用 / 也是 GUI 的内容来源） ----------
@@ -143,7 +144,7 @@ public final class RoomGui {
         List<String> out = new ArrayList<>();
         if (mode == Mode.ROOMS) {
             var rooms = RoomManager.rooms().stream()
-                    .filter(r -> gameKey == null || r.template.gameKey().equals(gameKey))
+                    .filter(r -> gameKey == null || gameKey.equals(r.game()))
                     .toList();
             out.add("&b[房间] &f" + (gameKey == null ? "全部" : gameKey)
                     + " &7共 &f" + rooms.size() + " &7个"
@@ -162,25 +163,24 @@ public final class RoomGui {
                 return out;
             }
             out.add("&b[房间动作] &f" + room.roomId + " &7（模板 &f" + room.template.key()
-                    + "&7，游戏 &f" + room.template.gameKey() + "&7）");
+                    + "&7，游戏 &f" + (room.game().isEmpty() ? room.template.key() : room.game()) + "&7）");
             out.add("&7  人=&f" + room.playerCount() + " &7空置=&f" + room.idleSeconds() + "s");
             var cfg = games();
             for (String[] a : new String[][]{
                     {"进入并加入", "join"}, {"开始一局", "start"}, {"停止", "stop"}}) {
-                String cmd = cfg.getString("games." + room.template.gameKey() + "." + a[1] + "-command");
+                String cmd = cfg.getString("games." + (room.game().isEmpty() ? room.template.key() : room.game())
+                        + "." + a[1] + "-command");
                 out.add("&7  - &f" + a[0] + "&7："
                         + (cmd == null || cmd.isBlank() ? "&c未配置（" + a[1] + "-command）" : "&f/" + cmd));
             }
             out.add("&7  - &4删除房间&7：会踢人、卸载、删目录、撤销区域注册");
             return out;
         } else {
-            var tpls = RoomManager.templates().stream()
-                    .filter(t -> gameKey == null || t.gameKey().equals(gameKey))
-                    .toList();
+            var tpls = RoomManager.templates().stream().toList();
             out.add("&b[模板] &f" + (gameKey == null ? "全部" : gameKey)
                     + " &7共 &f" + tpls.size() + " &7个（点一个开始建房间）");
             for (WorldTemplate t : tpls) {
-                out.add("&7- &f" + t.key() + " &7游戏=&f" + t.gameKey()
+                out.add("&7- &f" + t.key()
                         + " &7目录=&f" + t.folder()
                         + " &7体积=&f" + (t.bytes() / 1024 / 1024) + "MB"
                         + (t.dir().isDirectory() ? "" : " &c(目录缺失)"));
@@ -216,7 +216,7 @@ public final class RoomGui {
             inv.setItem(0, createButton());
             int slot = 1;
             for (var r : RoomManager.rooms()) {
-                if (gameKey != null && !r.template.gameKey().equals(gameKey)) {
+                if (gameKey != null && !gameKey.equals(r.game())) {
                     continue;
                 }
                 if (slot > ROOM_SLOTS) {
@@ -241,7 +241,7 @@ public final class RoomGui {
         } else {
             int slot = 0;
             for (WorldTemplate t : RoomManager.templates()) {
-                if (gameKey != null && !t.gameKey().equals(gameKey)) {
+                if (gameKey != null && !GameMaps.mapNames(gameKey).isEmpty() && false) {
                     continue;
                 }
                 if (slot >= TEMPLATE_SLOTS * 2) {
@@ -261,7 +261,7 @@ public final class RoomGui {
                 return true;
             }
             var rooms = RoomManager.rooms().stream()
-                    .filter(r -> holder.gameKey == null || r.template.gameKey().equals(holder.gameKey))
+                    .filter(r -> holder.gameKey == null || holder.gameKey.equals(r.game()))
                     .toList();
             int idx = slot - 1;
             if (idx >= 0 && idx < rooms.size()) {
@@ -304,7 +304,7 @@ public final class RoomGui {
         }
         // 模板页：点一个就建房间
         var tpls = RoomManager.templates().stream()
-                .filter(t -> holder.gameKey == null || t.gameKey().equals(holder.gameKey))
+                .filter(t -> true)
                 .toList();
         if (slot >= 0 && slot < tpls.size()) {
             String tplKey = tpls.get(slot).key();
@@ -344,10 +344,11 @@ public final class RoomGui {
             p.sendMessage(LEGACY.deserialize("&c房间不存在。"));
             return;
         }
-        String key = "games." + room.template.gameKey() + "." + phase + "-command";
+        String gk = room.game().isEmpty() ? room.template.key() : room.game();
+        String key = "games." + gk + "." + phase + "-command";
         String cmd = games().getString(key);
         if (cmd == null || cmd.isBlank()) {
-            p.sendMessage(LEGACY.deserialize("&c游戏 &f" + room.template.gameKey()
+            p.sendMessage(LEGACY.deserialize("&c游戏 &f" + (room.game().isEmpty() ? "-" : room.game())
                     + " &c没有配置 " + phase + "-command（" + key + "）。"));
             return;
         }
@@ -393,7 +394,7 @@ public final class RoomGui {
         ItemMeta meta = it.getItemMeta();
         meta.displayName(noItalic("&b" + t.key()));
         List<Component> lore = new ArrayList<>();
-        lore.add(noItalic("&7游戏：&f" + t.gameKey()));
+        lore.add(noItalic("&7目录：&f" + t.folder()));
         lore.add(noItalic("&7体积：&f" + (t.bytes() / 1024 / 1024) + "MB"));
         lore.add(noItalic(t.dir().isDirectory() ? "&a目录正常" : "&c目录缺失"));
         lore.add(noItalic("&8点击用这个模板建房间"));

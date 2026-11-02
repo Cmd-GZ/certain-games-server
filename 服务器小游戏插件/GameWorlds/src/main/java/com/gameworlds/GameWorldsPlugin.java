@@ -383,8 +383,8 @@ public final class GameWorldsPlugin extends JavaPlugin implements CommandExecuto
             if (room == null) {
                 send(sender, "&c创建房间失败（模板不存在 / 目录缺失 / 达到上限）。详情见控制台与 /hub doctor。");
             } else {
-                send(sender, "&a已创建房间 &f" + room.roomId + " &7（游戏 &f"
-                        + room.template.gameKey() + "&7）。"
+                send(sender, "&a已创建房间 &f" + room.roomId + " &7（模板 &f"
+                        + room.template.key() + "&7）。"
                         + "开局：&f/hub start " + room.roomId);
             }
         });

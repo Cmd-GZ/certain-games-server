@@ -101,6 +101,11 @@ public final class GameMaps {
         return byName == null ? List.of() : new ArrayList<>(byName.keySet());
     }
 
+    /** 已登记的游戏清单。 */
+    public static java.util.List<String> games() {
+        return new ArrayList<>(BY_GAME.keySet());
+    }
+
     /** 已登记的游戏数 / 地图总数（doctor 用）。 */
     public static int gameCount() {
         return BY_GAME.size();
