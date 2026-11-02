@@ -165,6 +165,7 @@ public final class RoomManager {
         plugin = lib;
         TEMPLATES.clear();
         ROOMS.clear();
+        WORLD_INDEX.clear();
         ready = false;
         try {
             // 地图登记表（(游戏, 地图) -> 世界清单 + 区域 + 规则）。读失败不致命：
@@ -249,6 +250,7 @@ public final class RoomManager {
             }
         }
         ROOMS.clear();
+        WORLD_INDEX.clear();
         TEMPLATES.clear();
         ready = false;
     }
@@ -275,8 +277,21 @@ public final class RoomManager {
         return new ArrayList<>(ROOMS.values());
     }
 
-    public static Room room(String roomId) {
-        return roomId == null ? null : ROOMS.get(roomId);
+    /** 世界名 -> 它所属的房间（房间名与世界名已解耦，按世界名也要能查到）。 */
+    private static final java.util.Map<String, Room> WORLD_INDEX = new LinkedHashMap<>();
+
+    /**
+     * 按**房间名**或**世界名**取房间。
+     *
+     * <p>为什么两者都接受：房间名（{@code room_x_1}）与世界名（{@code room_x_1_1}）现在是分开的，
+     * 而既有代码/命令有些地方还在传世界名。
+     */
+    public static Room room(String roomIdOrWorld) {
+        if (roomIdOrWorld == null) {
+            return null;
+        }
+        Room r = ROOMS.get(roomIdOrWorld);
+        return r != null ? r : WORLD_INDEX.get(roomIdOrWorld);
     }
 
     public static int roomCount() {
@@ -347,7 +362,7 @@ public final class RoomManager {
         if (worldName == null) {
             return null;
         }
-        Room room = ROOMS.get(worldName);
+        Room room = room(worldName);
         return room == null ? null : room.template.key();
     }
 
@@ -430,7 +445,8 @@ public final class RoomManager {
                 rollbackWorlds(room, created);
                 return fail("地图 " + map.name() + " 引用的模板不存在：" + plan.templateKey());
             }
-            String worldName = index == 0 ? roomId : roomId + "_" + (index + 1);
+            // 命名统一：<房间名>_1_<世界序号>（第一个世界也是 _1_1，不再特殊）
+            String worldName = roomId + "_1_" + (index + 1);
             File dest = new File(worldDimDir(), worldName);
             try {
                 copyDirectory(tpl.dir(), dest);
@@ -483,6 +499,11 @@ public final class RoomManager {
 
         long tLoad = System.nanoTime();
         ROOMS.put(roomId, room);
+        for (WorldInstance wi : room.instances) {
+            if (wi.world != null) {
+                WORLD_INDEX.put(wi.world.getName(), room);
+            }
+        }
         log("已创建房间 " + room.describe() + "（" + room.instances.size() + " 个世界 / 地图 "
                 + map.name() + "，总耗时 " + (tLoad - t0) / 1_000_000 + "ms）");
         return room;
@@ -725,7 +746,14 @@ public final class RoomManager {
         if (room == null) {
             return false;
         }
-        ROOMS.remove(roomId);
+        Room gone = ROOMS.remove(roomId);
+        if (gone != null) {
+            for (WorldInstance wi : gone.instances) {
+                if (wi.world != null) {
+                    WORLD_INDEX.remove(wi.world.getName());
+                }
+            }
+        }
 
         if (room.world != null) {
             // 世界里还有人：先送回主城，否则 unload 会失败
