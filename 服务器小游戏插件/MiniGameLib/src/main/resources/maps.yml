@@ -15,7 +15,8 @@ maps:
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - name: ''
+        - &id003
+          name: ''
           x1: 198.5
           y1: 34
           z1: 236.5
@@ -38,7 +39,8 @@ maps:
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - name: ''
+        - &id004
+          name: ''
           x1: -7.5
           y1: 50
           z1: 281.5
@@ -282,7 +284,8 @@ maps:
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - name: 群系
+        - &id006
+          name: 群系
           x1: -8.6
           y1: 2.1
           z1: -96.5
@@ -435,14 +438,15 @@ maps:
         z: 307
       worlds:
       - template: mini_game
-        rules:
+        rules: &id001
           pvp: false
           difficulty: NORMAL
           mob-spawning: false
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - name: ''
+        - &id002
+          name: ''
           x1: 620.5
           y1: 53
           z1: 300.5
@@ -488,7 +492,8 @@ maps:
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - name: TNTRUNround
+        - &id005
+          name: TNTRUNround
           x1: 0.4
           y1: -1.8
           z1: 0.8
@@ -541,3 +546,25 @@ maps:
           x2: 96
           y2: 100
           z2: -65
+  arcadeparty:
+    迷你小游戏派对:
+      entry:
+        template: mini_game
+        x: 620.5
+        y: 53
+        z: 300.5
+      worlds:
+      - template: mini_game
+        rules: *id001
+        regions:
+        - *id002
+        - *id003
+        - *id004
+      - template: tr
+        rules: *id001
+        regions:
+        - *id005
+      - template: hp
+        rules: *id001
+        regions:
+        - *id006
