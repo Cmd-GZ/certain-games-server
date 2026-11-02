@@ -109,6 +109,9 @@ public final class FireJumperManager {
     private final List<LineType> lineTypes = new ArrayList<>();
 
     private final Set<UUID> waiting = new LinkedHashSet<>();
+    /** D21：加入 tick 与同 tick 内随机名次（同时进入的几人随机决出主持人）。 */
+    private final java.util.Map<UUID, Long> joinTick = new java.util.HashMap<>();
+    private final java.util.Map<UUID, Long> joinSeed = new java.util.HashMap<>();
     private final Set<UUID> playing = new LinkedHashSet<>();
     private final Set<UUID> eliminated = new LinkedHashSet<>();
     private final List<Wave> waves = new ArrayList<>();
@@ -181,6 +184,43 @@ public final class FireJumperManager {
                         Chat.send(p, message);
                     }
                 }
+            }
+
+            // ---------- D21 主持人流程（配置 flow: host 才启用，默认走上游） ----------
+            @Override
+            public boolean hostFlow() {
+                return "host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"));
+            }
+
+            @Override
+            public int waitSeconds() {
+                return Math.max(5, plugin.getConfig().getInt("wait-seconds", 300));
+            }
+
+            @Override
+            public java.util.List<UUID> waitingOrder() {
+                java.util.List<UUID> order = new ArrayList<>(waiting);
+                order.sort(java.util.Comparator
+                        .comparingLong((UUID id) -> joinTick.getOrDefault(id, 0L))
+                        .thenComparingLong(id -> joinSeed.getOrDefault(id, 0L)));
+                return order;
+            }
+
+            @Override
+            public void onHostTimeout(UUID host) {
+                org.bukkit.entity.Player p = Bukkit.getPlayer(host);
+                String name = p == null ? host.toString() : p.getName();
+                waiting.remove(host);
+                if (session != null && p != null && !session.state().isFinal()) {
+                    session.leave(p);   // I1：归属也要摘，否则他再也进不了别的游戏
+                }
+                if (p != null && p.isOnline()) {
+                    Chat.send(p, "&c倒计时结束还没开始，你被移出本局（主持人超时）。");
+                    com.hub.api.HubAPI.teleportToLobby(p);
+                }
+                plugin.getLogger().info("[FireJumper] 主持人 " + name + " 超时未开始，已移出本局（剩余 "
+                        + waiting.size() + " 人）");
+                countdown.update();
             }
 
             @Override
@@ -340,6 +380,26 @@ public final class FireJumperManager {
 
     // ---------- 加入 / 离开 ----------
 
+    /** 发送者是否是当前主持人（D21；仅 flow: host 时成立）。 */
+    public boolean isHost(org.bukkit.command.CommandSender sender) {
+        if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
+            return false;
+        }
+        if (!(sender instanceof org.bukkit.entity.Player p)) {
+            return false;
+        }
+        UUID host = countdown.currentHost();
+        return host != null && host.equals(p.getUniqueId());
+    }
+
+    public int waitingCount() {
+        return waiting.size();
+    }
+
+    public int minPlayersPublic() {
+        return minPlayers();
+    }
+
     public void join(Player player) {
         UUID id = player.getUniqueId();
         if (state != State.WAITING) {
@@ -367,6 +427,8 @@ public final class FireJumperManager {
             return;
         }
         waiting.add(id);
+        joinTick.put(id, (long) Bukkit.getCurrentTick());
+        joinSeed.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
         clearPlayer(player);
         player.setGameMode(GameMode.ADVENTURE);
         player.teleport(arena.lobby());

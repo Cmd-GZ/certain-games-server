@@ -286,8 +286,18 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void start(CommandSender sender) {
-        if (!admin(sender)) {
-            return;
+        // D21：开始权在主持人手上；但主持人**不享受管理员特权**（人数不够不能开）
+        boolean isAdmin = !(sender instanceof org.bukkit.entity.Player sp) || sp.hasPermission("firejumper.admin");
+        if (!isAdmin) {
+            if (!manager.isHost(sender)) {
+                Chat.send(sender, "&c只有本局**主持人**或管理员可以开始。");
+                return;
+            }
+            if (manager.waitingCount() < manager.minPlayersPublic()) {
+                Chat.send(sender, "&c人数还没达到 &f" + manager.minPlayersPublic()
+                        + " 人&c，主持人也不能开始。");
+                return;
+            }
         }
         if (manager.state() != FireJumperManager.State.WAITING) {
             Chat.send(sender, "&e对局已经在进行中。");

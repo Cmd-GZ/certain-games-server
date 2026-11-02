@@ -6,7 +6,7 @@
 
     <groupId>com.firejumper</groupId>
     <artifactId>fire-jumper</artifactId>
-    <version>1.1.1</version>
+    <version>1.2.0</version>
     <packaging>jar</packaging>
 
     <name>FireJumper</name>
