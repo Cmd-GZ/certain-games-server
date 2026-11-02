@@ -52,8 +52,20 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
             }
             case "leave" -> plugin.getGame().leave(player, false);
             case "start" -> {
-                if (checkAdmin(player, true)) {
-                    plugin.getGame().start(player);
+                // D21：开始权在主持人手上；主持人不能突破 min-players（管理员可以）
+                var game = plugin.getGame();
+                boolean isAdminS = player != null && player.hasPermission("gtb.admin");
+                if (isAdminS) {
+                    game.start(player);
+                } else if (game.isHost(player)) {
+                    if (game.waitingCountPublic() < game.minPlayersPublic()) {
+                        Chat.send(player, "&c人数还没达到 &f" + game.minPlayersPublic()
+                                + " 人&c，主持人也不能开始（管理员可以强制开始）。");
+                    } else {
+                        game.start(player);
+                    }
+                } else {
+                    Chat.send(player, "&c只有本局**主持人**或管理员可以开始。");
                 }
             }
             case "stop" -> {

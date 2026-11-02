@@ -1,5 +1,7 @@
 package com.buildbattle.gtb.game;
 
+import com.hub.session.EndReason;
+
 import com.hub.util.StartCountdown;
 
 import com.buildbattle.gtb.GuessBuildPlugin;
@@ -72,6 +74,45 @@ public class GameManager {
     private boolean ending;
     /** 等待室自动开局倒计时（公共库 MiniGameLib；同时只有一个场地在跑）。 */
     private final WaitCountdown wait;
+    /** 会话（D22）：单图/单场游戏用一个键。 */
+    private final java.util.Map<String, GTBSession> sessions = new java.util.LinkedHashMap<>();
+    private GTBSession session;
+
+    private GTBSession ensureSession() {
+        String key = "main";
+        GTBSession g = sessions.get(key);
+        if (g == null || g.state().isFinal()) {
+            g = new GTBSession(this, key);
+            sessions.put(key, g);
+        }
+        session = g;
+        return g;
+    }
+
+    /** D21：加入 tick 与同 tick 内随机名次。 */
+    private final java.util.Map<UUID, Long> joinTick = new java.util.HashMap<>();
+    private final java.util.Map<UUID, Long> joinSeed = new java.util.HashMap<>();
+
+    /** 发送者是否是当前主持人（D21；仅 flow: host 时成立）。 */
+    public boolean isHost(org.bukkit.command.CommandSender sender) {
+        if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
+            return false;
+        }
+        if (!(sender instanceof Player p)) {
+            return false;
+        }
+        UUID host = wait.currentHost();
+        return host != null && host.equals(p.getUniqueId());
+    }
+
+    public int waitingCountPublic() {
+        return players.size();
+    }
+
+    public int minPlayersPublic() {
+        return plugin.getConfig().getInt("min-players", 2);
+    }
+
     private Location lobbyPoint;
 
     // 战绩（第一名次数）：唯一文件 plugins/MiniGameLib/players.yml 的 gtb 段
@@ -211,7 +252,17 @@ public class GameManager {
                 broadcast("&e" + p.getName() + "&f 指定了场地，本局将在 &b" + arenaName + "&f 进行。");
             }
         }
+        // I1：先挂会话再入队；冲突就拒绝
+        GTBSession sess = ensureSession();
+        if (!sess.join(p)) {
+            if (sess.players().isEmpty()) {
+                sessions.remove("main");
+            }
+            return;
+        }
         players.add(id);
+        joinTick.put(id, (long) Bukkit.getCurrentTick());
+        joinSeed.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
         names.put(id, p.getName());
         states.put(id, PlayerState.capture(p));
         scores.put(id, 0);
@@ -252,6 +303,10 @@ public class GameManager {
     }
 
     public synchronized void leave(Player p, boolean quit) {
+        // I1：从归属链摘掉（漏了会让玩家卡在"已在等待中"）
+        if (session != null && !session.state().isFinal()) {
+            session.leave(p);
+        }
         if (ending) {
             return; // endGame 正在收尾：它会自己还原状态并回城，这里不能再改集合
         }
@@ -374,6 +429,71 @@ public class GameManager {
         public void onMessage(String message) {
             broadcast(message);
         }
+
+        // ---------- D21 主持人流程（配置 flow: host 才启用，默认走上游） ----------
+
+        @Override
+
+        public boolean hostFlow() {
+
+            return "host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"));
+
+        }
+
+        @Override
+
+        public int waitSeconds() {
+
+            return Math.max(5, plugin.getConfig().getInt("wait-seconds", 300));
+
+        }
+
+        @Override
+
+        public java.util.List<UUID> waitingOrder() {
+
+            java.util.List<UUID> order = new ArrayList<>(players);
+
+            order.sort(java.util.Comparator
+
+                    .comparingLong((UUID id) -> joinTick.getOrDefault(id, 0L))
+
+                    .thenComparingLong(id -> joinSeed.getOrDefault(id, 0L)));
+
+            return order;
+
+        }
+
+        @Override
+
+        public void onHostTimeout(UUID host) {
+
+            Player hp = Bukkit.getPlayer(host);
+
+            String hname = hp == null ? host.toString() : hp.getName();
+
+            players.remove(host);
+
+            if (hp != null && hp.isOnline()) {
+
+                Chat.send(hp, "&c倒计时结束还没开始，你被移出本局（主持人超时）。");
+
+                HubAPI.teleportToLobby(hp);
+
+            }
+
+            plugin.getLogger().info("[GuessTheBuild] 主持人 " + hname
+
+                    + " 超时未开始，已移出本局（剩余 " + players.size() + " 人）");
+
+            broadcast("&e主持人 &f" + hname + " &e超时未开始，已移出本局。");
+
+            // 注意：字段名就叫 wait，命名内部类里必须写 GameManager.this.wait，否则会命中 Object#wait(long)
+
+            GameManager.this.wait.update();
+
+        }
+
 
         @Override
         public void onStart() {
@@ -996,7 +1116,22 @@ public class GameManager {
      * 而 leave 会修改 players 并可能再次进入 endGame，导致遍历 players 时抛
      * ConcurrentModificationException、收尾半途中断。
      */
+    /** 收场入口（I4）：先让会话 end()，再由 onEnd 回到 doEndGame。 */
     private synchronized void endGame() {
+        if (session == null || session.state().isFinal()) {
+            doEndGame();
+            return;
+        }
+        session.end(EndReason.ROUND_END);
+    }
+
+    /** 真正的收场逻辑（原 endGame 的转发）。 */
+    void doEndGame() {
+        endGameOriginal();
+    }
+
+    private synchronized void endGameOriginal() {
+
         if (ending) {
             return;
         }
