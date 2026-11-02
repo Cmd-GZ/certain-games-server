@@ -648,9 +648,13 @@ public class DuelManager {
     /** 玩家右键开始纸。 */
     public void handleStartPaper(Player p) {
         String arenaName = playerArena.get(p.getUniqueId());
-        if (arenaName == null) return;
+        if (arenaName == null) {
+            return;
+        }
         DuelArena a = arenas.get(arenaName);
-        if (a == null || a.getState() != DuelArena.State.WAITING) return;
+        if (a == null || a.getState() != DuelArena.State.WAITING) {
+            return;
+        }
         // D21：管理员随时可开；**主持人**也可以开，但不能少于 2 人
         boolean isAdmin = p.isOp() || p.hasPermission("duel.admin");
         if (!isAdmin) {
@@ -852,6 +856,11 @@ public class DuelManager {
         a.setFighter1(f1);
         a.setFighter2(f2);
         a.setState(DuelArena.State.FIGHTING);
+        // I5/I4：会话状态跟着走（之前只改了场地状态，会话一直停在 WAITING）
+        DuelSession live = sessions.get(a.getName());
+        if (live != null && live.state() == com.hub.session.SessionState.WAITING) {
+            live.start();
+        }
         a.setFightStartMs(System.currentTimeMillis());
         reportArena(a);
         // 对战开始：tab 从 [等待中] 变为 [已加入]

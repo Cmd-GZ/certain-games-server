@@ -123,7 +123,15 @@ public final class WaitCountdown {
         if (size < min) {
             cancel();
         } else if (size >= max) {
-            if (!isRunning() || remainingSeconds() > FULL_SECONDS) {
+            // 满员加速只在**上游流程**下成立。
+            // 主持人流程下满员也**不能**把倒计时压到 3 秒：超时会踢掉主持人，
+            // 等于"房间刚满 3 秒主持人就被踢"，主持人根本没机会开局（真实 bug：
+            // duel max-players=2 时，第一个玩家（主持人）满员 3 秒后被踢走）。
+            if (host.hostFlow()) {
+                if (!isRunning()) {
+                    start(Math.max(1, host.waitSeconds()));
+                }
+            } else if (!isRunning() || remainingSeconds() > FULL_SECONDS) {
                 start(FULL_SECONDS);
             }
         } else if (!isRunning()) {
@@ -171,6 +179,11 @@ public final class WaitCountdown {
      *
      * <p>依赖 {@link Host#waitingOrder()} 的顺序（各游戏用 LinkedHashSet 存队列，天然有序）。
      */
+    /** 调试用：当前是否主持人流程。 */
+    public boolean hostFlowForDebug() {
+        return host.hostFlow();
+    }
+
     public UUID currentHost() {
         List<UUID> order = host.waitingOrder();
         return order == null || order.isEmpty() ? null : order.get(0);
