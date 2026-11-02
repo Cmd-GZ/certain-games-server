@@ -247,7 +247,7 @@ public final class FireJumperArena {
         if (regionConfigured()) {
             return pos1.getWorld();
         }
-        return Bukkit.getWorld(worldName);
+        return com.hub.world.Worlds.resolve(worldName);
     }
 
     public String worldName() {
@@ -336,7 +336,8 @@ public final class FireJumperArena {
         if (parts.length < 4) {
             return null;
         }
-        World world = Bukkit.getWorld(parts[0]);
+        // 支持 tpl:<模板键> 令牌（房间化）：房间存在时解析成房间世界
+        World world = com.hub.world.Worlds.resolve(parts[0]);
         if (world == null) {
             return null;
         }
