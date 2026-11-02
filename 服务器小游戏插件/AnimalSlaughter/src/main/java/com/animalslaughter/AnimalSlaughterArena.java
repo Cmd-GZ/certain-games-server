@@ -21,7 +21,7 @@ public final class AnimalSlaughterArena {
 
     /** 供区域声明用（{@code docs/框架不变量.md} I2）。 */
     public Location getCenter() {
-        return center;
+        return  com.hub.room.RoomBinding.apply("animalslaughter", center);
     }
     private int radius = 16;
     private Location lobby;
@@ -223,16 +223,16 @@ public final class AnimalSlaughterArena {
     }
 
     public Location center() {
-        return center == null ? null : center.clone();
+        return  com.hub.room.RoomBinding.apply("animalslaughter", center == null ? null : center.clone());
     }
 
     /** 旁观/观战视角：圆心上方 6 格。 */
     public Location spectatorSpot() {
-        return center == null ? null : center.clone().add(0, 6, 0);
+        return  com.hub.room.RoomBinding.apply("animalslaughter", center == null ? null : center.clone().add(0, 6, 0));
     }
 
     public Location getLobby() {
-        return lobby;
+        return  com.hub.room.RoomBinding.apply("animalslaughter", lobby);
     }
 
     public void setLobby(Location lobby) {

@@ -1,5 +1,5 @@
 name: SnakeParty
-version: '1.4.0'
+version: '1.5.0'
 main: com.snakeparty.SnakePartyPlugin
 api-version: '1.21'
 description: 蛇行派对：沿视线自动前进，撞到玻璃板或掉出场地即淘汰

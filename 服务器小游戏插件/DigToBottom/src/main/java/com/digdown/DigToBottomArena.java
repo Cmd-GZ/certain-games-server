@@ -69,7 +69,7 @@ public class DigToBottomArena {
     }
 
     public Location getCenter() {
-        return center;
+        return  com.hub.room.RoomBinding.apply("digdown", center);
     }
 
     public void setCenter(Location center) {
@@ -78,7 +78,7 @@ public class DigToBottomArena {
     }
 
     public Location getLobby() {
-        return lobby;
+        return  com.hub.room.RoomBinding.apply("digdown", lobby);
     }
 
     public void setLobby(Location lobby) {
@@ -86,7 +86,7 @@ public class DigToBottomArena {
     }
 
     public Location getSpectator() {
-        return spectator;
+        return  com.hub.room.RoomBinding.apply("digdown", spectator);
     }
 
     public void setSpectator(Location spectator) {

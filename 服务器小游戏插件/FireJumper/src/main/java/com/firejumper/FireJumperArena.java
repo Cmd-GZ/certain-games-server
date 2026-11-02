@@ -263,15 +263,15 @@ public final class FireJumperArena {
     }
 
     public Location lobby() {
-        return lobby == null ? null : lobby.clone();
+        return  com.hub.room.RoomBinding.apply("firejumper", lobby == null ? null : lobby.clone());
     }
 
     public Location pos1() {
-        return pos1 == null ? null : pos1.clone();
+        return  com.hub.room.RoomBinding.apply("firejumper", pos1 == null ? null : pos1.clone());
     }
 
     public Location pos2() {
-        return pos2 == null ? null : pos2.clone();
+        return  com.hub.room.RoomBinding.apply("firejumper", pos2 == null ? null : pos2.clone());
     }
 
     public Location spectatorSpot() {

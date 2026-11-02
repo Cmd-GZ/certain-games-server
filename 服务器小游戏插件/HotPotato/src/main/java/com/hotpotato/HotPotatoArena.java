@@ -42,7 +42,7 @@ public class HotPotatoArena {
     }
 
     public Location getPos1() {
-        return pos1;
+        return  com.hub.room.RoomBinding.apply("hotpotato", pos1);
     }
 
     public void setPos1(Location pos1) {
@@ -50,7 +50,7 @@ public class HotPotatoArena {
     }
 
     public Location getPos2() {
-        return pos2;
+        return  com.hub.room.RoomBinding.apply("hotpotato", pos2);
     }
 
     public void setPos2(Location pos2) {
@@ -58,7 +58,7 @@ public class HotPotatoArena {
     }
 
     public Location getCenter() {
-        return center;
+        return  com.hub.room.RoomBinding.apply("hotpotato", center);
     }
 
     public void setCenter(Location center) {
@@ -66,7 +66,7 @@ public class HotPotatoArena {
     }
 
     public Location getLobbyPoint() {
-        return lobbyPoint;
+        return  com.hub.room.RoomBinding.apply("hotpotato", lobbyPoint);
     }
 
     public void setLobbyPoint(Location lobbyPoint) {

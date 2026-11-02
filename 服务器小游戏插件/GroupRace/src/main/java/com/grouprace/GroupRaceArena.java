@@ -163,7 +163,7 @@ public final class GroupRaceArena {
     }
 
     public Location getLobby() {
-        return lobby == null ? null : lobby.clone();
+        return  com.hub.room.RoomBinding.apply("grouprace", lobby == null ? null : lobby.clone());
     }
 
     public void setLobby(Location lobby) {
@@ -171,7 +171,7 @@ public final class GroupRaceArena {
     }
 
     public Location getStart() {
-        return start == null ? null : start.clone();
+        return  com.hub.room.RoomBinding.apply("grouprace", start == null ? null : start.clone());
     }
 
     public void setStart(Location start) {
@@ -179,7 +179,7 @@ public final class GroupRaceArena {
     }
 
     public Location getPos1() {
-        return pos1 == null ? null : pos1.clone();
+        return  com.hub.room.RoomBinding.apply("grouprace", pos1 == null ? null : pos1.clone());
     }
 
     public void setPos1(Location pos1) {
@@ -187,7 +187,7 @@ public final class GroupRaceArena {
     }
 
     public Location getPos2() {
-        return pos2 == null ? null : pos2.clone();
+        return  com.hub.room.RoomBinding.apply("grouprace", pos2 == null ? null : pos2.clone());
     }
 
     public void setPos2(Location pos2) {

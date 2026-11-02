@@ -78,7 +78,7 @@ public class FootballArena {
     }
 
     public Location getPos1() {
-        return pos1;
+        return  com.hub.room.RoomBinding.apply("football", pos1);
     }
 
     public void setPos1(Location pos1) {
@@ -86,7 +86,7 @@ public class FootballArena {
     }
 
     public Location getPos2() {
-        return pos2;
+        return  com.hub.room.RoomBinding.apply("football", pos2);
     }
 
     public void setPos2(Location pos2) {
@@ -94,7 +94,7 @@ public class FootballArena {
     }
 
     public Location getCenter() {
-        return center;
+        return  com.hub.room.RoomBinding.apply("football", center);
     }
 
     public void setCenter(Location center) {
@@ -102,7 +102,7 @@ public class FootballArena {
     }
 
     public Location getLobbyPoint() {
-        return lobbyPoint;
+        return  com.hub.room.RoomBinding.apply("football", lobbyPoint);
     }
 
     public void setLobbyPoint(Location lobbyPoint) {
@@ -110,7 +110,7 @@ public class FootballArena {
     }
 
     public Location getSpawnRed() {
-        return spawnRed;
+        return  com.hub.room.RoomBinding.apply("football", spawnRed);
     }
 
     public void setSpawnRed(Location spawnRed) {
@@ -118,7 +118,7 @@ public class FootballArena {
     }
 
     public Location getSpawnBlue() {
-        return spawnBlue;
+        return  com.hub.room.RoomBinding.apply("football", spawnBlue);
     }
 
     public void setSpawnBlue(Location spawnBlue) {
@@ -126,7 +126,7 @@ public class FootballArena {
     }
 
     public Location getGoalRedPos1() {
-        return goalRedPos1;
+        return  com.hub.room.RoomBinding.apply("football", goalRedPos1);
     }
 
     public void setGoalRedPos1(Location goalRedPos1) {
@@ -134,7 +134,7 @@ public class FootballArena {
     }
 
     public Location getGoalRedPos2() {
-        return goalRedPos2;
+        return  com.hub.room.RoomBinding.apply("football", goalRedPos2);
     }
 
     public void setGoalRedPos2(Location goalRedPos2) {
@@ -142,7 +142,7 @@ public class FootballArena {
     }
 
     public Location getGoalBluePos1() {
-        return goalBluePos1;
+        return  com.hub.room.RoomBinding.apply("football", goalBluePos1);
     }
 
     public void setGoalBluePos1(Location goalBluePos1) {
@@ -150,7 +150,7 @@ public class FootballArena {
     }
 
     public Location getGoalBluePos2() {
-        return goalBluePos2;
+        return  com.hub.room.RoomBinding.apply("football", goalBluePos2);
     }
 
     public void setGoalBluePos2(Location goalBluePos2) {

@@ -128,7 +128,7 @@ public class LuckyPillarArena {
     }
 
     public Location getCenter() {
-        return center;
+        return  com.hub.room.RoomBinding.apply("luckypillar", center);
     }
 
     public void setCenter(Location center) {
@@ -136,7 +136,7 @@ public class LuckyPillarArena {
     }
 
     public Location getLobby() {
-        return lobby;
+        return  com.hub.room.RoomBinding.apply("luckypillar", lobby);
     }
 
     public void setLobby(Location lobby) {

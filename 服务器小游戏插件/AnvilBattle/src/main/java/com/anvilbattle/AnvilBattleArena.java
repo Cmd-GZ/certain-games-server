@@ -179,7 +179,7 @@ public final class AnvilBattleArena {
     }
 
     public Location getPos1() {
-        return pos1;
+        return  com.hub.room.RoomBinding.apply("anvilbattle", pos1);
     }
 
     public void setPos1(Location pos1) {
@@ -187,7 +187,7 @@ public final class AnvilBattleArena {
     }
 
     public Location getPos2() {
-        return pos2;
+        return  com.hub.room.RoomBinding.apply("anvilbattle", pos2);
     }
 
     public void setPos2(Location pos2) {
@@ -195,7 +195,7 @@ public final class AnvilBattleArena {
     }
 
     public Location getLobby() {
-        return lobby;
+        return  com.hub.room.RoomBinding.apply("anvilbattle", lobby);
     }
 
     public void setLobby(Location lobby) {

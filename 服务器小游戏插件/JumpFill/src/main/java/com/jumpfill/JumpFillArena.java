@@ -30,13 +30,13 @@ public final class JumpFillArena {
 
     /** 供区域声明用（{@code docs/框架不变量.md} I2）。 */
     public Location getPos1() {
-        return water1;
+        return  com.hub.room.RoomBinding.apply("jumpfill", water1);
     }
     private Location water2;
 
     /** 供区域声明用（{@code docs/框架不变量.md} I2）。 */
     public Location getPos2() {
-        return water2;
+        return  com.hub.room.RoomBinding.apply("jumpfill", water2);
     }
     private Location lobby;
     private final List<Location> starts = new ArrayList<>();
@@ -183,15 +183,15 @@ public final class JumpFillArena {
     }
 
     public Location lobby() {
-        return lobby == null ? null : lobby.clone();
+        return  com.hub.room.RoomBinding.apply("jumpfill", lobby == null ? null : lobby.clone());
     }
 
     public Location water1() {
-        return water1 == null ? null : water1.clone();
+        return  com.hub.room.RoomBinding.apply("jumpfill", water1 == null ? null : water1.clone());
     }
 
     public Location water2() {
-        return water2 == null ? null : water2.clone();
+        return  com.hub.room.RoomBinding.apply("jumpfill", water2 == null ? null : water2.clone());
     }
 
     /** 等待/开局时把水域刷成水；第一次会先把原始方块存快照。 */

@@ -20,7 +20,7 @@ public final class SnakePartyArena {
 
     /** 供区域声明用（{@code docs/框架不变量.md} I2）。 */
     public Location getCenter() {
-        return center;
+        return  com.hub.room.RoomBinding.apply("snakeparty", center);
     }
     private int radius = 16;
     private Material floorMaterial = Material.STONE;
@@ -192,7 +192,7 @@ public final class SnakePartyArena {
     }
 
     public Location center() {
-        return center == null ? null : center.clone();
+        return  com.hub.room.RoomBinding.apply("snakeparty", center == null ? null : center.clone());
     }
 
     public void setCenter(Location center) {
@@ -201,7 +201,7 @@ public final class SnakePartyArena {
 
     /** 旁观/观战视角：中心上方 8 格。 */
     public Location spectatorSpot() {
-        return center == null ? null : center.clone().add(0, 8, 0);
+        return  com.hub.room.RoomBinding.apply("snakeparty", center == null ? null : center.clone().add(0, 8, 0));
     }
 
     public World world() {
@@ -225,7 +225,7 @@ public final class SnakePartyArena {
     }
 
     public Location getLobby() {
-        return lobby;
+        return  com.hub.room.RoomBinding.apply("snakeparty", lobby);
     }
 
     public void setLobby(Location lobby) {

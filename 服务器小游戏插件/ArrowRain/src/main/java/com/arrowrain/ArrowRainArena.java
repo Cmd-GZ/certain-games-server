@@ -189,15 +189,15 @@ public final class ArrowRainArena {
     }
 
     public Location lobby() {
-        return lobby == null ? null : lobby.clone();
+        return  com.hub.room.RoomBinding.apply("arrowrain", lobby == null ? null : lobby.clone());
     }
 
     public Location pos1() {
-        return pos1 == null ? null : pos1.clone();
+        return  com.hub.room.RoomBinding.apply("arrowrain", pos1 == null ? null : pos1.clone());
     }
 
     public Location pos2() {
-        return pos2 == null ? null : pos2.clone();
+        return  com.hub.room.RoomBinding.apply("arrowrain", pos2 == null ? null : pos2.clone());
     }
 
     public Location center() {

@@ -19,7 +19,7 @@ public final class LandClaimArena {
 
     /** 供区域声明用（{@code docs/框架不变量.md} I2）。 */
     public Location getCenter() {
-        return center;
+        return  com.hub.room.RoomBinding.apply("landclaim", center);
     }
     private int radius;
 
@@ -165,7 +165,7 @@ public final class LandClaimArena {
     }
 
     public Location center() {
-        return center == null ? null : center.clone();
+        return  com.hub.room.RoomBinding.apply("landclaim", center == null ? null : center.clone());
     }
 
     public int radius() {
@@ -177,7 +177,7 @@ public final class LandClaimArena {
     }
 
     public Location lobby() {
-        return lobby == null ? null : lobby.clone();
+        return  com.hub.room.RoomBinding.apply("landclaim", lobby == null ? null : lobby.clone());
     }
 
     public List<Location> spawns() {

@@ -80,7 +80,7 @@ public class ColorPartyArena {
     }
 
     public Location getPos1() {
-        return pos1;
+        return  com.hub.room.RoomBinding.apply("colorparty", pos1);
     }
 
     public void setPos1(Location pos1) {
@@ -88,7 +88,7 @@ public class ColorPartyArena {
     }
 
     public Location getPos2() {
-        return pos2;
+        return  com.hub.room.RoomBinding.apply("colorparty", pos2);
     }
 
     public void setPos2(Location pos2) {
@@ -96,7 +96,7 @@ public class ColorPartyArena {
     }
 
     public Location getSpawn() {
-        return spawn;
+        return  com.hub.room.RoomBinding.apply("colorparty", spawn);
     }
 
     public void setSpawn(Location spawn) {
@@ -104,7 +104,7 @@ public class ColorPartyArena {
     }
 
     public Location getLobbyPoint() {
-        return lobbyPoint;
+        return  com.hub.room.RoomBinding.apply("colorparty", lobbyPoint);
     }
 
     public void setLobbyPoint(Location lobbyPoint) {
@@ -112,7 +112,7 @@ public class ColorPartyArena {
     }
 
     public Location getPanelPos1() {
-        return panelPos1;
+        return  com.hub.room.RoomBinding.apply("colorparty", panelPos1);
     }
 
     public void setPanelPos1(Location panelPos1) {
@@ -120,7 +120,7 @@ public class ColorPartyArena {
     }
 
     public Location getPanelPos2() {
-        return panelPos2;
+        return  com.hub.room.RoomBinding.apply("colorparty", panelPos2);
     }
 
     public void setPanelPos2(Location panelPos2) {

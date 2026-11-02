@@ -21,12 +21,12 @@ public final class TNTBattleArena {
 
     /** 场地边界角 1（供区域声明用，{@code docs/框架不变量.md} I2）。 */
     public Location getPos1() {
-        return pos1;
+        return  com.hub.room.RoomBinding.apply("tntbattle", pos1);
     }
 
     /** 场地边界角 2。 */
     public Location getPos2() {
-        return pos2;
+        return  com.hub.room.RoomBinding.apply("tntbattle", pos2);
     }
     private Location lobby;
     private final List<Location> redSpawns = new ArrayList<>();
@@ -252,15 +252,15 @@ public final class TNTBattleArena {
     }
 
     public Location lobby() {
-        return lobby == null ? null : lobby.clone();
+        return  com.hub.room.RoomBinding.apply("tntbattle", lobby == null ? null : lobby.clone());
     }
 
     public Location pos1() {
-        return pos1 == null ? null : pos1.clone();
+        return  com.hub.room.RoomBinding.apply("tntbattle", pos1 == null ? null : pos1.clone());
     }
 
     public Location pos2() {
-        return pos2 == null ? null : pos2.clone();
+        return  com.hub.room.RoomBinding.apply("tntbattle", pos2 == null ? null : pos2.clone());
     }
 
     public String sizeText() {

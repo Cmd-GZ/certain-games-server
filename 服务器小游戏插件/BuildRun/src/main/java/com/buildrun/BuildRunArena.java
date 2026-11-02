@@ -99,7 +99,7 @@ public class BuildRunArena {
     }
 
     public Location getPos1() {
-        return pos1;
+        return  com.hub.room.RoomBinding.apply("buildrun", pos1);
     }
 
     public void setPos1(Location pos1) {
@@ -107,7 +107,7 @@ public class BuildRunArena {
     }
 
     public Location getPos2() {
-        return pos2;
+        return  com.hub.room.RoomBinding.apply("buildrun", pos2);
     }
 
     public void setPos2(Location pos2) {
@@ -142,7 +142,7 @@ public class BuildRunArena {
     }
 
     public Location getSpawn() {
-        return spawn;
+        return  com.hub.room.RoomBinding.apply("buildrun", spawn);
     }
 
     public void setSpawn(Location spawn) {
@@ -150,7 +150,7 @@ public class BuildRunArena {
     }
 
     public Location getLobby() {
-        return lobby;
+        return  com.hub.room.RoomBinding.apply("buildrun", lobby);
     }
 
     public void setLobby(Location lobby) {

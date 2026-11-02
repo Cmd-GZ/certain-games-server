@@ -59,7 +59,7 @@ public class MurderMysteryArena {
     }
 
     public Location getPos1() {
-        return pos1;
+        return  com.hub.room.RoomBinding.apply("murdermystery", pos1);
     }
 
     public void setPos1(Location pos1) {
@@ -67,7 +67,7 @@ public class MurderMysteryArena {
     }
 
     public Location getPos2() {
-        return pos2;
+        return  com.hub.room.RoomBinding.apply("murdermystery", pos2);
     }
 
     public void setPos2(Location pos2) {
@@ -75,7 +75,7 @@ public class MurderMysteryArena {
     }
 
     public Location getCenter() {
-        return center;
+        return  com.hub.room.RoomBinding.apply("murdermystery", center);
     }
 
     public void setCenter(Location center) {
@@ -83,7 +83,7 @@ public class MurderMysteryArena {
     }
 
     public Location getLobbyPoint() {
-        return lobbyPoint;
+        return  com.hub.room.RoomBinding.apply("murdermystery", lobbyPoint);
     }
 
     public void setLobbyPoint(Location lobbyPoint) {
