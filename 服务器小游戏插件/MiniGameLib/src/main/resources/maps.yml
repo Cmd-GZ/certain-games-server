@@ -2,12 +2,12 @@ maps:
   snakeparty:
     snakeparty_mini_game:
       entry:
-        template: snakeparty_mini_game
+        template: mini_game
         x: 258
         y: 34
         z: 296
       worlds:
-      - template: snakeparty_mini_game
+      - template: mini_game
         rules:
           pvp: false
           difficulty: NORMAL
@@ -25,12 +25,12 @@ maps:
   animalslaughter:
     animalslaughter_mini_game:
       entry:
-        template: animalslaughter_mini_game
+        template: mini_game
         x: 12
         y: 50
         z: 302
       worlds:
-      - template: animalslaughter_mini_game
+      - template: mini_game
         rules:
           pvp: true
           difficulty: NORMAL
@@ -48,12 +48,12 @@ maps:
   anvilbattle:
     anvilbattle_mini_game:
       entry:
-        template: anvilbattle_mini_game
+        template: mini_game
         x: 614
         y: 58
         z: -179.5
       worlds:
-      - template: anvilbattle_mini_game
+      - template: mini_game
         rules:
           pvp: true
           difficulty: NORMAL
@@ -71,12 +71,12 @@ maps:
   digdown:
     一号场:
       entry:
-        template: digdown_mini_game
+        template: mini_game
         x: 647
         y: 45
         z: 19
       worlds:
-      - template: digdown_mini_game
+      - template: mini_game
         rules:
           pvp: false
           difficulty: NORMAL
@@ -94,12 +94,12 @@ maps:
   firejumper:
     firejumper_mini_game:
       entry:
-        template: firejumper_mini_game
+        template: mini_game
         x: 633
         y: 78
         z: 582.5
       worlds:
-      - template: firejumper_mini_game
+      - template: mini_game
         rules:
           pvp: false
           difficulty: NORMAL
@@ -117,7 +117,7 @@ maps:
   tntbattle:
     双岛:
       worlds:
-      - template: tntbattle_mini_game
+      - template: mini_game
         rules:
           pvp: true
           difficulty: NORMAL
@@ -134,12 +134,12 @@ maps:
           z2: 101
     废墟:
       entry:
-        template: tntbattle_tnt
+        template: tnt
         x: 113
         y: 174
         z: 120.5
       worlds:
-      - template: tntbattle_tnt
+      - template: tnt
         rules:
           pvp: true
           difficulty: NORMAL
@@ -157,12 +157,12 @@ maps:
   murdermystery:
     圣诞工厂:
       entry:
-        template: murdermystery_mm
+        template: mm
         x: -2.5
         y: 67
         z: 0
       worlds:
-      - template: murdermystery_mm
+      - template: mm
         rules:
           pvp: false
           difficulty: NORMAL
@@ -179,12 +179,12 @@ maps:
           z2: 60.0
     ship:
       entry:
-        template: murdermystery_mm
+        template: mm
         x: 146.5
         y: 73
         z: -158.5
       worlds:
-      - template: murdermystery_mm
+      - template: mm
         rules:
           pvp: false
           difficulty: NORMAL
@@ -201,12 +201,12 @@ maps:
           z2: -47.7
     档案室顶层:
       entry:
-        template: murdermystery_mm
+        template: mm
         x: 490
         y: 44
         z: -182
       worlds:
-      - template: murdermystery_mm
+      - template: mm
         rules:
           pvp: false
           difficulty: NORMAL
@@ -223,12 +223,12 @@ maps:
           z2: -103.1
     别墅:
       entry:
-        template: murdermystery_mm
+        template: mm
         x: -40.5
         y: 121
         z: 285.5
       worlds:
-      - template: murdermystery_mm
+      - template: mm
         rules:
           pvp: false
           difficulty: NORMAL
@@ -246,12 +246,12 @@ maps:
   landclaim:
     landclaim_mini_game:
       entry:
-        template: landclaim_mini_game
+        template: mini_game
         x: 20
         y: -14
         z: -207
       worlds:
-      - template: landclaim_mini_game
+      - template: mini_game
         rules:
           pvp: false
           difficulty: NORMAL
@@ -269,12 +269,12 @@ maps:
   hotpotato:
     群系:
       entry:
-        template: hotpotato_hp
+        template: hp
         x: 11
         y: 2
         z: -76
       worlds:
-      - template: hotpotato_hp
+      - template: hp
         rules:
           pvp: false
           difficulty: NORMAL
@@ -292,12 +292,12 @@ maps:
   football:
     足球场:
       entry:
-        template: football_duel
+        template: duel
         x: 202
         y: -5
         z: 57
       worlds:
-      - template: football_duel
+      - template: duel
         rules:
           pvp: true
           difficulty: NORMAL
@@ -315,12 +315,12 @@ maps:
   jumpfill:
     jumpfill_mini_game:
       entry:
-        template: jumpfill_mini_game
+        template: mini_game
         x: 22
         y: 0
         z: 22
       worlds:
-      - template: jumpfill_mini_game
+      - template: mini_game
         rules:
           pvp: false
           difficulty: NORMAL
@@ -338,12 +338,12 @@ maps:
   duel:
     重锤:
       entry:
-        template: duel_duel
+        template: duel
         x: 17.5
         y: -1
         z: 17
       worlds:
-      - template: duel_duel
+      - template: duel
         rules:
           pvp: true
           difficulty: NORMAL
@@ -383,12 +383,12 @@ maps:
   grouprace:
     grouprace_mini_game:
       entry:
-        template: grouprace_mini_game
+        template: mini_game
         x: -265
         y: 28
         z: -97
       worlds:
-      - template: grouprace_mini_game
+      - template: mini_game
         rules:
           pvp: false
           difficulty: NORMAL
@@ -406,12 +406,12 @@ maps:
   buildrun:
     红地板:
       entry:
-        template: buildrun_gtb
+        template: gtb
         x: -16
         y: 127
         z: -123
       worlds:
-      - template: buildrun_gtb
+      - template: gtb
         rules:
           pvp: false
           difficulty: NORMAL
@@ -429,12 +429,12 @@ maps:
   hillking:
     hillking_mini_game:
       entry:
-        template: hillking_mini_game
+        template: mini_game
         x: 627
         y: 53
         z: 307
       worlds:
-      - template: hillking_mini_game
+      - template: mini_game
         rules:
           pvp: false
           difficulty: NORMAL
@@ -452,12 +452,12 @@ maps:
   luckypillar:
     虚空:
       entry:
-        template: luckypillar_lp
+        template: lp
         x: 79
         y: 102
         z: 74
       worlds:
-      - template: luckypillar_lp
+      - template: lp
         rules:
           pvp: false
           difficulty: NORMAL
@@ -475,12 +475,12 @@ maps:
   tntrun:
     TNTRUNround:
       entry:
-        template: tntrun_tr
+        template: tr
         x: 17
         y: -2
         z: 17.5
       worlds:
-      - template: tntrun_tr
+      - template: tr
         rules:
           pvp: false
           difficulty: NORMAL
@@ -498,12 +498,12 @@ maps:
   knockback:
     knockback_mini_game:
       entry:
-        template: knockback_mini_game
+        template: mini_game
         x: 267.5
         y: 30
         z: -201
       worlds:
-      - template: knockback_mini_game
+      - template: mini_game
         rules:
           pvp: true
           difficulty: NORMAL
@@ -521,12 +521,12 @@ maps:
   colorparty:
     玻璃:
       entry:
-        template: colorparty_duel
+        template: duel
         x: 78
         y: 100
         z: -83
       worlds:
-      - template: colorparty_duel
+      - template: duel
         rules:
           pvp: false
           difficulty: NORMAL
