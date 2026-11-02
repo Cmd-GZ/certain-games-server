@@ -1,5 +1,5 @@
 name: GameWorlds
-version: '1.1.1'
+version: '1.2.0'
 main: com.gameworlds.GameWorldsPlugin
 api-version: '26.2'
 description: 小游戏多世界：启动时自动创建/加载各游戏世界并按配置套用世界规则（禁刷怪、固定时间、PvP 按游戏）

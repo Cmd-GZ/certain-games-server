@@ -426,6 +426,37 @@ public final class GameWorldsPlugin extends JavaPlugin implements CommandExecuto
                 }
                 return true;
             }
+            case "load" -> {
+                // `/gw create template X` 只**登记**不建目录（模板不自动加载），
+                // 而它的提示语一直写着"用 /gw load X 进入编辑" —— 但以前**没有这个子命令**，
+                // 提示指向了不存在的命令（重构前的残留）。这里把它补上：
+                // 按需创建/加载一个已登记的世界（模板也能加载，用于建图）。
+                if (!admin(sender)) return true;
+                if (args.length < 2) {
+                    send(sender, "&c用法：/gw load <世界名>");
+                    return true;
+                }
+                String name = args[1];
+                World loaded = Bukkit.getWorld(name);
+                if (loaded != null) {
+                    send(sender, "&7世界 &f" + name + " &7已经是加载状态。");
+                    managed.put(name, loaded);
+                    return true;
+                }
+                ConfigurationSection wsL = getConfig().getConfigurationSection("worlds." + name);
+                if (wsL == null) {
+                    send(sender, "&c世界 &e" + name + "&c 没有登记过（先 /gw create template " + name + "）。");
+                    return true;
+                }
+                World wL = loadOrCreate(name, wsL);
+                if (wL == null) {
+                    send(sender, "&c加载失败，见控制台日志。");
+                    return true;
+                }
+                managed.put(name, wL);
+                send(sender, "&a已加载世界 &e" + name + "&7（用 /gw tp " + name + " 进去）");
+                return true;
+            }
             case "tp" -> {
                 if (!admin(sender)) return true;
                 if (!(sender instanceof Player p)) {

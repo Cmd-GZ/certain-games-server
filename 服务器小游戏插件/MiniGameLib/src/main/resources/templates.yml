@@ -398,3 +398,20 @@ templates:
       x2: 34
       y2: 47
       z2: 34
+  arrowrain_pvp:
+    game: arrowrain
+    folder: tmpl_arrowrain_pvp
+    rules:
+      pvp: true
+      difficulty: NORMAL
+      mob-spawning: false
+      keep-inventory: false
+      fixed-time: 6000
+    regions:
+    - name: ''
+      x1: 37
+      y1: 38
+      z1: 11
+      x2: 57
+      y2: 38
+      z2: 31
