@@ -560,7 +560,13 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
 
     /** 派对当前所在的房间（房间化之后由它提供世界与场地）；没有则 null。 */
     private com.hub.room.RoomManager.Room partyRoom() {
-        return com.hub.room.RoomManager.activeFor(GAME);
+        // 注意：本类的 GAME 是**显示名**（"街机派对"），而房间的 game 是**游戏 key**（arcadeparty）。
+        // 两者不能混用 —— 混了的结果是"房间明明在，派对却看不见它"（池子不取交集、也不委派）。
+        com.hub.room.RoomManager.Room r = com.hub.room.RoomManager.activeFor("arcadeparty");
+        if (r == null) {
+            r = com.hub.room.RoomManager.activeFor("arcade");
+        }
+        return r;
     }
 
     /** 该游戏当前的空闲场地（等待中、没有对局在跑）；没有就返回空列表。 */
@@ -794,6 +800,23 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             broadcastWaiting("&c没有启用任何小游戏（config.yml 的 games 段或 /arcade menu）。");
             return;
         }
+        // **房间模式**：只打这个房间里**真有场地**的子游戏（房间地图是事实源）。
+        // 否则会出现"派对选了 4 个游戏、房间里只有 1 个"的情况——那些关卡根本没地方跑。
+        com.hub.room.RoomManager.Room roomNow = partyRoom();
+        plugin.getLogger().info("[派对调试] partyRoom=" + (roomNow == null ? "null"
+                : roomNow.roomId + "/" + roomNow.game() + " 子游戏=" + roomNow.subGames()));
+        if (roomNow != null) {
+            List<String> inRoom = roomNow.subGames();
+            if (!inRoom.isEmpty()) {
+                pool.retainAll(inRoom);
+                plugin.getLogger().info("[派对] 房间 " + roomNow.roomId + " 提供的子游戏："
+                        + String.join(", ", inRoom) + "；取交集后可选 " + pool.size() + " 个");
+                if (pool.isEmpty()) {
+                    broadcastWaiting("&c这个房间里没有可玩的小游戏（检查地图数据）。");
+                    return;
+                }
+            }
+        }
         // flow-game 非空 = 本场只允许这几个小游戏（两种 flow 都生效；房间化之后它会来自房间模板）
         String pinned = flowGame();
         if (!pinned.isEmpty()) {
@@ -935,17 +958,23 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             // **父级委派**：房间模式下，把"这一关在哪个世界、哪块场地、哪些人"交给子游戏，
             // 子游戏据此初始化（它不会自己去查房间）。委派在整关期间保持有效，关卡结束后清除。
             com.hub.room.RoomManager.Room room = partyRoom();
-            if (room != null && currentArena != null) {
+            if (room != null) {
+                // 房间模式：场地与世界都从房间里来。`currentArena` 只有 arena-aware 的游戏才有，
+                // 其它子游戏就取它在这张地图里的第一块场地（通常只有一块）。
                 org.bukkit.World stageWorld = null;
+                String stageArena = currentArena;
                 for (com.hub.room.RoomManager.ArenaSlot slot : room.arenasOf(currentGameKey)) {
-                    if (slot.arenaName().equals(currentArena)) {
-                        stageWorld = slot.world();
-                        break;
+                    if (currentArena != null && !slot.arenaName().equals(currentArena)) {
+                        continue;
                     }
+                    stageWorld = slot.world();
+                    stageArena = slot.arenaName();
+                    break;
                 }
                 if (stageWorld != null) {
+                    currentArena = stageArena;
                     com.hub.room.GameDelegation.begin(currentGameKey, stageWorld,
-                            currentArena, new ArrayList<>(transitionParticipants));
+                            stageArena, new ArrayList<>(transitionParticipants));
                     plugin.getLogger().info("[派对] 已委派 " + currentGameKey + " 到房间 "
                             + room.roomId + " 的世界 " + stageWorld.getName()
                             + "（场地 " + currentArena + "，"

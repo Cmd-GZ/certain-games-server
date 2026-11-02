@@ -144,13 +144,15 @@ else
 fi
 
 if [ "$done_seen" = 1 ]; then
-  sleep 3
+  # 多等一会再让假玩家连：服务器刚 Done 时还在收尾（存档/区块），
+  # 这期间登录很容易被服务端判 slow_login 踢掉，重试一次要 30s，窗口很快耗尽。
+  sleep 10
   FAKE_JOB=""
   if [ -n "$FAKE_NAME" ]; then
     echo "== 假玩家 $FAKE_NAME 命令: $FAKE_CMDS（延迟 ${FAKE_DELAY}s，挂 ${FAKE_STAY}s）"
     python3 "$ROOT/tools/fakeclient.py" --port 25560 --name "$FAKE_NAME" \
         --commands "$FAKE_CMDS" --delay "$FAKE_DELAY" --stay "$FAKE_STAY" \
-        --connect-timeout 60 > "$ROOT/.server/fakeclient.log" 2>&1 &
+        --connect-timeout 180 > "$ROOT/.server/fakeclient.log" 2>&1 &
     FAKE_JOB=$!
   fi
   if [ -n "$CMDS" ]; then

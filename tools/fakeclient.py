@@ -174,7 +174,7 @@ class Conn:
 
 # ---------------- 登录流程 ----------------
 
-def login(conn, name, port):
+def login(conn, name, port, timeout=60.0):
     host = "127.0.0.1"
     handshake = (write_varint(PROTOCOL) + write_string(host)
                  + struct.pack(">H", port)
@@ -182,7 +182,7 @@ def login(conn, name, port):
     conn.send(0x00, handshake)
     conn.send(SB_LOGIN_HELLO, write_string(name) + uuid.uuid4().bytes)
 
-    deadline = time.time() + 20
+    deadline = time.time() + timeout
     while time.time() < deadline:
         packet = conn.read_packet()
         if packet is None:
@@ -208,7 +208,7 @@ def login(conn, name, port):
                 return
         if conn.state == STATE_PLAY:
             return
-    raise RuntimeError("登录超时（20s 没进游戏阶段）")
+    raise RuntimeError(f"登录超时（{timeout:.0f}s 没进游戏阶段）")
 
 
 def handle_config(conn, pid, payload):
@@ -279,6 +279,8 @@ def main():
     ap.add_argument("--gap", type=float, default=1.0, help="命令之间的间隔（秒）")
     ap.add_argument("--stay", type=float, default=40.0, help="最后一条命令之后再挂多久（秒）")
     ap.add_argument("--connect-timeout", type=float, default=180.0, help="等服务器开服的超时（秒）")
+    ap.add_argument("--login-timeout", type=float, default=60.0,
+                    help="单次登录阶段等多久（秒）。服务器加载世界越多启动越慢，默认 60")
     ap.add_argument("--sync-timeout", type=float, default=90.0,
                     help="多个假玩家**等所有人登录成功**的最长时间（秒）。"
                          "设 0 = 不等（旧行为：各自按自己登录时刻算时间表）")
@@ -334,7 +336,7 @@ def run_one(args, name, commands, extra_delay, barrier=None):
             continue
         log(f"已连上 {args.host}:{args.port}，以 {name} 登录")
         try:
-            login(attempt, name, args.port)
+            login(attempt, name, args.port, args.login_timeout)
             conn = attempt
             break
         except Exception as exc:                  # noqa: BLE001 —— 登录阶段重试
