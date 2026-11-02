@@ -90,6 +90,34 @@ public final class GameMaps {
                 + BY_GAME.values().stream().mapToInt(Map::size).sum() + " 张地图");
     }
 
+    /**
+     * 把一张**子小游戏**的地图**套壳**成"只有一个游戏的派对"地图。
+     *
+     * <p>为什么需要：子小游戏被单独打开时，按 D15 应当走**派对**的流程（{@code PARTY_OF_ONE}），
+     * 房间的拥有者永远是派对。所以这里把
+     * {@code maps.<子游戏>.<地图>} 转成
+     * {@code game = "arcadeparty"}、区域标注原属子游戏的同一份世界计划。
+     *
+     * @param src 子小游戏自己的地图定义
+     * @return 套壳后的地图（房间会以 arcadeparty 的身份创建）
+     */
+    public static GameMap wrapAsParty(GameMap src) {
+        if (src == null) {
+            return null;
+        }
+        List<GameMap.WorldPlan> worlds = new ArrayList<>();
+        for (GameMap.WorldPlan wp : src.worlds()) {
+            List<GameMap.RegionPlan> tagged = new ArrayList<>();
+            for (GameMap.RegionPlan rp : wp.regions()) {
+                // 区域记住"它属于哪个子游戏"，派对换关/开局就靠这个找场地
+                tagged.add(new GameMap.RegionPlan(rp.name(), rp.x1(), rp.y1(), rp.z1(),
+                        rp.x2(), rp.y2(), rp.z2(), rp.rules(), src.game()));
+            }
+            worlds.add(new GameMap.WorldPlan(wp.templateKey(), wp.rules(), tagged));
+        }
+        return new GameMap("arcadeparty", src.game() + ":" + src.name(), worlds, src.entry());
+    }
+
     /** 某张地图的定义；没有返回 null。 */
     public static GameMap get(String game, String map) {
         Map<String, GameMap> byName = BY_GAME.get(game);

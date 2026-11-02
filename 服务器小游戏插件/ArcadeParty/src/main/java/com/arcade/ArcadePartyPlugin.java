@@ -15,6 +15,13 @@ public final class ArcadePartyPlugin extends JavaPlugin {
         manager = new ArcadePartyManager(this);
         manager.load();
 
+        // 登记"子小游戏"范围（唯一事实源就是本插件的 games: 配置）。
+        // 框架据此判断：某个游戏被单独打开时要不要**套壳成派对**（PARTY_OF_ONE）。
+        var gamesSec = getConfig().getConfigurationSection("games");
+        com.hub.room.PartyGames.register(gamesSec == null ? java.util.List.of() : gamesSec.getKeys(false));
+        getLogger().info("子小游戏范围已登记：" + com.hub.room.PartyGames.size() + " 个"
+                + "（" + String.join(", ", com.hub.room.PartyGames.all()) + "）");
+
         ArcadeMenu menu = new ArcadeMenu(this, manager);
         ArcadePartyCommand command = new ArcadePartyCommand(this, manager, menu);
         PluginCommand arcade = getCommand("arcade");

@@ -596,13 +596,44 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
      * 等模板登记加上地图清单后，这里换成"按地图查所属模板"即可，**命令形式不用变**。
      */
     private void createRoom(CommandSender sender, String[] args) {
-        if (args.length < 3) {
+        if (args.length < 2) {
             sender.sendMessage(LEGACY.deserialize("&c用法：/hub create <游戏> <地图> [房间名]"));
+            sender.sendMessage(LEGACY.deserialize("&7　子小游戏请写成 &f/hub create arcadeparty:<子游戏> [<地图>]"
+                    + " &7（= 套壳成只有它的派对）"));
             sender.sendMessage(LEGACY.deserialize("&7可用模板：&f/hub room templates"));
             return;
         }
         String game = args[1];
-        String map = args[2];
+        String map = args.length >= 3 ? args[2] : "";
+        String subGame = null;
+
+        // **显式写法**：`/hub create arcadeparty:<子游戏> [<地图>]`
+        // —— 强调"这是子小游戏，套壳成只有它的派对"（D15）。
+        int colon = game.indexOf(':');
+        if (colon > 0) {
+            String parent = game.substring(0, colon);
+            subGame = game.substring(colon + 1);
+            if (!"arcadeparty".equalsIgnoreCase(parent)) {
+                sender.sendMessage(LEGACY.deserialize("&c目前只支持 &farcadeparty:<子游戏>&c 这种写法。"));
+                return;
+            }
+            if (!com.hub.room.PartyGames.isSubGame(subGame)) {
+                sender.sendMessage(LEGACY.deserialize("&c&f" + subGame + " &c不是子小游戏（它自己拥有房间，"
+                        + "直接用 &f/hub create " + subGame + " <地图>&c）。"));
+                return;
+            }
+            if (map.isBlank()) {
+                var maps = com.hub.room.GameMaps.mapNames(subGame);
+                if (maps.size() == 1) {
+                    map = maps.get(0);
+                } else {
+                    sender.sendMessage(LEGACY.deserialize("&c&f" + subGame + " &c有 " + maps.size()
+                            + " 张地图，请指定：&f" + String.join(" / ", maps)));
+                    return;
+                }
+            }
+            game = subGame;
+        }
 
         // ① **地图登记表**（maps.yml）优先：新模型下这是唯一事实源。
         //    一张地图可能散在多个世界（派对就是 3 个），所以这里可能一次造出多个世界实例。
@@ -614,9 +645,18 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             }
         }
         if (gameMap != null) {
+            // **子小游戏套壳**（D15）：单独打开子小游戏 = 打一场"只有一个游戏的派对"。
+            // 房间的拥有者永远是派对，子游戏只是被父级委派去跑这一关。
+            boolean wrapped = false;
+            if (subGame != null || com.hub.room.PartyGames.isSubGame(gameMap.game())) {
+                gameMap = com.hub.room.GameMaps.wrapAsParty(gameMap);
+                wrapped = true;
+            }
+            final boolean wrappedFinal = wrapped;
             final String desiredId = args.length >= 4 ? args[3] : null;
             sender.sendMessage(LEGACY.deserialize("&7正在按地图 &f" + map + " &7创建房间（"
-                    + gameMap.worlds().size() + " 个世界）…"));
+                    + gameMap.worlds().size() + " 个世界）"
+                    + (wrappedFinal ? "&7【子小游戏 → 套壳成单人派对】" : "") + "…"));
             com.hub.room.RoomManager.Room room =
                     com.hub.room.RoomManager.createForMap(gameMap, desiredId);
             if (room == null) {
@@ -652,6 +692,8 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
         }
         final String tpl = templateKey;
         final String arenaForRoom = arenaName;
+        final String gameFinal = game;
+        final String mapFinal = map;
         sender.sendMessage(LEGACY.deserialize("&7正在从模板 &f" + tpl + " &7创建房间…"));
         String desired = args.length >= 4 ? args[3] : null;   // 可选：指定房间名
         com.hub.room.RoomManager.createAsync(tpl, desired, arenaForRoom, room -> {
@@ -660,7 +702,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
                 return;
             }
             getLogger().info("[/hub create] " + sender.getName() + " 建房间 " + room.roomId
-                    + "（游戏 " + game + "，地图 " + map + "，模板 " + tpl
+                    + "（游戏 " + gameFinal + "，地图 " + mapFinal + "，模板 " + tpl
                     + (arenaForRoom.isBlank() ? "" : "，场地名 " + arenaForRoom) + "）");
             sender.sendMessage(LEGACY.deserialize("&a已创建房间 &f" + room.roomId
                     + "&7（模板 &f" + tpl + "&7）。加入：&f/hub join " + room.roomId));

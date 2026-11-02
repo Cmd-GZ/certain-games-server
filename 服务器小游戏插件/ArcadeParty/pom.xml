@@ -6,7 +6,7 @@
 
     <groupId>com.arcade</groupId>
     <artifactId>arcade-party</artifactId>
-    <version>1.5.0</version>
+    <version>1.6.0</version>
     <packaging>jar</packaging>
 
     <name>ArcadeParty</name>
@@ -39,7 +39,7 @@
         <dependency>
             <groupId>com.hub</groupId>
             <artifactId>minigame-lib</artifactId>
-            <version>1.15.0</version>
+            <version>1.16.0</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
