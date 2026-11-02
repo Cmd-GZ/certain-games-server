@@ -49,7 +49,7 @@ public final class RoomActions {
         p.closeInventory();
         // 传送到**房间的入口点**（不是世界默认出生点）：多世界房间只有一个入口，
         // 由地图数据决定；游戏侧 init 还可以再按玩家调整具体出生点。
-        org.bukkit.Location entry = room.entry != null ? room.entry : room.world.getSpawnLocation();
+        org.bukkit.Location entry = room.entry() != null ? room.entry() : room.world.getSpawnLocation();
         if (entry != null) {
             p.teleport(entry);
         }

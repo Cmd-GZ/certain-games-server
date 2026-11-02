@@ -86,11 +86,31 @@ public final class RoomManager {
         public final java.util.List<WorldInstance> instances = new java.util.ArrayList<>();
 
         /**
-         * 入口点：{@code /hub join} 后玩家先出现在这。
+         * 入口点：{@code /hub join} 后玩家先出现在这。**对游戏只读**。
          *
-         * <p>**入口点 ≠ 出生点**：这里只保证"进得来"，游戏侧 init 可以再按玩家设置具体出生点。
+         * <p>**入口点 ≠ 出生点**：这里只保证"进得来"。具体某人落在哪，属于**游戏自己的状态**
+         * （例如游戏内的 {@code Map<UUID, Location>}），不要让游戏往房间上写 ——
+         * 房间的这份数据由**地图声明**决定、由**框架**写入，游戏再写就是两个写者（违反 R2），
+         * 而且房间行为会变成"取决于最后一个跑过的游戏"。
+         *
+         * <p>写入只能走 {@link #setEntryOnce(Location)}，且**只允许一次**（建房时）。
          */
-        public Location entry;
+        private Location entry;
+
+        /** 入口点（只读）。可能为 null（地图没声明、也推导不出来）。 */
+        public Location entry() {
+            return entry;
+        }
+
+        /** 由框架在建房时写入一次；已经写过就忽略并告警（防止被"后来者"覆盖）。 */
+        void setEntryOnce(Location loc) {
+            if (this.entry != null && loc != null) {
+                plugin.getLogger().warning("[房间] " + roomId + " 的入口点被重复设置，已忽略后一次"
+                        + "（房间数据只允许地图声明写入）");
+                return;
+            }
+            this.entry = loc;
+        }
 
         Room(String roomId, WorldTemplate template) {
             this.roomId = roomId;
@@ -495,7 +515,7 @@ public final class RoomManager {
         }
 
         // 入口点：map 里写了就用它（定位到对应世界实例）；否则用第一块区域的中心。
-        room.entry = resolveEntry(room, map);
+        room.setEntryOnce(resolveEntry(room, map));
 
         long tLoad = System.nanoTime();
         ROOMS.put(roomId, room);
