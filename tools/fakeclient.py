@@ -279,6 +279,9 @@ def main():
     ap.add_argument("--gap", type=float, default=1.0, help="命令之间的间隔（秒）")
     ap.add_argument("--stay", type=float, default=40.0, help="最后一条命令之后再挂多久（秒）")
     ap.add_argument("--connect-timeout", type=float, default=180.0, help="等服务器开服的超时（秒）")
+    ap.add_argument("--sync-timeout", type=float, default=90.0,
+                    help="多个假玩家**等所有人登录成功**的最长时间（秒）。"
+                         "设 0 = 不等（旧行为：各自按自己登录时刻算时间表）")
     args = ap.parse_args()
 
     # 支持 "3:hill join;7:arcade join" 这种逐条延迟；不带前缀的用 --gap
@@ -298,12 +301,16 @@ def main():
     names = [n.strip() for n in args.name.split(",") if n.strip()] or ["TestBot"]
     names = names[:4]                      # 最多 4 个，防止手滑起一堆
     if len(names) == 1:
-        return run_one(args, names[0], commands, 0.0)
+        return run_one(args, names[0], commands, 0.0, None)
     results = []
     threads = []
+    # 就绪栅栏：所有 bot 都登录成功后，才**统一起算**命令时间表。
+    # 不加这个的话，谁登得晚谁的命令就晚，需要"两人同时在场"的场景（派对开局、
+    # 满员倒计时、主持人流程）永远凑不齐 —— 以前多次因此白跑整轮冒烟。
+    barrier = threading.Barrier(len(names)) if args.sync_timeout > 0 else None
     for idx, nm in enumerate(names):
         t = threading.Thread(target=lambda nm=nm, idx=idx: results.append(
-            run_one(args, nm, commands, idx * args.stagger)), name=nm, daemon=True)
+            run_one(args, nm, commands, idx * args.stagger, barrier)), name=nm, daemon=True)
         t.start()
         threads.append(t)
         time.sleep(args.stagger)           # 错开登录，避免同一 tick 挤进来
@@ -313,7 +320,7 @@ def main():
     return 0 if results and all(r == 0 for r in results) else 1
 
 
-def run_one(args, name, commands, extra_delay):
+def run_one(args, name, commands, extra_delay, barrier=None):
     """跑一个假玩家：连上、登录、按时间表发命令、挂到最后。返回 0/1。"""
     # 服务器可能还没开好 / 登录可能被拖慢（刚开服时实测有 20s+ 的）：连不上就重试，
     # 登录阶段超时也重连（一个卡住的连接会一直挂着，不值得等）。
@@ -339,7 +346,21 @@ def run_one(args, name, commands, extra_delay):
             time.sleep(1.0)
     if conn is None:
         log("连不上服务器 / 登录一直失败")
+        # 自己没进来也要把栅栏放掉，否则其他人会一直等
+        if barrier is not None:
+            try:
+                barrier.abort()
+            except Exception:                 # noqa: BLE001
+                pass
         return 1
+
+    if barrier is not None:
+        log(f"已登录，等待其它假玩家就绪（最多 {args.sync_timeout:.0f}s）")
+        try:
+            barrier.wait(timeout=args.sync_timeout)
+            log(f"[ready] {name}")
+        except threading.BrokenBarrierError:
+            log("等待其它假玩家超时 / 已放弃，先按自己的节奏继续")
 
     try:
         at = time.time() + args.delay + extra_delay
