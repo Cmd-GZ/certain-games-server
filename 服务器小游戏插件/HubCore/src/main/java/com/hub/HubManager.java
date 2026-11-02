@@ -662,15 +662,15 @@ public class HubManager implements HubService {
             case "cmd" -> {
                 if (parsed[3] != null && !parsed[3].isEmpty()) {
                     p.closeInventory();
-                    // **兜底**：菜单里若配了直连命令（如 `gtb join`），而那个游戏已经房间化，
-                    // 直连必然失败（场地是 tpl: 令牌，没有存活房间 → "场地未配置完整"）。
-                    // 这里改成打开房间 UI，走正常的"造房/选房"流程。
+                    // 直连命令是**上游遗留的逃生口**，重构后游戏一律走房间（`game:` 动作）。
+                    // 这里不再偷偷改写玩家意图：命中已房间化的游戏就**拒绝并指路**（R3 失败可见），
+                    // 真正的修法是把菜单那格的 action 改成 `game:<显示名>`。
                     String head = parsed[3].split("\\s+")[0].toLowerCase(java.util.Locale.ROOT);
-                    String matchedCmd = matchRoomGame(head);
-                    if (matchedCmd != null) {
-                        plugin.getLogger().info("[/hub 菜单] 槽位直连命令 /" + parsed[3]
-                                + " 已房间化 → 转房间 UI（" + matchedCmd + "）");
-                        com.hub.gui.RoomGui.open(p, matchedCmd, com.hub.gui.RoomGui.Mode.ROOMS);
+                    if (matchRoomGame(head) != null) {
+                        plugin.getLogger().warning("[/hub 菜单] 槽位直连命令 /" + parsed[3]
+                                + " 指向已房间化的游戏，已拒绝；请把该槽位的 action 改成 game:<显示名>");
+                        p.sendMessage(LEGACY.deserialize("&c这个入口还是旧的直连命令，重构后已不可用。"
+                                + "&7请从 &f游戏菜单 &7的对应图标进入（会打开房间列表）。"));
                         return;
                     }
                     Bukkit.dispatchCommand(p, parsed[3]);
@@ -694,6 +694,45 @@ public class HubManager implements HubService {
         var regInfo = plugin.getRegistry().get(game);
         String gameKey = regInfo == null ? null : regInfo.id();
         return com.hub.gui.RoomGui.matchTemplateGame(gameKey);
+    }
+
+    /**
+     * 启动审计（R3 失败可见）：菜单里如果还留着指向"已房间化游戏"的直连命令
+     * （`cmd:gtb join` 这种），**开服时就报出来**。
+     *
+     * <p>为什么不自动改写：菜单是运维的东西，重构期的兜底会把"配置错了"藏起来，
+     * 等重构完就变成永久的技术债。正确做法是让它响，然后改数据 ——
+     * 游戏槽位的 action 应该是 `game:<显示名>`，由框架派生房间流程（R1 单一事实源）。
+     */
+    public void auditMenuActions() {
+        com.hub.gui.RoomGui.init(plugin);
+        var items = plugin.getConfig().getConfigurationSection("menu.items");
+        if (items == null) {
+            return;
+        }
+        int stale = 0;
+        for (String slot : items.getKeys(false)) {
+            String action = items.getString(slot + ".action", "");
+            if (!action.toLowerCase(java.util.Locale.ROOT).startsWith("cmd:")) {
+                continue;
+            }
+            String cmd = action.substring(4).trim();
+            if (cmd.isEmpty()) {
+                continue;
+            }
+            String head = cmd.split("\\s+")[0].toLowerCase(java.util.Locale.ROOT);
+            String roomGame = matchRoomGame(head);
+            if (roomGame != null) {
+                stale++;
+                plugin.getLogger().warning("[/hub 菜单] 槽位 " + slot + " 的 action 是 `" + action
+                        + "`，但游戏 " + roomGame + " 已房间化 —— 直连命令已不可用，"
+                        + "请改成 `game:<显示名>`（例：game:建筑猜猜乐）");
+            }
+        }
+        if (stale > 0) {
+            plugin.getLogger().warning("[/hub 菜单] 共 " + stale + " 个槽位需要修正"
+                    + "（重构后游戏只能从房间进，菜单应使用 game: 动作）");
+        }
     }
 
     /** 点游戏图标：只有 1 个场地才直接进，多个（或还没有场地信息）都打开场地子菜单。 */

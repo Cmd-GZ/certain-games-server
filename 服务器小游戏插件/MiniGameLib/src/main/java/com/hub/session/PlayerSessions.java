@@ -73,6 +73,41 @@ public final class PlayerSessions {
         LEAF.remove(id);
     }
 
+    /**
+     * 有多少玩家正待在**某个游戏**的对局里（含嵌套：派对里的子游戏也算）。
+     * 框架用它判断"能不能安全地让游戏重载配置"——有人在局内就别重载。
+     */
+    public static int countInGame(String gameKey) {
+        if (gameKey == null) {
+            return 0;
+        }
+        int n = 0;
+        for (GameSession s : LEAF.values()) {
+            if (s == null || !s.isActive()) {
+                continue;
+            }
+            for (GameSession node : chainOf0(s)) {
+                if (gameKey.equalsIgnoreCase(node.gameKey())) {
+                    n++;
+                    break;
+                }
+            }
+        }
+        return n;
+    }
+
+    /** 从叶子往上走整条归属链（含自己）。 */
+    private static java.util.List<GameSession> chainOf0(GameSession leaf) {
+        java.util.List<GameSession> out = new java.util.ArrayList<>();
+        GameSession cur = leaf;
+        int guard = 0;
+        while (cur != null && guard++ < 16) {
+            out.add(cur);
+            cur = cur.parent();
+        }
+        return out;
+    }
+
     /** 玩家当前所在的叶子会话；在大厅返回 null。 */
     public static GameSession sessionOf(UUID id) {
         if (id == null) {

@@ -71,6 +71,14 @@ public final class RoomActions {
             // **告诉游戏它在哪个房间**：派对/子游戏据此取场地与委派，不用自己去搜
             //（activeFor 在多房间时返回 null，靠搜是搜不到的）。
             com.hub.room.RoomContext.bind(gameKey, room);
+
+            // **场地懒加载**：游戏在插件启用时解析 `tpl:<模板键>` 会失败（那时还没有房间），
+            // 之后就一直报"场地未配置完整"。框架在这里让游戏**重载一次配置**——
+            // 此时房间已在、令牌能解析了。纯数据驱动（games.yml 的 reload-command），
+            // 不需要每个游戏改代码。
+            //
+            // 只在"该游戏当前没有进行中的对局"时重载：否则会打断另一个房间里的比赛。
+            reloadIfIdle(gameKey);
             if (plugin != null) {
                 plugin.getLogger().info("[/hub join] " + p.getName() + " 执行 " + join
                         + "（房间上下文已绑定 " + gameKey + " -> " + room.roomId + "）");
@@ -83,5 +91,50 @@ public final class RoomActions {
                     + "&7（游戏 &f" + gameKey + "&7 没配 join-command）"));
         }
         return true;
+    }
+
+    /**
+     * 让游戏重载一次配置（场地懒加载用），**仅当它当前没有玩家在局内**。
+     *
+     * <p>命令来自 `games.yml` 的 `reload-command`，缺省用 `join-command` 的首词 + ` reload`
+     * （绝大多数游戏的命令都是 `/<前缀> reload`）。
+     */
+    private static void reloadIfIdle(String gameKey) {
+        try {
+            org.bukkit.plugin.Plugin hub = org.bukkit.Bukkit.getPluginManager().getPlugin("HubCore");
+            if (com.hub.session.PlayerSessions.countInGame(gameKey) > 0) {
+                log(hub, "[/hub join] " + gameKey + " 有人在局内，跳过配置重载（不打断对局）");
+                return;
+            }
+            String cmd = gamesConfig().getString("games." + gameKey + ".reload-command");
+            if (cmd == null || cmd.isBlank()) {
+                String join = gamesConfig().getString("games." + gameKey + ".join-command", "");
+                if (join.isBlank()) {
+                    return;
+                }
+                cmd = join.split("\\s+")[0] + " reload";
+            }
+            // 以**控制台身份**执行：不依赖玩家权限，也不产生"玩家执行了命令"的噪音
+            boolean ok = org.bukkit.Bukkit.dispatchCommand(
+                    org.bukkit.Bukkit.getConsoleSender(), cmd);
+            log(hub, "[/hub join] 让 " + gameKey + " 重载配置：/" + cmd
+                    + (ok ? "" : "（命令是否被识别？）"));
+        } catch (Exception ex) {
+            com.hub.diagnostics.Failures.recordAndWarn("HubCore.进房前重载场地", ex);
+        }
+    }
+
+    private static void log(org.bukkit.plugin.Plugin hub, String msg) {
+        if (hub != null) {
+            hub.getLogger().info(msg);
+        }
+    }
+
+    private static org.bukkit.configuration.ConfigurationSection gamesConfig() {
+        var hub = org.bukkit.Bukkit.getPluginManager().getPlugin("HubCore");
+        if (hub == null) {
+            return new org.bukkit.configuration.MemoryConfiguration();
+        }
+        return ((com.hub.HubCorePlugin) hub).getConfig();
     }
 }

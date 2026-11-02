@@ -77,8 +77,10 @@ public final class GameMaps {
                 GameMap.Entry entry = null;
                 ConfigurationSection es = m.getConfigurationSection("entry");
                 if (es != null) {
+                    // yaw/pitch 可选（缺省 0 = 朝南平视），老地图定义不用改
                     entry = new GameMap.Entry(es.getString("template", ""),
-                            es.getDouble("x"), es.getDouble("y"), es.getDouble("z"));
+                            es.getDouble("x"), es.getDouble("y"), es.getDouble("z"),
+                            (float) es.getDouble("yaw", 0.0), (float) es.getDouble("pitch", 0.0));
                 }
                 byName.put(mapName, new GameMap(game, mapName, plans, entry));
             }

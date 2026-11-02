@@ -66,7 +66,19 @@ public record GameMap(String game, String name, List<WorldPlan> worlds, Entry en
         }
     }
 
-    /** 入口点：玩家进房间后先站在这里（属于哪个模板世界 + 坐标）。 */
-    public record Entry(String templateKey, double x, double y, double z) {
+    /**
+     * 入口点：玩家进房间后先站在这里（属于哪个模板世界 + 坐标 + 朝向）。
+     *
+     * <p>{@code yaw}/{@code pitch} 是 2026-11-03 补的：以前只有坐标，玩家进房间后一律朝南
+     * （yaw=0），站在建造台/棋盘边上要自己转视角。缺省值就是 0（旧 maps.yml 不用改）。
+     * 单位与 Bukkit {@link org.bukkit.Location} 一致：yaw 0=+z（南）、90=-x（西）、180=-z（北）、
+     * 270=+x（东）；pitch 正数=低头。
+     */
+    public record Entry(String templateKey, double x, double y, double z, float yaw, float pitch) {
+
+        /** 兼容老写法：不给朝向就用 0（朝南、平视）。 */
+        public Entry(String templateKey, double x, double y, double z) {
+            this(templateKey, x, y, z, 0f, 0f);
+        }
     }
 }

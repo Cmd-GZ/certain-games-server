@@ -55,6 +55,14 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
         manager = new HubManager(this);
         registry = new GameRegistry(this);
         registry.rescan();
+        // 菜单审计必须**在注册表就绪之后**：它要用 registry 把显示名解析成 gameKey。
+        // （我第一版放在 new HubManager() 之后 → 开服必抛 NPE，被 Failures 吞成一行 WARN，
+        //   审计等于没跑。R3 的价值就在这：异常没被吞掉，一眼看到。）
+        try {
+            manager.auditMenuActions();
+        } catch (Exception ex) {
+            Failures.recordAndWarn("HubCore.菜单审计", ex);
+        }
         menuLayout = new MenuLayout(this);
         menuEditor = new MenuEditor(this, menuLayout);
         // 头衔插件存在时，菜单右下角自动放一个头衔入口（已占用则不覆盖）

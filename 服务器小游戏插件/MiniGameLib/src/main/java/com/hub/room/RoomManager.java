@@ -606,7 +606,8 @@ public final class RoomManager {
             WorldInstance wi = room.instanceOf(e.templateKey());
             World w = wi != null && wi.world != null ? wi.world : room.world;
             if (w != null) {
-                return new Location(w, e.x(), e.y(), e.z());
+                // 朝向也一起带上：不然玩家进房间后一律朝南，还得自己转视角
+                return new Location(w, e.x(), e.y(), e.z(), e.yaw(), e.pitch());
             }
         }
         if (!room.instances().isEmpty() && !room.instances().get(0).plan.regions().isEmpty()) {

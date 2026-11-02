@@ -592,10 +592,16 @@ maps:
   gtb:
     糖果屋:
       entry:
+        # 站在建造台上（27×27 橡木台在 y=69，脚踩 y=70），朝西看整块建造区。
+        # 数值 = GuessTheBuild/config.yml 的 lobby-point（/gtb join 时还会再传一次；
+        # 这里保证"刚进房间、还没 join"的那一瞬间也是站在台上、朝着场地）。
+        # yaw/pitch 是本次给 entry 新加的字段，缺省 0 等于原来的行为。
         template: gtb
-        x: -17.0
-        y: 70
-        z: 17
+        x: -13.32
+        y: 70.0
+        z: 17.58
+        yaw: 91.8
+        pitch: -3.2
       worlds:
       - template: gtb
         rules:
