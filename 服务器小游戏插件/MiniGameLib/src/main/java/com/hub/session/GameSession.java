@@ -298,7 +298,13 @@ public abstract class GameSession {
         // 这样归属链是"派对 ⊃ 子游戏"（I1 允许嵌套），下面的并列检查才不会误杀。
         com.hub.room.GameDelegation.Task task = com.hub.room.GameDelegation.current();
         if (task != null && gameKey.equals(task.game()) && task.parentSession() != null) {
-            adoptUnder(task.parentSession());
+            boolean adopted = adoptUnder(task.parentSession());
+            // R3 失败可见：委派链没能挂上时，玩家会被下面的并列检查拒绝，
+            // 而"为什么被拒"只有这一行日志能说清（真实排查：HillKing 被派对委派后卡在这）。
+            org.bukkit.Bukkit.getLogger().info("[" + gameKey + "] 委派加入：" + p.getName()
+                    + (adopted
+                        ? " 会话已挂到父对局 " + task.parentSession().gameKey() + " 下"
+                        : " 会话未挂到父对局（已有父级或已有人）"));
         }
         List<GameSession> chain = PlayerSessions.chainOf(p.getUniqueId());
         for (GameSession other : chain) {

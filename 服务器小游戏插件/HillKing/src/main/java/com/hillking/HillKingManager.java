@@ -389,22 +389,59 @@ public final class HillKingManager {
     // ---------- 加入 / 离开 ----------
 
     /**
-     * 房间化（R1.5 / D25）：如果这个游戏当前挂着**一个**房间，就把场地换绑到房间世界。
+     * 房间化（R1.5 / D25）：把场地换绑到"这一局实际跑的那个世界实例"。
+     *
+     * <p>⚠️ 取世界的**顺序**是硬要求：
+     * <ol>
+     *   <li><b>父级委派优先</b>：被派对叫来时，世界由父级给（{@link com.hub.room.GameDelegation}）。
+     *       这时**绝不能**去搜"名下有房间"的游戏 —— 房间的 {@code game} 是 {@code arcadeparty}，
+     *       按 {@code hillking} 搜永远搜不到（真实事故：HillKing 被委派后仍跑在**模板世界**
+     *       {@code world_mini_game} 里，派对房间的世界反而是空的）。</li>
+     *   <li>{@link com.hub.room.RoomContext#roomOf(String)}：{@code /hub join} 时框架直接告诉我们。</li>
+     *   <li>最后才是 {@code RoomManager.activeFor}：单开、且该游戏只有一个房间时的老路径。</li>
+     * </ol>
      *
      * <p>这样"同一套坐标"跑在从模板复制出来的房间实例上，而不是配置里那块静态场地。
      * 房间与对局 1:1（D25），所以换绑时机是"玩家进来 / 开局前"。
      */
     private void bindRoomIfAny() {
-        var room = com.hub.room.RoomManager.activeFor(GAME_KEY);
-        if (room == null || room.world == null) {
+        // ① 委派优先（RoomBinding 内部就是"先委派、再 activeFor"），② 再用房间上下文兜底
+        World target = com.hub.room.RoomBinding.worldFor(GAME_KEY);
+        String source = "父级委派";
+        if (target == null) {
+            var room = com.hub.room.RoomContext.roomOf(GAME_KEY);
+            if (room == null) {
+                room = com.hub.room.RoomManager.activeFor(GAME_KEY);
+            }
+            if (room != null) {
+                target = room.world;
+                source = "房间 " + room.roomId;
+            }
+        }
+        // 房间被回收 / 委派过期时世界已经不在 Bukkit 注册表里 —— 当成"没有房间"，换回配置场地
+        if (target != null && Bukkit.getWorld(target.getName()) == null) {
+            plugin.getLogger().info("目标世界 " + target.getName()
+                    + " 已卸载（房间被回收？），忽略这次换绑");
+            target = null;
+        }
+        if (target == null) {
+            World current = arena.center() == null ? null : arena.center().getWorld();
+            if (current != null && Bukkit.getWorld(current.getName()) == null) {
+                arena.rebind(null);   // 场地本来绑在一个已消失的房间世界上：回到配置里的静态场地
+                plugin.getLogger().info("原房间世界已卸载，场地换回配置场地");
+            }
             return;
         }
-        if (arena.center() != null && room.world.equals(arena.center().getWorld())) {
+        if (arena.center() != null && target.equals(arena.center().getWorld())) {
             return;   // 已经绑过了
         }
-        arena.rebind(room.world);
-        plugin.getLogger().info("[HillKing] 已绑定房间 " + room.roomId
-                + "（世界 " + room.world.getName() + "）");
+        arena.rebind(target);
+        plugin.getLogger().info("场地已换绑到" + source + "的世界 " + target.getName());
+    }
+
+    /** 诊断用（R3 失败可见）：记录这次 {@code /hill join} 为什么没进去。 */
+    private void rejectJoin(Player player, String why) {
+        plugin.getLogger().info("拒绝 " + player.getName() + " 加入：" + why);
     }
 
     public void join(Player player) {
@@ -413,28 +450,40 @@ public final class HillKingManager {
         // 上一局结束后会话停在 ENDED（终态），必须换新的，否则这里会被判成"对局进行中"而拒绝加入
         ensureSession();
         if (!isWaitingState()) {
+            rejectJoin(player, "会话状态不是 WAITING（" + (session == null ? "session=null" : session.describe()) + "）");
             Chat.send(player, "&c对局正在进行中，请等这一局结束后再加入。");
             return;
         }
         if (waiting.contains(id)) {
+            // 这不是异常：派对的 startRound 会为"重新 join 一次"再执行一遍关卡命令
+            plugin.getLogger().info(player.getName() + " 已在等待队列里（重复 join，幂等忽略）");
             Chat.send(player, "&e你已经在等待队列中。");
             return;
         }
         if (waiting.size() >= maxPlayers()) {
+            rejectJoin(player, "等待队列已满（" + waiting.size() + "/" + maxPlayers() + "）");
             Chat.send(player, "&c等待队列已满（" + maxPlayers() + " 人）。");
             return;
         }
         if (!arena.isReady()) {
+            rejectJoin(player, "场地未配置完整（缺 " + arena.missing() + "，世界="
+                    + worldNameOf(arena.center()) + "）");
             Chat.send(player, "&c场地还没配置完整（缺 " + arena.missing() + "），请联系管理员。");
+            return;
+        }
+        // I1 / D23：**先**挂会话归属链，成功了才写进本游戏队列。
+        // 反过来的话，归属被拒时会留下"队列里有他、归属链上没他"的半加入状态（doctor 查不出来）。
+        if (session == null || !session.join(player)) {
+            rejectJoin(player, "会话归属链挂接失败（"
+                    + (session == null ? "session=null" : session.describe()) + "）");
+            Chat.send(player, "&c加入失败：你正在另一局游戏里，请先退出那一局。");
             return;
         }
         waiting.add(id);
         joinTick.put(id, (long) Bukkit.getCurrentTick());
         joinSeed.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
-        // I1：把玩家挂到会话的归属链上（否则 doctor 的 [归属] 永远是 0 人、I1 只是名义成立）
-        if (session != null && !session.join(player)) {
-            plugin.getLogger().warning("[HillKing] " + player.getName() + " 加入归属链失败（见 [被吞异常]）");
-        }
+        plugin.getLogger().info(player.getName() + " 加入等待（场地世界 "
+                + worldNameOf(arena.center()) + "，" + waiting.size() + "/" + maxPlayers() + "）");
         clearGameState(player);
         player.setGameMode(GameMode.SURVIVAL);
         resetPlayer(player);
@@ -538,6 +587,9 @@ public final class HillKingManager {
         if (!isWaitingState()) {
             return;
         }
+        // 开局前最后对齐一次场地世界：委派/房间可能是在玩家进来之后才确定的
+        // （派对先 `/hill join`、再进入倒计时；这条路径保证开局一定跑在房间世界里）
+        bindRoomIfAny();
         if (!arena.isReady()) {
             for (UUID id : waiting) {
                 Player p = Bukkit.getPlayer(id);
@@ -579,6 +631,8 @@ public final class HillKingManager {
             scores.put(id, 0);
         }
         secondsLeft = gameSeconds();
+        plugin.getLogger().info("开局：场地世界 " + worldNameOf(arena.center())
+                + "，" + playing.size() + " 人（会话 " + (session == null ? "null" : session.describe()) + "）");
 
         List<Location> spawnOrder = new ArrayList<>(arena.getSpawns());
         java.util.Collections.shuffle(spawnOrder, random);
@@ -651,8 +705,13 @@ public final class HillKingManager {
      * 破坏性游戏（TNTBattle 那种改地形的）尤其依赖这条：**每局一个新房间**才是干净的地形。
      */
     private void destroyRoomAfterMatch() {
-        var room = com.hub.room.RoomManager.activeFor(GAME_KEY);
+        // **只删属于自己的房间**：被派对委派时房间属于派对（room.game()=arcadeparty），
+        // 由派对负责回收，我们不能越权删别人的房间（I2/D25）。
+        var room = com.hub.room.RoomContext.roomOf(GAME_KEY);
         if (room == null) {
+            room = com.hub.room.RoomManager.activeFor(GAME_KEY);
+        }
+        if (room == null || !GAME_KEY.equals(room.game())) {
             return;
         }
         final String roomId = room.roomId;
@@ -1023,6 +1082,11 @@ public final class HillKingManager {
                 Chat.send(p, message);
             }
         }
+    }
+
+    /** 诊断用：坐标所在世界名（不会因为世界为 null 引发 NPE）。 */
+    private static String worldNameOf(Location loc) {
+        return loc == null || loc.getWorld() == null ? "?" : loc.getWorld().getName();
     }
 
     private String nameOf(UUID id) {

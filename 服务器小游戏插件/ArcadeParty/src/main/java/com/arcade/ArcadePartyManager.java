@@ -1139,6 +1139,12 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             return;
         }
         roundResolved = true;
+        // **撤销对子游戏的委派**：这一关结束了，之后别人单开这个子小游戏时，
+        // 绝不能还读到本场派对的房间世界（真实风险：委派残留 → 场地被绑到别人的房间）。
+        if (com.hub.room.GameDelegation.current() != null) {
+            plugin.getLogger().info("[派对] 撤销委派：" + com.hub.room.GameDelegation.current().game());
+            com.hub.room.GameDelegation.end();
+        }
         cancelTimeout();
 
         Set<UUID> awarded = new LinkedHashSet<>();
