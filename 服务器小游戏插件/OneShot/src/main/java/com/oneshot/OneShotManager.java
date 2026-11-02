@@ -1,5 +1,7 @@
 package com.oneshot;
 
+import com.hub.session.EndReason;
+
 import com.hub.api.ArcadeBridge;
 import com.hub.api.GameState;
 import com.hub.api.HubAPI;
@@ -60,6 +62,23 @@ public final class OneShotManager {
     private final NamespacedKey returnKey;
     private final NamespacedKey startKey;
     private final WaitCountdown countdown;
+    /** 会话（D22）：单图游戏只有一个键。 */
+    private final java.util.Map<String, OneShotSession> sessions = new java.util.LinkedHashMap<>();
+    private java.util.Set<UUID> pendingWinners;
+    private String pendingEndMessage;
+    private OneShotSession session;
+
+    private OneShotSession ensureSession() {
+        String key = "main";
+        OneShotSession s2 = sessions.get(key);
+        if (s2 == null || s2.state().isFinal()) {
+            s2 = new OneShotSession(this, key);
+            sessions.put(key, s2);
+        }
+        session = s2;
+        return s2;
+    }
+
     /** D21：加入 tick 与同 tick 内随机名次。 */
     private final java.util.Map<UUID, Long> joinTick = new java.util.HashMap<>();
     private final java.util.Map<UUID, Long> joinSeed = new java.util.HashMap<>();
@@ -413,6 +432,14 @@ public final class OneShotManager {
             Chat.send(player, "&c场地还没配置完整（缺 " + arena.missing() + "），请联系管理员。");
             return;
         }
+        // I1：先挂会话再入队；冲突就拒绝（避免半加入）
+        OneShotSession sess = ensureSession();
+        if (!sess.join(player)) {
+            if (sess.players().isEmpty()) {
+                sessions.remove("main");
+            }
+            return;
+        }
         waiting.add(id);
         joinTick.put(id, (long) Bukkit.getCurrentTick());
         joinSeed.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
@@ -430,6 +457,10 @@ public final class OneShotManager {
     }
 
     public void leave(Player player, boolean silent) {
+        // I1：从归属链上摘掉（漏了会让玩家卡在"已在等待中"）
+        if (session != null && !session.state().isFinal()) {
+            session.leave(player);
+        }
         UUID id = player.getUniqueId();
         boolean wasWaiting = waiting.remove(id);
         boolean wasPlaying = playing.remove(id);
@@ -617,7 +648,23 @@ public final class OneShotManager {
         broadcast("&e&l剩余 " + secondsLeft + " 秒：所有存活玩家开始发光！");
     }
 
+    /** 收场入口（I4）：先让会话 end()，再由 onEnd 回到 doEndGame。 */
     private void endGame(Set<UUID> winners, String reason) {
+        pendingWinners = winners;
+        pendingEndMessage = reason;
+        if (session == null || session.state().isFinal()) {
+            doEndGame();
+            return;
+        }
+        session.end(EndReason.ROUND_END);
+    }
+
+    /** 真正的收场逻辑。赢家与文案透传，玩家看到的结算不变。 */
+    void doEndGame() {
+        Set<UUID> winners = pendingWinners;
+        String reason = pendingEndMessage != null ? pendingEndMessage : "&7对局结束。";
+        pendingWinners = null;
+        pendingEndMessage = null;
         if (state != State.RUNNING) {
             return;
         }
