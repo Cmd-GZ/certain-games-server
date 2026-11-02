@@ -5,6 +5,7 @@ import com.hub.region.ArenaRegion;
 import com.hub.world.WorldNames;
 import com.hub.region.RegionRegistry;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Difficulty;
 import org.bukkit.GameRule;
 import org.bukkit.World;
@@ -39,10 +40,29 @@ import java.util.Map;
  */
 public final class RoomManager {
 
+    /**
+     * 房间里的**一个世界实例**：从某个模板复制出来、按某张地图的计划初始化。
+     *
+     * <p>为什么房间需要多个：派对的一张地图散在 3 个世界（`world_mini_game` / `world_pvp_mini_games` /
+     * `world_tr`），一个派对房间必须同时持有它们。
+     */
+    public static final class WorldInstance {
+        public final String templateKey;
+        /** 该世界要用的区域与规则（来自 {@link GameMap.WorldPlan}）；旧路径可能为 null。 */
+        public final GameMap.WorldPlan plan;
+        public World world;
+
+        public WorldInstance(String templateKey, GameMap.WorldPlan plan, World world) {
+            this.templateKey = templateKey;
+            this.plan = plan;
+            this.world = world;
+        }
+    }
+
     /** 一个房间实例。 */
     public static final class Room {
         public final String roomId;
-        public final WorldTemplate template;
+        public WorldTemplate template;
         /**
          * 这个房间服务的是模板世界里的**哪张地图**（= 模板 regions 里的 field name）。
          *
@@ -54,9 +74,51 @@ public final class RoomManager {
         public final long createdAt = System.currentTimeMillis();
         public long lastActiveAt = System.currentTimeMillis();
 
+        /** 这个房间服务的是哪个游戏 / 哪张地图（按地图造房时填；旧的按模板造房时为空）。 */
+        public String game = "";
+        public String map = "";
+
+        /**
+         * 房间持有的**全部世界实例**（一张地图可能散在多个世界，例如派对就有 3 个）。
+         *
+         * <p>{@link #world} 始终等于**第一个**实例的世界，保留给"单世界房间"的既有代码使用。
+         */
+        public final java.util.List<WorldInstance> instances = new java.util.ArrayList<>();
+
+        /**
+         * 入口点：{@code /hub join} 后玩家先出现在这。
+         *
+         * <p>**入口点 ≠ 出生点**：这里只保证"进得来"，游戏侧 init 可以再按玩家设置具体出生点。
+         */
+        public Location entry;
+
         Room(String roomId, WorldTemplate template) {
             this.roomId = roomId;
             this.template = template;
+        }
+
+        /** 某个模板键对应的世界实例（多世界房间按模板键取）。 */
+        public WorldInstance instanceOf(String templateKey) {
+            for (WorldInstance wi : instances) {
+                if (wi.templateKey.equals(templateKey)) {
+                    return wi;
+                }
+            }
+            return null;
+        }
+
+        /** 所有世界实例里的世界（含主世界）。 */
+        public java.util.List<World> allWorlds() {
+            java.util.List<World> out = new java.util.ArrayList<>();
+            for (WorldInstance wi : instances) {
+                if (wi.world != null) {
+                    out.add(wi.world);
+                }
+            }
+            if (out.isEmpty() && world != null) {
+                out.add(world);
+            }
+            return out;
         }
 
         /** 世界里的人（含旁观）。 */
@@ -105,6 +167,13 @@ public final class RoomManager {
         ROOMS.clear();
         ready = false;
         try {
+            // 地图登记表（(游戏, 地图) -> 世界清单 + 区域 + 规则）。读失败不致命：
+            // 没有它只是"不能按地图造房"，已有模板/房间照常工作。
+            try {
+                GameMaps.load(lib);
+            } catch (RuntimeException ex) {
+                com.hub.diagnostics.Failures.recordAndWarn("MiniGameLib.maps.yml", ex);
+            }
             File cfgFile = new File(lib.getDataFolder(), "templates.yml");
             if (!cfgFile.isFile()) {
                 lib.saveResource("templates.yml", false);
@@ -310,6 +379,151 @@ public final class RoomManager {
     }
 
     // ---------- 创建 ----------
+
+    /**
+     * 按**地图**建一个房间：一张地图可能需要**多个世界实例**（派对就有 3 个）。
+     *
+     * <p>流程与 {@link #create(String, String)} 相同，只是对 {@link GameMap#worlds()} 里每个计划
+     * 各做一次"复制 → 删世界身份 → 加载 → 套规则 → 注册区域"，然后合成**一个** Room：
+     * <ul>
+     *   <li>第一个世界实例的世界就是 {@code room.world}（兼容单世界的既有代码）；</li>
+     *   <li>第 2 个以后的世界名是 {@code <roomId>_2}、{@code <roomId>_3}…（房间名与世界名解耦）；</li>
+     *   <li>区域登记用 {@code map.game()}，这样"一个模板世界被多个游戏引用"时归属不会串。</li>
+     * </ul>
+     *
+     * @param map       地图定义（来自 maps.yml）
+     * @param desiredId 期望的房间名；为空则自动生成
+     * @return 成功返回 Room；失败返回 null（原因写进日志/Failures）
+     */
+    public static synchronized Room createForMap(GameMap map, String desiredId) {
+        if (!ready) {
+            return fail("房间引擎未就绪");
+        }
+        if (map == null || map.worlds().isEmpty()) {
+            return fail("地图没有声明任何世界");
+        }
+        if (maxRooms > 0 && ROOMS.size() >= maxRooms) {
+            reap();
+            if (ROOMS.size() >= maxRooms) {
+                return fail("全服房间数已达上限 " + maxRooms);
+            }
+        }
+        if (roomCountOf(map.game()) >= maxPerGame) {
+            return fail("游戏 " + map.game() + " 的房间数已达上限 " + maxPerGame);
+        }
+        String roomId = desiredId == null || desiredId.isBlank()
+                ? nextRoomId(map.game()) : sanitize(desiredId);
+        if (Bukkit.getWorld(roomId) != null || ROOMS.containsKey(roomId)) {
+            return fail("房间名已被占用：" + roomId);
+        }
+
+        Room room = new Room(roomId, null);
+        room.game = map.game();
+        room.map = map.name();
+        java.util.List<File> created = new java.util.ArrayList<>();
+        long t0 = System.nanoTime();
+
+        int index = 0;
+        for (GameMap.WorldPlan plan : map.worlds()) {
+            WorldTemplate tpl = TEMPLATES.get(plan.templateKey());
+            if (tpl == null || !tpl.dir().isDirectory()) {
+                rollbackWorlds(room, created);
+                return fail("地图 " + map.name() + " 引用的模板不存在：" + plan.templateKey());
+            }
+            String worldName = index == 0 ? roomId : roomId + "_" + (index + 1);
+            File dest = new File(worldDimDir(), worldName);
+            try {
+                copyDirectory(tpl.dir(), dest);
+            } catch (Exception ex) {
+                Failures.recordAndWarn("RoomManager.copy/" + worldName, ex);
+                deleteDir(dest);
+                rollbackWorlds(room, created);
+                return fail("复制模板失败：" + ex.getMessage());
+            }
+            created.add(dest);
+            deleteQuietly(new File(dest, "data/paper/metadata.dat"));
+            deleteQuietly(new File(dest, "session.lock"));
+            deleteQuietly(new File(dest, "level.dat_old"));
+
+            World w = null;
+            try {
+                w = Bukkit.createWorld(new WorldCreator(worldName));
+            } catch (RuntimeException ex) {
+                Failures.recordAndWarn("RoomManager.load/" + worldName, ex);
+            }
+            if (w == null) {
+                rollbackWorlds(room, created);
+                return fail("世界加载失败（已回滚）：" + worldName);
+            }
+            if (plan.rules() != null) {
+                applyRules(w, plan.rules());
+            }
+            for (GameMap.RegionPlan region : plan.regions()) {
+                try {
+                    RegionRegistry.register(new ArenaRegion(map.game(), region.name(), roomId,
+                            region.x1(), region.y1(), region.z1(), region.x2(), region.y2(), region.z2()));
+                } catch (RuntimeException ex) {
+                    Failures.recordAndWarn("RoomManager.region/" + roomId, ex);
+                }
+            }
+            room.instances.add(new WorldInstance(plan.templateKey(), plan, w));
+            if (index == 0) {
+                room.world = w;
+                room.template = tpl;
+            }
+            index++;
+        }
+        if (room.template == null) {
+            rollbackWorlds(room, created);
+            return fail("地图 " + map.name() + " 没有可用的世界");
+        }
+
+        // 入口点：map 里写了就用它（定位到对应世界实例）；否则用第一块区域的中心。
+        room.entry = resolveEntry(room, map);
+
+        long tLoad = System.nanoTime();
+        ROOMS.put(roomId, room);
+        log("已创建房间 " + room.describe() + "（" + room.instances.size() + " 个世界 / 地图 "
+                + map.name() + "，总耗时 " + (tLoad - t0) / 1_000_000 + "ms）");
+        return room;
+    }
+
+    /** 把 map 的入口点解析成 Location（找不到就退回第一块区域中心）。 */
+    private static Location resolveEntry(Room room, GameMap map) {
+        GameMap.Entry e = map.entry();
+        if (e != null) {
+            WorldInstance wi = room.instanceOf(e.templateKey());
+            World w = wi != null && wi.world != null ? wi.world : room.world;
+            if (w != null) {
+                return new Location(w, e.x(), e.y(), e.z());
+            }
+        }
+        if (!room.instances.isEmpty() && !room.instances.get(0).plan.regions().isEmpty()) {
+            GameMap.RegionPlan r = room.instances.get(0).plan.regions().get(0);
+            World w = room.instances.get(0).world;
+            if (w != null) {
+                return new Location(w, r.centerX(), r.y1(), r.centerZ());
+            }
+        }
+        return room.world != null ? room.world.getSpawnLocation() : null;
+    }
+
+    /** 建到一半失败：把已经造出来的世界和区域都回滚掉。 */
+    private static void rollbackWorlds(Room room, java.util.List<File> created) {
+        for (WorldInstance wi : room.instances) {
+            if (wi.world != null) {
+                try {
+                    Bukkit.unloadWorld(wi.world, false);
+                } catch (RuntimeException ex) {
+                    Failures.recordAndWarn("RoomManager.rollback-unload/" + wi.templateKey, ex);
+                }
+            }
+        }
+        room.instances.clear();
+        for (File dir : created) {
+            deleteDir(dir);
+        }
+    }
 
     /**
      * 从模板建一个房间。**同步**（R1 简化：复制 50–115ms，管理员命令可接受）。

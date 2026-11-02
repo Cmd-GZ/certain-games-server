@@ -1,0 +1,543 @@
+maps:
+  snakeparty:
+    snakeparty_mini_game:
+      entry:
+        template: snakeparty_mini_game
+        x: 258
+        y: 34
+        z: 296
+      worlds:
+      - template: snakeparty_mini_game
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: ''
+          x1: 198.5
+          y1: 34
+          z1: 236.5
+          x2: 318.5
+          y2: 58
+          z2: 356.5
+  animalslaughter:
+    animalslaughter_mini_game:
+      entry:
+        template: animalslaughter_mini_game
+        x: 12
+        y: 50
+        z: 302
+      worlds:
+      - template: animalslaughter_mini_game
+        rules:
+          pvp: true
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: ''
+          x1: -7.5
+          y1: 50
+          z1: 281.5
+          x2: 32.5
+          y2: 74
+          z2: 321.5
+  anvilbattle:
+    anvilbattle_mini_game:
+      entry:
+        template: anvilbattle_mini_game
+        x: 614
+        y: 58
+        z: -179.5
+      worlds:
+      - template: anvilbattle_mini_game
+        rules:
+          pvp: true
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: ''
+          x1: 578.7
+          y1: 58
+          z1: -214.7
+          x2: 648.7
+          y2: 104.6
+          z2: -144.3
+  digdown:
+    一号场:
+      entry:
+        template: digdown_mini_game
+        x: 647
+        y: 45
+        z: 19
+      worlds:
+      - template: digdown_mini_game
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 一号场
+          x1: 627.4
+          y1: 45.0
+          z1: -0.8
+          x2: 667.4
+          y2: 69.0
+          z2: 39.2
+  firejumper:
+    firejumper_mini_game:
+      entry:
+        template: firejumper_mini_game
+        x: 633
+        y: 78
+        z: 582.5
+      worlds:
+      - template: firejumper_mini_game
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: ''
+          x1: 624
+          y1: 78
+          z1: 573
+          x2: 642
+          y2: 78
+          z2: 592
+  tntbattle:
+    双岛:
+      worlds:
+      - template: tntbattle_mini_game
+        rules:
+          pvp: true
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 双岛
+          x1: 191
+          y1: 57
+          z1: -32
+          x2: 334
+          y2: 57
+          z2: 101
+    废墟:
+      entry:
+        template: tntbattle_tnt
+        x: 113
+        y: 174
+        z: 120.5
+      worlds:
+      - template: tntbattle_tnt
+        rules:
+          pvp: true
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 废墟
+          x1: 8
+          y1: 174
+          z1: 7
+          x2: 218
+          y2: 174
+          z2: 234
+  murdermystery:
+    圣诞工厂:
+      entry:
+        template: murdermystery_mm
+        x: -2.5
+        y: 67
+        z: 0
+      worlds:
+      - template: murdermystery_mm
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 圣诞工厂
+          x1: -80.7
+          y1: 67.3
+          z1: -59.7
+          x2: 75.5
+          y2: 151
+          z2: 60.0
+    ship:
+      entry:
+        template: murdermystery_mm
+        x: 146.5
+        y: 73
+        z: -158.5
+      worlds:
+      - template: murdermystery_mm
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: ship
+          x1: 110.2
+          y1: 72.6
+          z1: -269.0
+          x2: 182.7
+          y2: 133.3
+          z2: -47.7
+    档案室顶层:
+      entry:
+        template: murdermystery_mm
+        x: 490
+        y: 44
+        z: -182
+      worlds:
+      - template: murdermystery_mm
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 档案室顶层
+          x1: 402.3
+          y1: 44.1
+          z1: -261.2
+          x2: 577.5
+          y2: 104.5
+          z2: -103.1
+    别墅:
+      entry:
+        template: murdermystery_mm
+        x: -40.5
+        y: 121
+        z: 285.5
+      worlds:
+      - template: murdermystery_mm
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 别墅
+          x1: -114.0
+          y1: 120.9
+          z1: 218.6
+          x2: 33.4
+          y2: 163.7
+          z2: 352.3
+  landclaim:
+    landclaim_mini_game:
+      entry:
+        template: landclaim_mini_game
+        x: 20
+        y: -14
+        z: -207
+      worlds:
+      - template: landclaim_mini_game
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: ''
+          x1: 10
+          y1: -14
+          z1: -217
+          x2: 30
+          y2: 10
+          z2: -197
+  hotpotato:
+    群系:
+      entry:
+        template: hotpotato_hp
+        x: 11
+        y: 2
+        z: -76
+      worlds:
+      - template: hotpotato_hp
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 群系
+          x1: -8.6
+          y1: 2.1
+          z1: -96.5
+          x2: 30.8
+          y2: 29
+          z2: -56.5
+  football:
+    足球场:
+      entry:
+        template: football_duel
+        x: 202
+        y: -5
+        z: 57
+      worlds:
+      - template: football_duel
+        rules:
+          pvp: true
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 足球场
+          x1: 164
+          y1: -5
+          z1: 4
+          x2: 240
+          y2: 13
+          z2: 110
+  jumpfill:
+    jumpfill_mini_game:
+      entry:
+        template: jumpfill_mini_game
+        x: 22
+        y: 0
+        z: 22
+      worlds:
+      - template: jumpfill_mini_game
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: ''
+          x1: 18
+          y1: 0
+          z1: 18
+          x2: 26
+          y2: 0
+          z2: 26
+  duel:
+    重锤:
+      entry:
+        template: duel_duel
+        x: 17.5
+        y: -1
+        z: 17
+      worlds:
+      - template: duel_duel
+        rules:
+          pvp: true
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 重锤
+          x1: 0.4
+          y1: -1
+          z1: 0.5
+          x2: 34.6
+          y2: 31
+          z2: 33.6
+    相扑:
+      entry:
+        template: duel_sumo
+        x: 26.5
+        y: 57
+        z: -3
+      worlds:
+      - template: duel_sumo
+        rules:
+          pvp: true
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: true
+          fixed-time: 6000
+        regions:
+        - name: 相扑
+          x1: 20.2
+          y1: 57
+          z1: -9.6
+          x2: 33.5
+          y2: 63
+          z2: 3.8
+  grouprace:
+    grouprace_mini_game:
+      entry:
+        template: grouprace_mini_game
+        x: -265
+        y: 28
+        z: -97
+      worlds:
+      - template: grouprace_mini_game
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: ''
+          x1: -283.1
+          y1: 27.7
+          z1: -221.4
+          x2: -247.1
+          y2: 36.0
+          z2: 27.2
+  buildrun:
+    红地板:
+      entry:
+        template: buildrun_gtb
+        x: -16
+        y: 127
+        z: -123
+      worlds:
+      - template: buildrun_gtb
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 红地板
+          x1: -23
+          y1: 127
+          z1: -130
+          x2: -9
+          y2: 146
+          z2: -116
+  hillking:
+    hillking_mini_game:
+      entry:
+        template: hillking_mini_game
+        x: 627
+        y: 53
+        z: 307
+      worlds:
+      - template: hillking_mini_game
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: ''
+          x1: 620.5
+          y1: 53
+          z1: 300.5
+          x2: 634.5
+          y2: 77
+          z2: 314.5
+  luckypillar:
+    虚空:
+      entry:
+        template: luckypillar_lp
+        x: 79
+        y: 102
+        z: 74
+      worlds:
+      - template: luckypillar_lp
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 虚空
+          x1: 47
+          y1: 101.6
+          z1: 41.8
+          x2: 111
+          y2: 125.6
+          z2: 105.8
+  tntrun:
+    TNTRUNround:
+      entry:
+        template: tntrun_tr
+        x: 17
+        y: -2
+        z: 17.5
+      worlds:
+      - template: tntrun_tr
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: TNTRUNround
+          x1: 0.4
+          y1: -1.8
+          z1: 0.8
+          x2: 34.4
+          y2: 47
+          z2: 34.5
+  knockback:
+    knockback_mini_game:
+      entry:
+        template: knockback_mini_game
+        x: 267.5
+        y: 30
+        z: -201
+      worlds:
+      - template: knockback_mini_game
+        rules:
+          pvp: true
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: ''
+          x1: 232.7
+          y1: 30.5
+          z1: -238.1
+          x2: 302.1
+          y2: 30.5
+          z2: -163.7
+  colorparty:
+    玻璃:
+      entry:
+        template: colorparty_duel
+        x: 78
+        y: 100
+        z: -83
+      worlds:
+      - template: colorparty_duel
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 玻璃
+          x1: 60
+          y1: 100
+          z1: -101
+          x2: 96
+          y2: 100
+          z2: -65

@@ -625,6 +625,32 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
                 break;
             }
         }
+        // ① 先查**地图登记表**（maps.yml）：这是新模型，(game, map) 直接给出"需要哪些世界"。
+        //    一张地图可能散在多个世界（派对），所以这里可能一次造出好几个世界实例。
+        com.hub.room.GameMap gameMap = com.hub.room.GameMaps.get(game, map);
+        if (gameMap == null) {
+            String canonical = registry.canonicalName(game);
+            if (canonical != null && !canonical.equalsIgnoreCase(game)) {
+                gameMap = com.hub.room.GameMaps.get(canonical, map);
+            }
+        }
+        if (gameMap != null) {
+            final com.hub.room.GameMap gm = gameMap;
+            final String desiredId = args.length >= 4 ? args[3] : null;
+            sender.sendMessage(LEGACY.deserialize("&7正在按地图 &f" + map + " &7创建房间（"
+                    + gm.worlds().size() + " 个世界）…"));
+            com.hub.room.RoomManager.Room room =
+                    com.hub.room.RoomManager.createForMap(gm, desiredId);
+            if (room == null) {
+                sender.sendMessage(LEGACY.deserialize("&c创建失败（详情见控制台）：&f" + map));
+                return;
+            }
+            sender.sendMessage(LEGACY.deserialize("&a已创建房间 &f" + room.roomId
+                    + "&a（地图 &f" + map + "&a，&f" + room.instances.size() + "&a 个世界）。加入：&f/hub join "
+                    + room.roomId));
+            return;
+        }
+
         if (templateKey == null) {
             for (com.hub.room.WorldTemplate t : com.hub.room.RoomManager.templates()) {
                 boolean gameOk = t.gameKey().equalsIgnoreCase(game)
