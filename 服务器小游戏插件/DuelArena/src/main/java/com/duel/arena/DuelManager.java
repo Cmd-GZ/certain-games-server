@@ -654,7 +654,22 @@ public class DuelManager {
      * 所以只有那张地图换绑，其它场地保持原样。
      */
     private void bindRoomIfAny() {
-        com.hub.room.RoomManager.Room room = com.hub.room.RoomManager.activeFor("duel");
+        // ① **父级委派优先**：派对叫我们来的，世界与场地名都由父级给（子游戏不自己搜房间）。
+        com.hub.room.GameDelegation.Task task = com.hub.room.GameDelegation.current();
+        if (task != null && "duel".equals(task.game()) && task.world() != null) {
+            DuelArena a = arenas.get(task.arenaName());
+            if (a != null && (a.getPos1() == null || !task.world().equals(a.getPos1().getWorld()))) {
+                a.bindWorld(task.world());   // 只覆盖读取，不动存储
+                plugin.getLogger().info("[DuelArena] 场地 " + a.getName() + " 已按父级委派换绑到世界 "
+                        + task.world().getName());
+            }
+            return;
+        }
+        // ② 普通路径：房间上下文（/hub join 时框架告诉我们的），再退回"搜唯一房间"
+        com.hub.room.RoomManager.Room room = com.hub.room.RoomContext.roomOf("duel");
+        if (room == null) {
+            room = com.hub.room.RoomManager.activeFor("duel");
+        }
         if (room == null || room.world == null) {
             return;
         }
@@ -665,7 +680,7 @@ public class DuelManager {
         if (a.getPos1() != null && room.world.equals(a.getPos1().getWorld())) {
             return;   // 已绑过
         }
-        a.bindWorld(room.world);   // 只覆盖读取，不动存储（否则会把房间世界名写进配置）
+        a.bindWorld(room.world);
         plugin.getLogger().info("[DuelArena] 场地 " + a.getName() + " 已换绑到房间 "
                 + room.roomId + "（世界 " + room.world.getName() + "）");
     }
@@ -674,8 +689,12 @@ public class DuelManager {
 
     /** D25：对局结束销毁房间（延迟 3 秒让结算先发出去）。 */
     private void destroyRoomAfterMatch() {
-        com.hub.room.RoomManager.Room room = com.hub.room.RoomManager.activeFor("duel");
+        // 只有"这个房间就是 duel 自己的"才销毁。被派对委派时房间属于派对，不能由我们删。
+        com.hub.room.RoomManager.Room room = com.hub.room.RoomContext.roomOf("duel");
         if (room == null) {
+            room = com.hub.room.RoomManager.activeFor("duel");
+        }
+        if (room == null || !"duel".equals(room.game())) {
             return;
         }
         final String roomId = room.roomId;
