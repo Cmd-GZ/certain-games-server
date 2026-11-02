@@ -441,6 +441,7 @@ public class BuildRunManager {
         // 人数上限已彻底取消：这里**不读** max-players（老配置里写 8 也不生效），来几个人就复制几块场地
         playerArena.put(id, arenaName);
         a.getPlayers().add(id);
+        a.recordJoin(id);   // D21：记加入 tick + 随机名次
         if (!ensureSession(arenaName).join(p)) {
             plugin.getLogger().warning("[BuildRun] " + p.getName() + " 加入归属链失败（场 " + arenaName + "）");
         }
@@ -2818,6 +2819,30 @@ public class BuildRunManager {
         wait(a).update();
     }
 
+    /** 某场地当前等待人数。 */
+    public int waitingCountOf(String arenaName) {
+        BuildRunArena a = arenas.get(arenaName);
+        return a == null ? 0 : a.getPlayers().size();
+    }
+
+    /** 某场地的最小开局人数（BuildRun 已取消人数上限，下限仍是可配的）。 */
+    public int minPlayersOf(String arenaName) {
+        return plugin.getConfig().getInt("min-players", 2);
+    }
+
+    /** 发送者是否是某场地当前的主持人（D21；仅 flow: host 时成立）。 */
+    public boolean isHostOf(Player p, String arenaName) {
+        if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
+            return false;
+        }
+        BuildRunArena a = arenas.get(arenaName);
+        if (a == null || p == null) {
+            return false;
+        }
+        UUID host = wait(a).currentHost();
+        return host != null && host.equals(p.getUniqueId());
+    }
+
     private WaitCountdown wait(BuildRunArena a) {
         return waits.computeIfAbsent(a.getName(), n -> new WaitCountdown(plugin, new WaitCountdown.Host() {
             @Override
@@ -2860,6 +2885,46 @@ public class BuildRunManager {
             @Override
             public void onMessage(String message) {
                 broadcast(a, message);
+            }
+
+            // ---------- D21 主持人流程（配置 flow: host 才启用，默认走上游） ----------
+            @Override
+            public boolean hostFlow() {
+                return "host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"));
+            }
+
+            @Override
+            public int waitSeconds() {
+                return Math.max(5, plugin.getConfig().getInt("wait-seconds", 300));
+            }
+
+            @Override
+            public java.util.List<UUID> waitingOrder() {
+                java.util.List<UUID> order = new ArrayList<>(a.getPlayers());
+                order.sort(java.util.Comparator
+                        .comparingLong((UUID id) -> a.joinTickOf(id))
+                        .thenComparingLong(id -> a.joinSeedOf(id)));
+                return order;
+            }
+
+            @Override
+            public void onHostTimeout(UUID host) {
+                Player p = Bukkit.getPlayer(host);
+                String name = p == null ? host.toString() : p.getName();
+                a.getPlayers().remove(host);
+                playerArena.remove(host);
+                BuildRunSession sess = sessions.get(a.getName());
+                if (sess != null && p != null && !sess.state().isFinal()) {
+                    sess.leave(p);
+                }
+                if (p != null && p.isOnline()) {
+                    msg(p, "&c倒计时结束还没开始，你被移出本局（主持人超时）。");
+                    com.hub.api.HubAPI.teleportToLobby(p);
+                }
+                plugin.getLogger().info("[BuildRun] 场 " + a.getName() + "：主持人 " + name
+                        + " 超时未开始，已移出（剩余 " + a.getPlayers().size() + " 人）");
+                broadcast(a, "&e主持人 &f" + name + " &e超时未开始，已移出本局。");
+                updateWaitCountdown(a);
             }
 
             @Override

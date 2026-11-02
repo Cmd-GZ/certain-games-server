@@ -263,10 +263,6 @@ public class BuildRunCommand implements CommandExecutor, TabCompleter {
                 }
             }
             case "start" -> {
-                if (!admin) {
-                    noPerm(sender);
-                    return true;
-                }
                 String name;
                 if (args.length >= 2) {
                     name = args[1];
@@ -277,6 +273,19 @@ public class BuildRunCommand implements CommandExecutor, TabCompleter {
                 if (name == null) {
                     Chat.send(sender, "&c用法：/br start <场名>");
                     return true;
+                }
+                // D21：开始权在主持人手上；主持人**不享受管理员特权**（人数不够不能开）
+                if (!admin) {
+                    Player sp = sender instanceof Player p2 ? p2 : null;
+                    if (sp == null || !m.isHostOf(sp, name)) {
+                        noPerm(sender);
+                        return true;
+                    }
+                    if (m.waitingCountOf(name) < m.minPlayersOf(name)) {
+                        Chat.send(sender, "&c人数还没达到 &f" + m.minPlayersOf(name)
+                                + " 人&c，主持人也不能开始（管理员可以强制开始）。");
+                        return true;
+                    }
                 }
                 Player op = sender instanceof Player p ? p : null;
                 if (op == null) {
