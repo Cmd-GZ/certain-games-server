@@ -55,8 +55,35 @@ public class DuelArena {
     public long joinTickOf(UUID id) { return joinTicks.getOrDefault(id, 0L); }
     public long joinSeedOf(UUID id) { return joinSeeds.getOrDefault(id, 0L); }
 
+    /**
+     * 房间化（R1.5）的**临时世界覆盖**：不为 null 时，所有读取到的坐标都换成这个世界。
+     *
+     * <p>为什么不用"直接把 Location 的 world 改掉"：那样插件保存配置时会把房间世界名
+     * 写进磁盘，房间一删，下次启动 `Location.deserialize` 就报错（真实事故：
+     * `world_key: minecraft:room_sx` 的场地会让开服直接抛 4 行 ERROR、区域数从 25 掉到 24）。
+     * 覆盖只影响读取，**存储值永远是原样**。
+     */
+    private transient org.bukkit.World boundWorld;
+
+    /** 绑定到房间世界（传 null 解除绑定）。 */
+    public void bindWorld(org.bukkit.World w) {
+        this.boundWorld = w;
+    }
+
+    public org.bukkit.World boundWorld() {
+        return boundWorld;
+    }
+
+    /** 读取坐标时套用临时世界覆盖。 */
+    private Location apply(Location loc) {
+        if (loc == null || boundWorld == null || boundWorld.equals(loc.getWorld())) {
+            return loc;
+        }
+        return new Location(boundWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+    }
+
     public Location getPos1() {
-        return pos1;
+        return apply(pos1);
     }
 
     public void setPos1(Location pos1) {
@@ -64,7 +91,7 @@ public class DuelArena {
     }
 
     public Location getPos2() {
-        return pos2;
+        return apply(pos2);
     }
 
     public void setPos2(Location pos2) {
@@ -72,7 +99,7 @@ public class DuelArena {
     }
 
     public Location getSpawn1() {
-        return spawn1;
+        return apply(spawn1);
     }
 
     public void setSpawn1(Location spawn1) {
@@ -80,7 +107,7 @@ public class DuelArena {
     }
 
     public Location getSpawn2() {
-        return spawn2;
+        return apply(spawn2);
     }
 
     public void setSpawn2(Location spawn2) {
@@ -116,7 +143,7 @@ public class DuelArena {
                 && loc.getBlockZ() >= minZ && loc.getBlockZ() <= maxZ;
     }
 
-    public Location getManualLobby() { return manualLobby; }
+    public Location getManualLobby() { return apply(manualLobby); }
     public void setManualLobby(Location l) { this.manualLobby = l; }
 
     /** 等待点：手动设置优先，否则范围中心上方。 */

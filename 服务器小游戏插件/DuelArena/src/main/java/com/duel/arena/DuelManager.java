@@ -665,26 +665,12 @@ public class DuelManager {
         if (a.getPos1() != null && room.world.equals(a.getPos1().getWorld())) {
             return;   // 已绑过
         }
-        rebindToWorld(a, room.world);
+        a.bindWorld(room.world);   // 只覆盖读取，不动存储（否则会把房间世界名写进配置）
         plugin.getLogger().info("[DuelArena] 场地 " + a.getName() + " 已换绑到房间 "
                 + room.roomId + "（世界 " + room.world.getName() + "）");
     }
 
-    /** 把场地的所有坐标点换到另一个世界（x/y/z 不变）。 */
-    private void rebindToWorld(DuelArena a, org.bukkit.World w) {
-        a.setPos1(move(a.getPos1(), w));
-        a.setPos2(move(a.getPos2(), w));
-        a.setSpawn1(move(a.getSpawn1(), w));
-        a.setSpawn2(move(a.getSpawn2(), w));
-        a.setManualLobby(move(a.getManualLobby(), w));
-    }
 
-    private static Location move(Location loc, org.bukkit.World w) {
-        if (loc == null) {
-            return null;
-        }
-        return new Location(w, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
-    }
 
     /** D25：对局结束销毁房间（延迟 3 秒让结算先发出去）。 */
     private void destroyRoomAfterMatch() {
