@@ -27,6 +27,12 @@ public final class RoomBinding {
 
     /** 该游戏当前应当绑定到的房间世界；没有（或不止一个房间）时返回 {@code null}。 */
     public static World worldFor(String gameKey) {
+        // ① **父级委派优先**：子小游戏被派对叫来时，用父级给的世界（它不自己找房间）。
+        World delegated = GameDelegation.worldFor(gameKey);
+        if (delegated != null) {
+            return delegated;
+        }
+        // ② 没有委派 → 老路径：找"名下有房间"的那个（单开普通游戏/独立房间时用）。
         RoomManager.Room room = RoomManager.activeFor(gameKey);
         return room == null ? null : room.world;
     }

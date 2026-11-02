@@ -558,8 +558,24 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         return plugin.getConfig().getBoolean("games." + key + ".arena-aware", false);
     }
 
+    /** 派对当前所在的房间（房间化之后由它提供世界与场地）；没有则 null。 */
+    private com.hub.room.RoomManager.Room partyRoom() {
+        return com.hub.room.RoomManager.activeFor(GAME);
+    }
+
     /** 该游戏当前的空闲场地（等待中、没有对局在跑）；没有就返回空列表。 */
     public List<String> freeArenas(String key) {
+        // **房间模式优先**：房间的地图里已经写好了这张图包含哪些子游戏的哪些场地。
+        com.hub.room.RoomManager.Room room = partyRoom();
+        if (room != null) {
+            List<String> inRoom = new ArrayList<>();
+            for (com.hub.room.RoomManager.ArenaSlot slot : room.arenasOf(key)) {
+                inRoom.add(slot.arenaName());
+            }
+            if (!inRoom.isEmpty()) {
+                return inRoom;
+            }
+        }
         List<String> out = new ArrayList<>();
         for (ArenaStatus status : HubAPI.arenas(displayOf(key))) {
             // 只看状态：刚结束的对局人数可能还没清零，但已经可以再开一局了
@@ -916,6 +932,26 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         // 过渡阶段直接把参赛者加入下一个游戏的等待区（游戏自己会把人传到它的 lobby），
         // 不再把人冻在场地半空，避免被服务器判定为飞行踢出。
         if (join != null && !join.isBlank()) {
+            // **父级委派**：房间模式下，把"这一关在哪个世界、哪块场地、哪些人"交给子游戏，
+            // 子游戏据此初始化（它不会自己去查房间）。委派在整关期间保持有效，关卡结束后清除。
+            com.hub.room.RoomManager.Room room = partyRoom();
+            if (room != null && currentArena != null) {
+                org.bukkit.World stageWorld = null;
+                for (com.hub.room.RoomManager.ArenaSlot slot : room.arenasOf(currentGameKey)) {
+                    if (slot.arenaName().equals(currentArena)) {
+                        stageWorld = slot.world();
+                        break;
+                    }
+                }
+                if (stageWorld != null) {
+                    com.hub.room.GameDelegation.begin(currentGameKey, stageWorld,
+                            currentArena, new ArrayList<>(transitionParticipants));
+                    plugin.getLogger().info("[派对] 已委派 " + currentGameKey + " 到房间 "
+                            + room.roomId + " 的世界 " + stageWorld.getName()
+                            + "（场地 " + currentArena + "，"
+                            + transitionParticipants.size() + " 人）");
+                }
+            }
             for (UUID id : transitionParticipants) {
                 Player p = Bukkit.getPlayer(id);
                 if (p != null) {
