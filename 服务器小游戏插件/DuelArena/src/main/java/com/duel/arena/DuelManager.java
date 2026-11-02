@@ -533,6 +533,7 @@ public class DuelManager {
             return false;
         }
         playerArena.put(id, arenaName);
+        bindRoomIfAny();
         a.getQueue().add(id);
         a.recordJoin(id);   // D21
 
@@ -643,6 +644,60 @@ public class DuelManager {
             paper.setItemMeta(meta);
         }
         p.getInventory().setItem(4, paper);
+    }
+
+    /**
+     * 房间化（R1.5 / D25）：如果这个游戏当前挂着**一个**房间，就把该房间对应的场地
+     * **换绑到房间世界**（坐标不变，只换世界实例）。
+     *
+     * <p>为什么按"房间对应的地图"来绑：一个房间只服务一张地图（`Room.arena`），
+     * 所以只有那张地图换绑，其它场地保持原样。
+     */
+    private void bindRoomIfAny() {
+        com.hub.room.RoomManager.Room room = com.hub.room.RoomManager.activeFor("duel");
+        if (room == null || room.world == null) {
+            return;
+        }
+        DuelArena a = arenas.get(room.arena);
+        if (a == null) {
+            return;
+        }
+        if (a.getPos1() != null && room.world.equals(a.getPos1().getWorld())) {
+            return;   // 已绑过
+        }
+        rebindToWorld(a, room.world);
+        plugin.getLogger().info("[DuelArena] 场地 " + a.getName() + " 已换绑到房间 "
+                + room.roomId + "（世界 " + room.world.getName() + "）");
+    }
+
+    /** 把场地的所有坐标点换到另一个世界（x/y/z 不变）。 */
+    private void rebindToWorld(DuelArena a, org.bukkit.World w) {
+        a.setPos1(move(a.getPos1(), w));
+        a.setPos2(move(a.getPos2(), w));
+        a.setSpawn1(move(a.getSpawn1(), w));
+        a.setSpawn2(move(a.getSpawn2(), w));
+        a.setManualLobby(move(a.getManualLobby(), w));
+    }
+
+    private static Location move(Location loc, org.bukkit.World w) {
+        if (loc == null) {
+            return null;
+        }
+        return new Location(w, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+    }
+
+    /** D25：对局结束销毁房间（延迟 3 秒让结算先发出去）。 */
+    private void destroyRoomAfterMatch() {
+        com.hub.room.RoomManager.Room room = com.hub.room.RoomManager.activeFor("duel");
+        if (room == null) {
+            return;
+        }
+        final String roomId = room.roomId;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            boolean ok = com.hub.room.RoomManager.delete(roomId);
+            plugin.getLogger().info("[DuelArena] 对局结束，销毁房间 " + roomId
+                    + (ok ? "（成功）" : "（失败：房间已不存在）"));
+        }, 60L);
     }
 
     /** 玩家右键开始纸。 */
@@ -993,6 +1048,7 @@ public class DuelManager {
 
     /** 真正的收场逻辑。赢家透传，玩家看到的结算不变。 */
     void doEndFight(String arenaName) {
+        destroyRoomAfterMatch();
         DuelArena a = arenas.get(arenaName);
         if (a == null) {
             return;
