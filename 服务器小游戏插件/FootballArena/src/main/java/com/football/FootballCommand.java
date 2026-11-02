@@ -131,8 +131,17 @@ public class FootballCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
             case "start" -> {
-                if (!admin) { noPerm(sender); return true; }
                 if (!(sender instanceof Player p)) return true;
+                // D21：开始权在主持人手上；主持人**不享受管理员特权**（人数不够不能开）
+                if (!admin) {
+                    String tryArena = editing.getOrDefault(p.getUniqueId(), null);
+                    if (tryArena == null || !m.isHostOf(p, tryArena)) { noPerm(sender); return true; }
+                    if (m.waitingCountOf(tryArena) < m.minPlayersOf(tryArena)) {
+                        Chat.send(sender, "&c人数还没达到 &f" + m.minPlayersOf(tryArena)
+                                + " 人&c，主持人也不能开始（管理员可以强制开始）。");
+                        return true;
+                    }
+                }
                 String arenaName = editing.get(p.getUniqueId());
                 if (arenaName == null) {
                     Chat.send(sender, "&c请先 /fb edit <场名>。");

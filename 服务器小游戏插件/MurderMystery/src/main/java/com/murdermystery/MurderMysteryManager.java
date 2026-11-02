@@ -665,6 +665,7 @@ public class MurderMysteryManager {
         }
         playerArena.put(id, arenaName);
         a.getPlayers().add(id);
+        a.recordJoin(id);   // D21：记加入 tick + 随机名次
         p.getInventory().clear();
         p.setGameMode(GameMode.SURVIVAL);
         p.setHealth(20);
@@ -875,6 +876,27 @@ public class MurderMysteryManager {
     }
 
     /** 取（或创建）某场地的等待倒计时；公共库负责人数/OP 规则与计时。 */
+    public int waitingCountOf(String arenaName) {
+        MurderMysteryArena a = arenas.get(arenaName);
+        return a == null ? 0 : a.getPlayers().size();
+    }
+
+    public int minPlayersOf(String arenaName) {
+        return plugin.getConfig().getInt("min-players", 2);
+    }
+
+    public boolean isHostOf(Player p, String arenaName) {
+        if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
+            return false;
+        }
+        MurderMysteryArena a = arenas.get(arenaName);
+        if (a == null || p == null) {
+            return false;
+        }
+        UUID host = wait(a).currentHost();
+        return host != null && host.equals(p.getUniqueId());
+    }
+
     private WaitCountdown wait(MurderMysteryArena a) {
         return waits.computeIfAbsent(a.getName(), n -> new WaitCountdown(plugin, new WaitCountdown.Host() {
             @Override
@@ -917,6 +939,82 @@ public class MurderMysteryManager {
             public void onMessage(String message) {
                 broadcast(a, message);
             }
+
+            // ---------- D21 主持人流程（配置 flow: host 才启用，默认走上游） ----------
+
+            @Override
+
+            public boolean hostFlow() {
+
+                return "host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"));
+
+            }
+
+
+            @Override
+
+            public int waitSeconds() {
+
+                return Math.max(5, plugin.getConfig().getInt("wait-seconds", 300));
+
+            }
+
+
+            @Override
+
+            public java.util.List<UUID> waitingOrder() {
+
+                java.util.List<UUID> order = new ArrayList<>(a.getPlayers());
+
+                order.sort(java.util.Comparator
+
+                        .comparingLong((UUID id) -> a.joinTickOf(id))
+
+                        .thenComparingLong(id -> a.joinSeedOf(id)));
+
+                return order;
+
+            }
+
+
+            @Override
+
+            public void onHostTimeout(UUID host) {
+
+                Player p = Bukkit.getPlayer(host);
+
+                String name = p == null ? host.toString() : p.getName();
+
+                a.getPlayers().remove(host);
+
+                playerArena.remove(host);
+
+                MurderMysterySession sess = sessions.get(a.getName());
+
+                if (sess != null && p != null && !sess.state().isFinal()) {
+
+                    sess.leave(p);
+
+                }
+
+                if (p != null && p.isOnline()) {
+
+                    msg(p, "&c倒计时结束还没开始，你被移出本局（主持人超时）。");
+
+                    com.hub.api.HubAPI.teleportToLobby(p);
+
+                }
+
+                plugin.getLogger().info("[MurderMystery] 场 " + a.getName() + "：主持人 " + name
+
+                        + " 超时未开始，已移出（剩余 " + a.getPlayers().size() + " 人）");
+
+                broadcast(a, "&e主持人 &f" + name + " &e超时未开始，已移出本局。");
+
+                updateWaitCountdown(a);
+
+            }
+
 
             @Override
             public void onStart() {
