@@ -44,6 +44,12 @@ public final class RoomActions {
     public static boolean join(Player p, String roomId) {
         RoomManager.Room room = RoomManager.room(roomId);
         if (room == null || room.world == null) {
+            // R3：失败要可见 —— 以前这里静默 return false，只有发起的玩家看到提示，
+            // 控制台完全没线索（排查"为什么某人没进房间"时抓瞎）。
+            if (plugin != null) {
+                plugin.getLogger().warning("[/hub join] 失败：" + p.getName() + " -> " + roomId
+                        + "（房间" + (room == null ? "不存在" : "存在但世界未加载") + "）");
+            }
             return false;
         }
         p.closeInventory();
@@ -62,6 +68,9 @@ public final class RoomActions {
         if (join != null && !join.isBlank()) {
             // {arena} 用房间记住的场地名（一个模板世界多张地图时，这决定进哪块）
             join = join.replace("{arena}", room.arena == null ? "" : room.arena).trim();
+            if (plugin != null) {
+                plugin.getLogger().info("[/hub join] " + p.getName() + " 执行 " + join);
+            }
             p.performCommand(join);
             p.sendMessage(LEGACY.deserialize("&a已进入房间 &f" + roomId
                     + " &7并加入 &f/" + join + "&7（模板 &f" + room.template.key() + "&7）"));
