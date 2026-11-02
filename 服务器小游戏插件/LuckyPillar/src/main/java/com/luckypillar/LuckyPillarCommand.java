@@ -199,6 +199,19 @@ public class LuckyPillarCommand implements CommandExecutor, TabCompleter {
                     }
                     case "start" -> {
                         Player p = sender instanceof Player pl ? pl : null;
+                        // D21：开始权在主持人手上；主持人不能突破 min-players
+                        boolean isAdmin = p != null && p.hasPermission("luckypillar.admin");
+                        if (!isAdmin) {
+                            if (p == null || !m.isHostOf(p, a.getName())) {
+                                Chat.send(sender, "&c只有本场**主持人**或管理员可以开始。");
+                                return true;
+                            }
+                            if (m.waitingCountOf(a.getName()) < m.minPlayersOf(a.getName())) {
+                                Chat.send(sender, "&c人数还没达到 &f" + m.minPlayersOf(a.getName())
+                                        + " 人&c，主持人也不能开始。");
+                                return true;
+                            }
+                        }
                         m.start(p, a.getName());
                     }
                     default -> {

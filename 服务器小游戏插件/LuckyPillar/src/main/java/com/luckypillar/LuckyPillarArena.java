@@ -176,6 +176,23 @@ public class LuckyPillarArena {
         this.clean = clean;
     }
 
+    /** D21：加入 tick 与同 tick 内随机名次。 */
+    private final java.util.Map<UUID, Long> joinTicks = new java.util.HashMap<>();
+    private final java.util.Map<UUID, Long> joinSeeds = new java.util.HashMap<>();
+
+    public void recordJoin(UUID id) {
+        joinTicks.put(id, (long) org.bukkit.Bukkit.getCurrentTick());
+        joinSeeds.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
+    }
+
+    public long joinTickOf(UUID id) {
+        return joinTicks.getOrDefault(id, 0L);
+    }
+
+    public long joinSeedOf(UUID id) {
+        return joinSeeds.getOrDefault(id, 0L);
+    }
+
     public List<UUID> getPlayers() {
         return players;
     }

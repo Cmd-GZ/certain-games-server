@@ -476,6 +476,27 @@ public class DigToBottomManager {
         wait(a).update();
     }
 
+    public int waitingCountOf(String arenaName) {
+        DigToBottomArena a = arenas.get(arenaName);
+        return a == null ? 0 : a.getPlayers().size();
+    }
+
+    public int minPlayersOf(String arenaName) {
+        return plugin.getConfig().getInt("min-players", 2);
+    }
+
+    public boolean isHostOf(Player p, String arenaName) {
+        if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
+            return false;
+        }
+        DigToBottomArena a = arenas.get(arenaName);
+        if (a == null || p == null) {
+            return false;
+        }
+        UUID host = wait(a).currentHost();
+        return host != null && host.equals(p.getUniqueId());
+    }
+
     private WaitCountdown wait(DigToBottomArena a) {
         return waits.computeIfAbsent(a.getName(), n -> new WaitCountdown(plugin, new WaitCountdown.Host() {
             @Override
@@ -518,6 +539,79 @@ public class DigToBottomManager {
             public void onMessage(String message) {
                 broadcast(a, message);
             }
+
+            // ---------- D21 主持人流程（配置 flow: host 才启用，默认走上游） ----------
+
+            @Override
+
+            public boolean hostFlow() {
+
+                return "host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"));
+
+            }
+
+            @Override
+
+            public int waitSeconds() {
+
+                return Math.max(5, plugin.getConfig().getInt("wait-seconds", 300));
+
+            }
+
+            @Override
+
+            public java.util.List<UUID> waitingOrder() {
+
+                java.util.List<UUID> order = new ArrayList<>(a.getPlayers());
+
+                order.sort(java.util.Comparator
+
+                        .comparingLong((UUID id) -> a.joinTickOf(id))
+
+                        .thenComparingLong(id -> a.joinSeedOf(id)));
+
+                return order;
+
+            }
+
+            @Override
+
+            public void onHostTimeout(UUID host) {
+
+                Player hp = Bukkit.getPlayer(host);
+
+                String hname = hp == null ? host.toString() : hp.getName();
+
+                a.getPlayers().remove(host);
+
+                playerArena.remove(host);
+
+                DigToBottomSession s2 = sessions.get(a.getName());
+
+                if (s2 != null && hp != null && !s2.state().isFinal()) {
+
+                    s2.leave(hp);
+
+                }
+
+                if (hp != null && hp.isOnline()) {
+
+                    msg(hp, "&c倒计时结束还没开始，你被移出本局（主持人超时）。");
+
+                    com.hub.api.HubAPI.teleportToLobby(hp);
+
+                }
+
+                plugin.getLogger().info("[DigToBottom] 场 " + a.getName() + "：主持人 " + hname
+
+                        + " 超时未开始，已移出（剩余 " + a.getPlayers().size() + " 人）");
+
+                broadcast(a, "&e主持人 &f" + hname + " &e超时未开始，已移出本局。");
+
+                updateWaitCountdown(a);
+
+            }
+
 
             @Override
             public void onStart() {
@@ -569,6 +663,7 @@ public class DigToBottomManager {
         }
         playerArena.put(id, arenaName);
         a.getPlayers().add(id);
+        a.recordJoin(id);   // D21：记加入 tick + 随机名次
         a.getNames().put(id, p.getName());
         p.getInventory().clear();
         p.setGameMode(GameMode.SURVIVAL);

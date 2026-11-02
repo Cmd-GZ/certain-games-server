@@ -186,8 +186,22 @@ public class DigToBottomCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
             case "start" -> {
-                if (!admin) { noPerm(sender); return true; }
-                Player player = sender instanceof Player p ? p : null;
+                Player player0 = sender instanceof Player p0 ? p0 : null;
+                // D21：开始权在主持人手上；主持人**不享受管理员特权**（人数不够不能开）
+                if (!admin) {
+                    String tryArena = args.length >= 2 ? args[1]
+                            : (player0 == null ? null : editing.get(player0.getUniqueId()));
+                    if (player0 == null || tryArena == null || !m.isHostOf(player0, tryArena)) {
+                        noPerm(sender);
+                        return true;
+                    }
+                    if (m.waitingCountOf(tryArena) < m.minPlayersOf(tryArena)) {
+                        Chat.send(sender, "&c人数还没达到 &f" + m.minPlayersOf(tryArena)
+                                + " 人&c，主持人也不能开始（管理员可以强制开始）。");
+                        return true;
+                    }
+                }
+                Player player = player0;
                 String arenaName;
                 if (args.length >= 2) {
                     arenaName = args[1];
