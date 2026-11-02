@@ -112,7 +112,7 @@ public final class MemoryFlipArena {
     }
 
     public Location getLobby() {
-        return lobby == null ? null : lobby.clone();
+        return  com.hub.room.RoomBinding.apply("memoryflip", lobby == null ? null : lobby.clone());
     }
 
     public void setLobby(Location lobby) {

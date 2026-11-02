@@ -81,7 +81,7 @@ public class TntRunArena {
     }
 
     public Location getPos1() {
-        return pos1;
+        return  com.hub.room.RoomBinding.apply("tntrun", pos1);
     }
 
     public void setPos1(Location pos1) {
@@ -89,7 +89,7 @@ public class TntRunArena {
     }
 
     public Location getPos2() {
-        return pos2;
+        return  com.hub.room.RoomBinding.apply("tntrun", pos2);
     }
 
     public void setPos2(Location pos2) {
@@ -97,7 +97,7 @@ public class TntRunArena {
     }
 
     public Location getSpawn() {
-        return spawn;
+        return  com.hub.room.RoomBinding.apply("tntrun", spawn);
     }
 
     public void setSpawn(Location spawn) {
@@ -105,7 +105,7 @@ public class TntRunArena {
     }
 
     public Location getLobbyPoint() {
-        return lobbyPoint;
+        return  com.hub.room.RoomBinding.apply("tntrun", lobbyPoint);
     }
 
     public void setLobbyPoint(Location lobbyPoint) {
@@ -114,7 +114,7 @@ public class TntRunArena {
 
     /** 最上层中心（开局站位圆心）；没设置时返回 null，开局退回出生点。 */
     public Location getCenter() {
-        return center;
+        return  com.hub.room.RoomBinding.apply("tntrun", center);
     }
 
     public void setCenter(Location center) {

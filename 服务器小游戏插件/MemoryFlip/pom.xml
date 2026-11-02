@@ -6,7 +6,7 @@
 
     <groupId>com.memoryflip</groupId>
     <artifactId>memory-flip</artifactId>
-    <version>1.3.0</version>
+    <version>1.4.0</version>
     <packaging>jar</packaging>
 
     <name>MemoryFlip</name>
@@ -39,7 +39,7 @@
         <dependency>
             <groupId>com.hub</groupId>
             <artifactId>minigame-lib</artifactId>
-            <version>1.11.0</version>
+            <version>1.12.0</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
