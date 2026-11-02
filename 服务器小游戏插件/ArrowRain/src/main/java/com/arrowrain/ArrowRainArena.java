@@ -180,7 +180,7 @@ public final class ArrowRainArena {
         if (regionConfigured()) {
             return pos1.getWorld();
         }
-        return Bukkit.getWorld(worldName);
+        return com.hub.world.Worlds.resolve(worldName);
     }
 
     public String worldName() {
@@ -247,7 +247,9 @@ public final class ArrowRainArena {
         if (parts.length < 4) {
             return null;
         }
-        World world = Bukkit.getWorld(parts[0]);
+        // 支持 `tpl:<模板键>` 令牌（R2 / R1.5）：房间化后配置里不再写死世界名，
+        // 而是指向模板；`Worlds.resolve` 会把它解析成**当前那个房间的世界**。
+        World world = com.hub.world.Worlds.resolve(parts[0]);
         if (world == null) {
             return null;
         }

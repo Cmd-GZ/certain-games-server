@@ -367,7 +367,24 @@ public final class ArrowRainManager {
         return minPlayers();
     }
 
+    /**
+     * 房间化（R1.5）：场地在**启用时就解析过一次**，那时还没有房间，
+     * `tpl:<模板键>` 解析不到世界 → 场地被判为"未配置"。
+     * 所以每次有人加入前，若场地还没就绪且**现在有房间了**，就重新解析一次。
+     */
+    private void refreshArenaForRoom() {
+        if (arena().ready()) {
+            return;
+        }
+        if (com.hub.room.RoomBinding.worldFor("arrowrain") == null) {
+            return;   // 没有房间，重解析也没用
+        }
+        arena().load();
+        plugin.getLogger().info("[ArrowRain] 场地已按房间重新解析（就绪=" + arena().ready() + "）");
+    }
+
     public void join(Player player) {
+        refreshArenaForRoom();
         UUID id = player.getUniqueId();
         if (state != State.WAITING) {
             Chat.send(player, "&c对局正在进行中，请等这一局结束后再加入。");
