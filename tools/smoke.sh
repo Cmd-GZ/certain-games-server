@@ -15,14 +15,21 @@
 #   tools/smoke.sh --commands FILE      # 启动后逐行喂命令
 #   tools/smoke.sh --expect 'PATTERN'   # 断言日志里必须出现（可重复）
 #   tools/smoke.sh --reject 'PATTERN'   # 断言日志里不能出现（可重复）
-#   tools/smoke.sh --fake-player NAME   # 起一个"假玩家"配合需要真人的流程（见 tools/fakeclient.py）
+#   tools/smoke.sh --fake-player NAME   # 起"假玩家"配合需要真人的流程（见 tools/fakeclient.py）
 #   tools/smoke.sh --fake-commands 'a;b' # 假玩家到点依次发的命令（分号分隔，不带前导 /）
-#   tools/smoke.sh --fake-delay N       # 假玩家登录后多久开始发命令（默认 3 秒）
+#   tools/smoke.sh --fake-delay N       # 假玩家就绪（全部在场）后多久开始发命令（默认 3 秒）
 #   tools/smoke.sh --fake-stay N        # 最后一条命令后再挂多久（默认 100 秒）
+#   tools/smoke.sh --fake-wait N        # 'Done (' 之后等多久再连假玩家（默认 5 秒）
+#   tools/smoke.sh --fake-ready-timeout N # 等"假玩家全部就绪"的最长时间（默认 100 秒）
+#   tools/smoke.sh --fake-soft          # 假玩家没全部就绪时**仍然**喂控制台命令（默认跳过）
 #
 # 为什么要 --fake-player：`/arcade start` 能强制跨过人数门槛，但跨不过"一个人都没有"——
 # 街机派对这类"先有人进等待区才开局"的流程，没有客户端就只能人肉进服验。
 # 假玩家是协议直连（抬头有说明），只登录、只发命令、只应答心跳。
+#
+# 为什么要先等 `== ALL READY`：需要"两个 bot 同时在场"的流程（派对开局、满员倒计时）
+# 一旦有 bot 没进来，整轮命令都是白喂的。fakeclient 自己会快失败重连、过闸时打
+# `== ALL READY (N/N) ==`，本脚本等这一行出现之后再开始喂控制台命令。
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -37,6 +44,10 @@ FAKE_NAME=""
 FAKE_CMDS=""
 FAKE_DELAY=3
 FAKE_STAY=100
+FAKE_WAIT=5
+FAKE_READY_TIMEOUT=100
+FAKE_CONNECT_TIMEOUT=180
+FAKE_SOFT=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -50,6 +61,10 @@ while [ $# -gt 0 ]; do
     --fake-commands) FAKE_CMDS="$2"; shift 2 ;;
     --fake-delay)    FAKE_DELAY="$2"; shift 2 ;;
     --fake-stay)     FAKE_STAY="$2"; shift 2 ;;
+    --fake-wait)     FAKE_WAIT="$2"; shift 2 ;;
+    --fake-ready-timeout) FAKE_READY_TIMEOUT="$2"; shift 2 ;;
+    --fake-connect-timeout) FAKE_CONNECT_TIMEOUT="$2"; shift 2 ;;
+    --fake-soft)     FAKE_SOFT=1; shift ;;
     *) echo "未知参数 $1" >&2; exit 2 ;;
   esac
 done
@@ -117,8 +132,9 @@ if [ "$DEPLOY" = 1 ]; then
 fi
 
 LOG="$ROOT/.server/smoke.log"
+FAKE_LOG="$ROOT/.server/fakeclient.log"
 FIFO="$ROOT/.server/.smoke.fifo"
-rm -f "$LOG" "$FIFO"
+rm -f "$LOG" "$FAKE_LOG" "$FIFO"
 mkfifo "$FIFO"
 
 cd "$SERVER" || exit 1
@@ -143,19 +159,40 @@ else
   echo "== 开服成功：$(grep -o 'Done ([0-9.]*s)' "$LOG" | head -1)"
 fi
 
+fake_ready=0
+FAKE_JOB=""
 if [ "$done_seen" = 1 ]; then
-  # 多等一会再让假玩家连：服务器刚 Done 时还在收尾（存档/区块），
-  # 这期间登录很容易被服务端判 slow_login 踢掉，重试一次要 30s，窗口很快耗尽。
-  sleep 10
-  FAKE_JOB=""
+  # 稍微等一下再让假玩家连：刚 Done 时服务器还在收尾（15 个世界存盘 + 模板扫描），
+  # 这期间登录会被拖慢。不过**不用等很久**——fakeclient 自己会快失败重连，
+  # 早连反而能早一点抢到服务器空闲的那一刻。
+  sleep "$FAKE_WAIT"
   if [ -n "$FAKE_NAME" ]; then
-    echo "== 假玩家 $FAKE_NAME 命令: $FAKE_CMDS（延迟 ${FAKE_DELAY}s，挂 ${FAKE_STAY}s）"
+    echo "== 假玩家 $FAKE_NAME 命令: $FAKE_CMDS（就绪后 ${FAKE_DELAY}s 起算，挂 ${FAKE_STAY}s）"
     python3 "$ROOT/tools/fakeclient.py" --port 25560 --name "$FAKE_NAME" \
         --commands "$FAKE_CMDS" --delay "$FAKE_DELAY" --stay "$FAKE_STAY" \
-        --connect-timeout 180 > "$ROOT/.server/fakeclient.log" 2>&1 &
+        --connect-timeout "$FAKE_CONNECT_TIMEOUT" > "$FAKE_LOG" 2>&1 &
     FAKE_JOB=$!
+
+    # 等所有假玩家都进游戏阶段（fakeclient 过闸会打 '== ALL READY (N/N) =='）。
+    # 需要"两人同时在场"的场景，等不到就别喂命令了，直接判失败。
+    for _ in $(seq 1 "$FAKE_READY_TIMEOUT"); do
+      if grep -q '== ALL READY' "$FAKE_LOG" 2>/dev/null; then fake_ready=1; break; fi
+      kill -0 "$FAKE_JOB" 2>/dev/null || break
+      sleep 1
+    done
+    if [ "$fake_ready" = 1 ]; then
+      echo "   ✅ 假玩家就绪：$(grep -o '== ALL READY ([0-9]*/[0-9]*) ==' "$FAKE_LOG" | head -1)"
+    else
+      echo "   ❌ ${FAKE_READY_TIMEOUT}s 内假玩家没有全部就绪（见 $FAKE_LOG）"
+      rc=1
+    fi
   fi
-  if [ -n "$CMDS" ]; then
+
+  feed_cmds=1
+  if [ -n "$FAKE_NAME" ] && [ "$fake_ready" = 0 ] && [ "$FAKE_SOFT" = 0 ]; then
+    feed_cmds=0
+  fi
+  if [ -n "$CMDS" ] && [ "$feed_cmds" = 1 ]; then
     if [ ! -f "$CMDS" ]; then
       echo "❌ 命令脚本不见了：$CMDS"; rc=1
     fi
@@ -167,14 +204,16 @@ if [ "$done_seen" = 1 ]; then
       echo "$line" >&3
       sleep 1
     done < "$CMDS"
+  elif [ -n "$CMDS" ]; then
+    echo "== 跳过喂命令：假玩家没全部就绪（确定要照喂就加 --fake-soft）"
   fi
+
   sleep 2
   echo "stop" >&3
   for _ in $(seq 1 180); do kill -0 "$JOB" 2>/dev/null || break; sleep 1; done
   if [ -n "${FAKE_JOB:-}" ]; then
     kill -0 "$FAKE_JOB" 2>/dev/null && kill "$FAKE_JOB" 2>/dev/null
     wait "$FAKE_JOB" 2>/dev/null
-    echo "== 假玩家日志: $ROOT/.server/fakeclient.log"
   fi
 fi
 exec 3>&-
@@ -194,6 +233,18 @@ if [ "$done_seen" = 1 ]; then
     grep -E ' (ERROR|SEVERE)\]:' "$LOG" | head -10 | sed 's/^/     /'
     rc=1
   fi
+fi
+
+if [ -n "$FAKE_NAME" ]; then
+  # 假玩家摘要：就绪几个、发了几条命令、服务端到底收到了几条玩家命令
+  n_ready=$(grep -c '\[ready\]' "$FAKE_LOG" 2>/dev/null || true)
+  n_sent=$(grep -c '发送命令' "$FAKE_LOG" 2>/dev/null || true)
+  n_pcmd=$(grep -c 'issued server command' "$LOG" 2>/dev/null || true)
+  echo "   假玩家就绪: ${n_ready:-0} 个（$FAKE_NAME）$( [ "$fake_ready" = 1 ] && echo '，全部就绪 ✅' || echo '，没凑齐 ❌')"
+  echo "   假玩家发出命令: ${n_sent:-0} 条；服务端记录玩家命令: ${n_pcmd:-0} 行"
+  if [ "${n_ready:-0}" = 0 ]; then rc=1; fi
+  echo "   假玩家日志: $FAKE_LOG"
+  tail -12 "$FAKE_LOG" 2>/dev/null | sed 's/^/     /'
 fi
 
 for pat in "${EXPECTS[@]:-}"; do
