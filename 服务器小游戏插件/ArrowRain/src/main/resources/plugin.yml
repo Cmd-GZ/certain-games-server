@@ -1,5 +1,5 @@
 name: ArrowRain
-version: '1.6.0'
+version: '1.7.0'
 main: com.arrowrain.ArrowRainPlugin
 api-version: '1.21'
 description: 万箭齐发：躲在随机半砖掩体下躲避箭雨，第 N 回合起开放 PvP

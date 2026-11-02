@@ -444,6 +444,7 @@ public final class ArrowRainManager {
         HubAPI.clearGame(id);
         player.setGameMode(GameMode.SURVIVAL);
         player.setCollidable(true);
+        clearNoCollision(player);
         if (!silent) {
             HubAPI.teleportToLobby(player);
             Chat.send(player, "&e你已离开" + GAME + "。");
@@ -522,6 +523,7 @@ public final class ArrowRainManager {
             clearPlayer(player);
             player.setGameMode(GameMode.SURVIVAL);
             player.setCollidable(false);
+            applyNoCollision(player);
             player.setHealth(20.0);
             player.setFoodLevel(20);
             player.setSaturation(20.0f);
@@ -589,6 +591,7 @@ public final class ArrowRainManager {
             }
             case RAIN -> {
                 rainTick();
+                detectArrowHits();   // 上游 1.0.2：不依赖 ProjectileHitEvent（箭不造成伤害时它可能不触发）
                 if (--phaseTicks <= 0) {
                     endRain();
                 }
@@ -677,6 +680,53 @@ public final class ArrowRainManager {
         }
     }
 
+    /**
+     * 每 tick 自检落箭是否穿过玩家（**不依赖 `ProjectileHitEvent`**）。
+     *
+     * <p>为什么必须这样：箭被设成 `setDamage(0)` 之后，原版不会再为"命中实体"触发那个事件，
+     * 于是**站在箭雨里不掉血**（上游 1.0.2 修的就是这个）。这里自己按几何判定：
+     * 只认还在**下落**的箭（插在地上的不算），水平距离 ≤0.75 格、竖直落在身体范围内就算命中。
+     */
+    private void detectArrowHits() {
+        if (rainArrows.isEmpty() || playing.isEmpty()) {
+            return;
+        }
+        for (UUID arrowId : new ArrayList<>(rainArrows)) {
+            org.bukkit.entity.Entity entity = Bukkit.getEntity(arrowId);
+            if (!(entity instanceof Arrow arrow) || !arrow.isValid() || arrow.isDead()) {
+                rainArrows.remove(arrowId);
+                continue;
+            }
+            if (arrow.getVelocity().getY() > -0.05) {
+                continue;   // 已经插住/停下的箭不参与判定
+            }
+            Location arrowLoc = arrow.getLocation();
+            for (UUID playerId : new ArrayList<>(playing)) {
+                Player player = Bukkit.getPlayer(playerId);
+                if (player == null || !player.isOnline()) {
+                    continue;
+                }
+                Location playerLoc = player.getLocation();
+                if (arrowLoc.getWorld() == null || !arrowLoc.getWorld().equals(playerLoc.getWorld())) {
+                    continue;
+                }
+                double dx = arrowLoc.getX() - playerLoc.getX();
+                double dz = arrowLoc.getZ() - playerLoc.getZ();
+                if (dx * dx + dz * dz > 0.5625) {   // 0.75 格
+                    continue;
+                }
+                if (arrowLoc.getY() < playerLoc.getY() - 0.6
+                        || arrowLoc.getY() > playerLoc.getY() + 2.6) {
+                    continue;
+                }
+                arrow.remove();
+                rainArrows.remove(arrowId);
+                hitByArrow(player);
+                break;
+            }
+        }
+    }
+
     private void spawnArrow(double x, double z) {
         World world = arena.world();
         if (world == null) {
@@ -696,6 +746,55 @@ public final class ArrowRainManager {
         });
         arrow.setVelocity(new Vector(0, -speed, 0));
         rainArrows.add(arrow.getUniqueId());
+    }
+
+
+    // ---------- 玩家之间的挤压（上游 1.0.3） ----------
+
+    /** `setCollidable(false)` 管不到客户端侧的玩家挤压，必须靠计分板队伍的 COLLISION_RULE。 */
+    private static final String NO_COLLIDE_TEAM = "arrowrain_nocollide";
+
+    private void applyNoCollision(Player player) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        var main = Bukkit.getScoreboardManager().getMainScoreboard();
+        noCollisionTeam(main, player);
+        var current = player.getScoreboard();
+        if (current != null && current != main) {
+            noCollisionTeam(current, player);
+        }
+    }
+
+    private void noCollisionTeam(org.bukkit.scoreboard.Scoreboard board, Player player) {
+        if (board == null) {
+            return;
+        }
+        var team = board.getTeam(NO_COLLIDE_TEAM);
+        if (team == null) {
+            team = board.registerNewTeam(NO_COLLIDE_TEAM);
+        }
+        team.setOption(org.bukkit.scoreboard.Team.Option.COLLISION_RULE,
+                org.bukkit.scoreboard.Team.OptionStatus.NEVER);
+        team.addEntry(player.getName());
+    }
+
+    private void clearNoCollision(Player player) {
+        if (player == null) {
+            return;
+        }
+        var main = Bukkit.getScoreboardManager().getMainScoreboard();
+        var team = main.getTeam(NO_COLLIDE_TEAM);
+        if (team != null) {
+            team.removeEntry(player.getName());
+        }
+        var current = player.getScoreboard();
+        if (current != null && current != main) {
+            var t2 = current.getTeam(NO_COLLIDE_TEAM);
+            if (t2 != null) {
+                t2.removeEntry(player.getName());
+            }
+        }
     }
 
     // ---------- 掩体 ----------
@@ -908,6 +1007,7 @@ public final class ArrowRainManager {
                 clearPlayer(player);
                 player.setGameMode(GameMode.SURVIVAL);
                 player.setCollidable(true);
+                clearNoCollision(player);
                 HubAPI.teleportToLobby(player);
             }
             HubAPI.clearGame(id);
