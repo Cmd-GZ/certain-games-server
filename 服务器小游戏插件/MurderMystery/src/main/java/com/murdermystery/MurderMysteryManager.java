@@ -440,7 +440,10 @@ public class MurderMysteryManager {
     }
 
     public void saveAll() {
-        publishRegions();   // 场地可能刚被改过，重新声明（I2）
+                    // **未就绪的场地跳过回写**：世界缺失/没加载成功时，内存里的坐标是空的，
+            // 写回去等于把磁盘上的场地坐标抹掉（真实事故：删了 world_tr 后 TntRun 的场地被清空）。
+            // 房间只替换"世界"，坐标仍以这里为准，所以绝不能丢。
+publishRegions();   // 场地可能刚被改过，重新声明（I2）
         // R2 单一写者（docs/框架不变量.md）：先把磁盘上的当前值读进内存，再只重写自己负责的段。
         // 否则关服时（onDisable -> saveAll -> saveConfig）会用内存里的旧值整份覆盖 config.yml：
         // 线上手改了别的键，传上去又被旧值写回去，表现为"改了配置没生效"（和 BuildRun 同一个坑）。
