@@ -596,15 +596,15 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
      * 等模板登记加上地图清单后，这里换成"按地图查所属模板"即可，**命令形式不用变**。
      */
     private void createRoom(CommandSender sender, String[] args) {
-        if (args.length < 2) {
+        if (args.length < 3) {
             sender.sendMessage(LEGACY.deserialize("&c用法：/hub create <游戏> <地图> [房间名]"));
-            sender.sendMessage(LEGACY.deserialize("&7　子小游戏请写成 &f/hub create arcadeparty:<子游戏> [<地图>]"
+            sender.sendMessage(LEGACY.deserialize("&7　子小游戏请写成 &f/hub create arcadeparty:<子游戏> <地图>"
                     + " &7（= 套壳成只有它的派对）"));
             sender.sendMessage(LEGACY.deserialize("&7可用模板：&f/hub room templates"));
             return;
         }
         String game = args[1];
-        String map = args.length >= 3 ? args[2] : "";
+        String map = args[2];
         String subGame = null;
 
         // **显式写法**：`/hub create arcadeparty:<子游戏> [<地图>]`
@@ -621,16 +621,6 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
                 sender.sendMessage(LEGACY.deserialize("&c&f" + subGame + " &c不是子小游戏（它自己拥有房间，"
                         + "直接用 &f/hub create " + subGame + " <地图>&c）。"));
                 return;
-            }
-            if (map.isBlank()) {
-                var maps = com.hub.room.GameMaps.mapNames(subGame);
-                if (maps.size() == 1) {
-                    map = maps.get(0);
-                } else {
-                    sender.sendMessage(LEGACY.deserialize("&c&f" + subGame + " &c有 " + maps.size()
-                            + " 张地图，请指定：&f" + String.join(" / ", maps)));
-                    return;
-                }
             }
             game = subGame;
         }
