@@ -276,8 +276,18 @@ public final class LandClaimCommand implements CommandExecutor, TabCompleter {
     }
 
     private void start(CommandSender sender) {
-        if (!requireAdmin(sender)) {
-            return;
+        // D21：开始权在主持人手上；主持人**不享受管理员特权**（人数不够不能开）
+        boolean isAdminS = !(sender instanceof Player sp) || sp.hasPermission("landclaim.admin");
+        if (!isAdminS) {
+            if (!manager.isHost(sender)) {
+                Chat.send(sender, "&c只有本局**主持人**或管理员可以开始。");
+                return;
+            }
+            if (manager.waitingCountPublic() < manager.minPlayersPublic()) {
+                Chat.send(sender, "&c人数还没达到 &f" + manager.minPlayersPublic()
+                        + " 人&c，主持人也不能开始。");
+                return;
+            }
         }
         if (!manager.startGame(true)) {
             Chat.send(sender, "&c无法开始：检查场地配置和等待玩家。");

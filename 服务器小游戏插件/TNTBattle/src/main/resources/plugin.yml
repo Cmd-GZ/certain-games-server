@@ -1,5 +1,5 @@
 name: TNTBattle
-version: '1.13.1'
+version: '1.14.0'
 main: com.tntbattle.TNTBattlePlugin
 api-version: '26.2'
 description: TNT 对战：两队隔岛互射 TNT，搭羊毛桥，团灭对手获胜

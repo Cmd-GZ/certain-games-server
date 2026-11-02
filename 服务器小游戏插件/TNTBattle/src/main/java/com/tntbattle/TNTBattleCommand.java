@@ -514,8 +514,19 @@ public final class TNTBattleCommand implements CommandExecutor, TabCompleter {
     }
 
     private void start(CommandSender sender, String[] args) {
-        if (!requireAdmin(sender)) {
-            return;
+        // D21：开始权在主持人手上；主持人不能突破 min-players（管理员可以）
+        boolean isAdminS = !(sender instanceof Player sp) || sp.hasPermission("tntbattle.admin");
+        if (!isAdminS) {
+            TNTBattleManager tryMgr = resolve(args, 1, sender);
+            if (tryMgr == null || !(sender instanceof Player sp2) || !tryMgr.isHost(sp2)) {
+                requireAdmin(sender);   // 借用它的提示
+                return;
+            }
+            if (tryMgr.waitingCountPublic() < tryMgr.minPlayersPublic()) {
+                Chat.send(sender, "&c人数还没达到 &f" + tryMgr.minPlayersPublic()
+                        + " 人&c，主持人也不能开始。");
+                return;
+            }
         }
         TNTBattleManager manager = resolve(args, 1, sender);
         if (manager == null) {
