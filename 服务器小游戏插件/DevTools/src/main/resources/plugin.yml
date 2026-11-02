@@ -1,0 +1,9 @@
+name: DevTools
+version: '0.1.0'
+main: com.devtools.DevToolsPlugin
+api-version: '1.21'
+description: 开发期一次性工具（区域复制等）。**永不发布**：目录里有 .build-skip。
+commands:
+  rcopy:
+    description: 把一块区域从一个世界复制到另一个世界
+    usage: /rcopy <源世界> <x1> <y1> <z1> <x2> <y2> <z2> <目标世界> [dx dy dz]
