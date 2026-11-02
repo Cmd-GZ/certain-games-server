@@ -44,6 +44,13 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
 
     @Override
     public void onEnable() {
+        // 升级时把 games.yml 里**缺失**的游戏补上（只增不改）。放在启动时做，
+        // 运维一眼能在日志里看到补了哪些，而不是等第一次 /hub join 才发现是旧的。
+        try {
+            gamesConfig();
+        } catch (RuntimeException ex) {
+            com.hub.diagnostics.Failures.recordAndWarn("HubCore.games.yml 启动合并", ex);
+        }
         saveDefaultConfig();
         manager = new HubManager(this);
         registry = new GameRegistry(this);
@@ -715,13 +722,57 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
                 + " -> 房间 " + roomId + "（" + gameKey + "）：/" + cmd);
     }
 
-    /** 读（并按需生成）plugins/HubCore/games.yml。 */
+    /**
+     * 读（并按需生成、**按需补齐**）plugins/HubCore/games.yml。
+     *
+     * <p>{@code saveResource} **只在文件不存在时**写入，所以老服务器升级后，
+     * 新加的游戏的 join-command 永远不会出现在磁盘上 —— 表现是 `/hub join` 对那个游戏
+     * **静默什么都不做**（真实事故：升到 27 个游戏后，运行副本里还是 15 个的旧表）。
+     *
+     * <p>这里做的是**只增不改**的合并：以 jar 内的资源为准，把磁盘上**缺失**的
+     * `games.<key>` 补进去；运维已经手改过的条目**一个字节都不动**（单一写者，R2）。
+     */
     private org.bukkit.configuration.file.FileConfiguration gamesConfig() {
         java.io.File f = new java.io.File(getDataFolder(), "games.yml");
         if (!f.isFile()) {
             saveResource("games.yml", false);
+            return org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(f);
         }
-        return org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(f);
+        var onDisk = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(f);
+        var shipped = new org.bukkit.configuration.file.YamlConfiguration();
+        try (java.io.InputStream in = getResource("games.yml")) {
+            if (in == null) {
+                return onDisk;
+            }
+            shipped.load(new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8));
+        } catch (java.io.IOException | org.bukkit.configuration.InvalidConfigurationException
+                 | RuntimeException ex) {
+            // R3：失败要可见，但不该让整个插件起不来
+            com.hub.diagnostics.Failures.recordAndWarn("HubCore.games.yml 合并", ex);
+            return onDisk;
+        }
+        var shippedGames = shipped.getConfigurationSection("games");
+        if (shippedGames == null) {
+            return onDisk;
+        }
+        java.util.List<String> added = new java.util.ArrayList<>();
+        for (String key : shippedGames.getKeys(false)) {
+            if (onDisk.isConfigurationSection("games." + key) || onDisk.contains("games." + key)) {
+                continue;   // 已存在（哪怕被运维改过）—— 一律不动
+            }
+            onDisk.set("games." + key, shipped.get("games." + key));
+            added.add(key);
+        }
+        if (!added.isEmpty()) {
+            try {
+                onDisk.save(f);
+                getLogger().info("games.yml 已补齐 " + added.size() + " 个游戏："
+                        + String.join(", ", added) + "（已有的条目未改动）");
+            } catch (java.io.IOException ex) {
+                com.hub.diagnostics.Failures.recordAndWarn("HubCore.games.yml 保存", ex);
+            }
+        }
+        return onDisk;
     }
 
     // ---------- /hub room：房间引擎的管理入口（R1 的验收入口，R3 之后保留给 OP 排障） ----------
