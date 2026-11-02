@@ -2,12 +2,12 @@ maps:
   snakeparty:
     snakeparty_mini_game:
       entry:
-        template: mini_game
-        x: 258
+        template: mini_games
+        x: 258.0
         y: 34
         z: 296
       worlds:
-      - template: mini_game
+      - template: mini_games
         rules:
           pvp: false
           difficulty: NORMAL
@@ -15,8 +15,7 @@ maps:
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - &id003
-          name: 蛇行派对
+        - name: 蛇行派对
           x1: 198.5
           y1: 34
           z1: 236.5
@@ -27,12 +26,12 @@ maps:
   animalslaughter:
     animalslaughter_mini_game:
       entry:
-        template: mini_game
-        x: 12
+        template: mini_games
+        x: 12.0
         y: 50
         z: 302
       worlds:
-      - template: mini_game
+      - template: mini_games
         rules:
           pvp: true
           difficulty: NORMAL
@@ -40,8 +39,7 @@ maps:
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - &id004
-          name: 动物屠宰
+        - name: 动物屠宰
           x1: -7.5
           y1: 50
           z1: 281.5
@@ -52,12 +50,12 @@ maps:
   anvilbattle:
     anvilbattle_mini_game:
       entry:
-        template: mini_game
-        x: 614
+        template: mini_games
+        x: 614.0
         y: 58
         z: -179.5
       worlds:
-      - template: mini_game
+      - template: mini_games
         rules:
           pvp: true
           difficulty: NORMAL
@@ -72,15 +70,16 @@ maps:
           x2: 648.7
           y2: 104.6
           z2: -144.3
+          game: anvilbattle
   digdown:
     一号场:
       entry:
-        template: mini_game
-        x: 647
+        template: mini_games
+        x: 647.0
         y: 45
         z: 19
       worlds:
-      - template: mini_game
+      - template: mini_games
         rules:
           pvp: false
           difficulty: NORMAL
@@ -95,15 +94,16 @@ maps:
           x2: 667.4
           y2: 69.0
           z2: 39.2
+          game: digdown
   firejumper:
     firejumper_mini_game:
       entry:
-        template: mini_game
-        x: 633
+        template: mini_games
+        x: 633.0
         y: 78
         z: 582.5
       worlds:
-      - template: mini_game
+      - template: mini_games
         rules:
           pvp: false
           difficulty: NORMAL
@@ -118,10 +118,11 @@ maps:
           x2: 642
           y2: 78
           z2: 592
+          game: firejumper
   tntbattle:
     双岛:
       worlds:
-      - template: mini_game
+      - template: tntbt_twins
         rules:
           pvp: true
           difficulty: NORMAL
@@ -136,14 +137,15 @@ maps:
           x2: 334
           y2: 57
           z2: 101
+          game: tntbattle
     废墟:
       entry:
-        template: tnt
-        x: 113
+        template: tntbt_ruins
+        x: 113.0
         y: 174
         z: 120.5
       worlds:
-      - template: tnt
+      - template: tntbt_ruins
         rules:
           pvp: true
           difficulty: NORMAL
@@ -158,15 +160,16 @@ maps:
           x2: 218
           y2: 174
           z2: 234
+          game: tntbattle
   murdermystery:
     圣诞工厂:
       entry:
-        template: mm
+        template: mm_xft
         x: -2.5
         y: 67
         z: 0
       worlds:
-      - template: mm
+      - template: mm_xft
         rules:
           pvp: false
           difficulty: NORMAL
@@ -181,14 +184,15 @@ maps:
           x2: 75.5
           y2: 151
           z2: 60.0
+          game: murdermystery
     ship:
       entry:
-        template: mm
+        template: mm_ship
         x: 146.5
         y: 73
         z: -158.5
       worlds:
-      - template: mm
+      - template: mm_ship
         rules:
           pvp: false
           difficulty: NORMAL
@@ -203,14 +207,15 @@ maps:
           x2: 182.7
           y2: 133.3
           z2: -47.7
+          game: murdermystery
     档案室顶层:
       entry:
-        template: mm
-        x: 490
+        template: mm_arch
+        x: 490.0
         y: 44
         z: -182
       worlds:
-      - template: mm
+      - template: mm_arch
         rules:
           pvp: false
           difficulty: NORMAL
@@ -225,14 +230,15 @@ maps:
           x2: 577.5
           y2: 104.5
           z2: -103.1
+          game: murdermystery
     别墅:
       entry:
-        template: mm
-        x: -40.5
-        y: 121
-        z: 285.5
+        template: mm_villa
+        x: -143.49
+        y: 136.0
+        z: 312.5
       worlds:
-      - template: mm
+      - template: mm_villa
         rules:
           pvp: false
           difficulty: NORMAL
@@ -247,15 +253,16 @@ maps:
           x2: 33.4
           y2: 163.7
           z2: 352.3
+          game: murdermystery
   landclaim:
     landclaim_mini_game:
       entry:
-        template: mini_game
-        x: 20
+        template: mini_games
+        x: 20.0
         y: -14
         z: -207
       worlds:
-      - template: mini_game
+      - template: mini_games
         rules:
           pvp: false
           difficulty: NORMAL
@@ -270,15 +277,16 @@ maps:
           x2: 30
           y2: 10
           z2: -197
+          game: landclaim
   hotpotato:
     群系:
       entry:
-        template: hp
-        x: 11
-        y: 2
-        z: -76
+        template: mini_games
+        x: 4011.66
+        y: 4.0
+        z: -80.48
       worlds:
-      - template: hp
+      - template: mini_games
         rules:
           pvp: false
           difficulty: NORMAL
@@ -286,24 +294,23 @@ maps:
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - &id006
-          name: 群系
-          x1: -8.6
+        - name: 群系
+          x1: 3991.4
           y1: 2.1
           z1: -96.5
-          x2: 30.8
+          x2: 4030.8
           y2: 29
           z2: -56.5
           game: hotpotato
   football:
     足球场:
       entry:
-        template: duel
-        x: 202
+        template: fb
+        x: 202.0
         y: -5
         z: 57
       worlds:
-      - template: duel
+      - template: fb
         rules:
           pvp: true
           difficulty: NORMAL
@@ -318,15 +325,16 @@ maps:
           x2: 240
           y2: 13
           z2: 110
+          game: football
   jumpfill:
     jumpfill_mini_game:
       entry:
-        template: mini_game
-        x: 22
+        template: mini_games
+        x: 22.0
         y: 0
         z: 22
       worlds:
-      - template: mini_game
+      - template: mini_games
         rules:
           pvp: false
           difficulty: NORMAL
@@ -341,15 +349,16 @@ maps:
           x2: 26
           y2: 0
           z2: 26
+          game: jumpfill
   duel:
     重锤:
       entry:
-        template: duel
+        template: duel_mace
         x: 17.5
         y: -1
         z: 17
       worlds:
-      - template: duel
+      - template: duel_mace
         rules:
           pvp: true
           difficulty: NORMAL
@@ -364,6 +373,7 @@ maps:
           x2: 34.6
           y2: 31
           z2: 33.6
+          game: duel
     相扑:
       entry:
         template: duel_sumo
@@ -386,15 +396,16 @@ maps:
           x2: 33.5
           y2: 63
           z2: 3.8
+          game: duel
   grouprace:
     grouprace_mini_game:
       entry:
-        template: mini_game
-        x: -265
+        template: mini_games
+        x: -265.0
         y: 28
         z: -97
       worlds:
-      - template: mini_game
+      - template: mini_games
         rules:
           pvp: false
           difficulty: NORMAL
@@ -409,15 +420,16 @@ maps:
           x2: -247.1
           y2: 36.0
           z2: 27.2
+          game: grouprace
   buildrun:
     红地板:
       entry:
-        template: gtb
-        x: -16
-        y: 127
-        z: -123
+        template: bdr
+        x: -14.74
+        y: 128.0
+        z: -121.28
       worlds:
-      - template: gtb
+      - template: bdr
         rules:
           pvp: false
           difficulty: NORMAL
@@ -432,24 +444,24 @@ maps:
           x2: -9
           y2: 146
           z2: -116
+          game: buildrun
   hillking:
     hillking_mini_game:
       entry:
-        template: mini_game
-        x: 627
+        template: mini_games
+        x: 627.0
         y: 53
         z: 307
       worlds:
-      - template: mini_game
-        rules: &id001
+      - template: mini_games
+        rules:
           pvp: false
           difficulty: NORMAL
           mob-spawning: false
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - &id002
-          name: 高台之王
+        - name: 高台之王
           x1: 620.5
           y1: 53
           z1: 300.5
@@ -461,7 +473,7 @@ maps:
     虚空:
       entry:
         template: lp
-        x: 79
+        x: 79.0
         y: 102
         z: 74
       worlds:
@@ -480,15 +492,16 @@ maps:
           x2: 111
           y2: 125.6
           z2: 105.8
+          game: luckypillar
   tntrun:
     TNTRUNround:
       entry:
-        template: tr
-        x: 17
-        y: -2
-        z: 17.5
+        template: mini_games
+        x: 8017.6
+        y: 39.0
+        z: 16.04
       worlds:
-      - template: tr
+      - template: mini_games
         rules:
           pvp: false
           difficulty: NORMAL
@@ -496,24 +509,23 @@ maps:
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - &id005
-          name: TNTRUNround
-          x1: 0.4
+        - name: TNTRUNround
+          x1: 8000.4
           y1: -1.8
           z1: 0.8
-          x2: 34.4
+          x2: 8034.4
           y2: 47
           z2: 34.5
           game: tntrun
   knockback:
     knockback_mini_game:
       entry:
-        template: mini_game
+        template: mini_games
         x: 267.5
         y: 30
         z: -201
       worlds:
-      - template: mini_game
+      - template: mini_games
         rules:
           pvp: true
           difficulty: NORMAL
@@ -528,15 +540,16 @@ maps:
           x2: 302.1
           y2: 30.5
           z2: -163.7
+          game: knockback
   colorparty:
     玻璃:
       entry:
-        template: duel
-        x: 78
+        template: mini_games
+        x: 12078.0
         y: 100
         z: -83
       worlds:
-      - template: duel
+      - template: mini_games
         rules:
           pvp: false
           difficulty: NORMAL
@@ -545,43 +558,22 @@ maps:
           fixed-time: 6000
         regions:
         - name: 玻璃
-          x1: 60
+          x1: 12060
           y1: 100
           z1: -101
-          x2: 96
+          x2: 12096
           y2: 100
           z2: -65
-  arcadeparty:
-    迷你小游戏派对:
-      entry:
-        template: mini_game
-        x: 620.5
-        y: 53
-        z: 300.5
-      worlds:
-      - template: mini_game
-        rules: *id001
-        regions:
-        - *id002
-        - *id003
-        - *id004
-      - template: tr
-        rules: *id001
-        regions:
-        - *id005
-      - template: hp
-        rules: *id001
-        regions:
-        - *id006
+          game: colorparty
   oneshot:
     oneshot_mini_game:
       entry:
-        template: mini_game
+        template: mini_games
         x: 260.49
         y: 74.5
         z: 648.93
       worlds:
-      - template: mini_game
+      - template: mini_games
         rules:
           pvp: false
           difficulty: NORMAL
@@ -596,11 +588,12 @@ maps:
           x2: 304
           y2: 114
           z2: 642
+          game: oneshot
   gtb:
     糖果屋:
       entry:
         template: gtb
-        x: -17
+        x: -17.0
         y: 70
         z: 17
       worlds:
@@ -619,3 +612,164 @@ maps:
           x2: -4
           y2: 69
           z2: 30
+          game: gtb
+  arrowrain:
+    万箭齐发:
+      entry:
+        template: mini_games
+        x: 16042.5
+        y: 38.0
+        z: 16.5
+      worlds:
+      - template: mini_games
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 万箭齐发
+          x1: 16037
+          y1: 37
+          z1: 11
+          x2: 16057
+          y2: 47
+          z2: 31
+          game: arrowrain
+  arcadeparty:
+    迷你小游戏派对:
+      entry:
+        template: mini_games
+        x: -262.5
+        y: 51.0
+        z: 594.68
+      worlds:
+      - template: mini_games
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 蛇行派对
+          x1: 198.5
+          y1: 34
+          z1: 236.5
+          x2: 318.5
+          y2: 58
+          z2: 356.5
+          game: snakeparty
+        - name: 动物屠宰
+          x1: -7.5
+          y1: 50
+          z1: 281.5
+          x2: 32.5
+          y2: 74
+          z2: 321.5
+          game: animalslaughter
+        - name: 铁砧掘战
+          x1: 578.7
+          y1: 58
+          z1: -214.7
+          x2: 648.7
+          y2: 104.6
+          z2: -144.3
+          game: anvilbattle
+        - name: 一号场
+          x1: 627.4
+          y1: 45.0
+          z1: -0.8
+          x2: 667.4
+          y2: 69.0
+          z2: 39.2
+          game: digdown
+        - name: 跃火者
+          x1: 624
+          y1: 78
+          z1: 573
+          x2: 642
+          y2: 78
+          z2: 592
+          game: firejumper
+        - name: 占地风云1
+          x1: 10
+          y1: -14
+          z1: -217
+          x2: 30
+          y2: 10
+          z2: -197
+          game: landclaim
+        - name: 群系
+          x1: 3991.4
+          y1: 2.1
+          z1: -96.5
+          x2: 4030.8
+          y2: 29
+          z2: -56.5
+          game: hotpotato
+        - name: 花落水家
+          x1: 18
+          y1: 0
+          z1: 18
+          x2: 26
+          y2: 0
+          z2: 26
+          game: jumpfill
+        - name: 群友竞速
+          x1: -283.1
+          y1: 27.7
+          z1: -221.4
+          x2: -247.1
+          y2: 36.0
+          z2: 27.2
+          game: grouprace
+        - name: 高台之王
+          x1: 620.5
+          y1: 53
+          z1: 300.5
+          x2: 634.5
+          y2: 77
+          z2: 314.5
+          game: hillking
+        - name: TNTRUNround
+          x1: 8000.4
+          y1: -1.8
+          z1: 0.8
+          x2: 8034.4
+          y2: 47
+          z2: 34.5
+          game: tntrun
+        - name: 击退大战
+          x1: 232.7
+          y1: 30.5
+          z1: -238.1
+          x2: 302.1
+          y2: 30.5
+          z2: -163.7
+          game: knockback
+        - name: 玻璃
+          x1: 12060
+          y1: 100
+          z1: -101
+          x2: 12096
+          y2: 100
+          z2: -65
+          game: colorparty
+        - name: OneShot
+          x1: 203
+          y1: 112
+          z1: 566
+          x2: 304
+          y2: 114
+          z2: 642
+          game: oneshot
+        - name: 万箭齐发
+          x1: 16037
+          y1: 37
+          z1: 11
+          x2: 16057
+          y2: 47
+          z2: 31
+          game: arrowrain

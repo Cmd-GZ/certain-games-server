@@ -13,12 +13,27 @@
 #   weather-cycle   是否随时间变化天气（建议 false，固定晴天）
 #   fire-spread     火是否蔓延（TNT Run / 建筑世界建议 false）
 #   mob-griefing    苦力怕/末影人等是否破坏地形（建议 false）
+#   keep-inventory  死亡保留背包（幸运之柱必须 false，见下）
+#
+# ===== 2026-11-03「世界/地图重排」之后的布局 =====
+#
+# 旧的持久小游戏世界**全部退役**（world_mini_game / world_mm / world_duel / world_gtb /
+# world_tr / world_tnt / world_hp / world_lp / world_pvp_mini_games / world_fb / world_wf /
+# 0Void World / persmap / 0BB-Candyland / 0MM-SantaFactory）。
+# 地图改成「模板世界 → 房间世界」：模板只登记、**不自动加载**（D19），
+# 房间由 `/gw create room <模板>`（或 `/hub create <游戏> <地图>`）按需复制一份。
+# 模板名单见 MiniGameLib 的 templates.yml，地图→模板/区域/规则见 maps.yml。
+#
+# 主城（Bukkit 世界名 `world`，维度目录 overworld）**不模板化**（D1），不在这里管。
+# world_htf 暂时保留：HoldTheFort 是 git submodule，还没接模板世界。
 
 worlds:
-  world_gtb:
+  # ---------- 模板世界：只登记、不自动加载 ----------
+  # 这里写的是「模板默认规则」；房间真正套用的是 maps.yml 里那张地图的 rules。
+  tmpl_mini_games:
     enabled: true
     environment: NORMAL
-    type: FLAT
+    type: VOID
     fixed-time: 6000
     difficulty: NORMAL
     pvp: false
@@ -26,11 +41,11 @@ worlds:
     weather-cycle: false
     fire-spread: false
     mob-griefing: false
-
-  world_duel:
+    keep-inventory: true
+  tmpl_tntbt_twins:
     enabled: true
     environment: NORMAL
-    type: FLAT
+    type: VOID
     fixed-time: 6000
     difficulty: NORMAL
     pvp: true
@@ -38,35 +53,11 @@ worlds:
     weather-cycle: false
     fire-spread: false
     mob-griefing: false
-
-  world_hp:
+    keep-inventory: true
+  tmpl_tntbt_ruins:
     enabled: true
     environment: NORMAL
-    type: FLAT
-    fixed-time: 6000
-    difficulty: NORMAL
-    pvp: false
-    mob-spawning: false
-    weather-cycle: false
-    fire-spread: false
-    mob-griefing: false
-
-  world_tr:
-    enabled: true
-    environment: NORMAL
-    type: FLAT
-    fixed-time: 6000
-    difficulty: NORMAL
-    pvp: false
-    mob-spawning: false
-    weather-cycle: false
-    fire-spread: false
-    mob-griefing: false
-
-  world_mm:
-    enabled: true
-    environment: NORMAL
-    type: FLAT
+    type: VOID
     fixed-time: 6000
     difficulty: NORMAL
     pvp: true
@@ -74,11 +65,11 @@ worlds:
     weather-cycle: false
     fire-spread: false
     mob-griefing: false
-
-  world_fb:
+    keep-inventory: true
+  tmpl_mm_xft:
     enabled: true
     environment: NORMAL
-    type: FLAT
+    type: VOID
     fixed-time: 6000
     difficulty: NORMAL
     pvp: false
@@ -86,14 +77,47 @@ worlds:
     weather-cycle: false
     fire-spread: false
     mob-griefing: false
-
-  # LuckyPillar: one arena owns the whole world (a WorldBorder is per world).
-  # GameWorlds only supports FLAT / NORMAL, so use FLAT and keep the arena
-  # center at least 4 blocks above the ground (e.g. y=100).
-  world_lp:
+    keep-inventory: true
+  tmpl_mm_ship:
     enabled: true
     environment: NORMAL
-    type: FLAT
+    type: VOID
+    fixed-time: 6000
+    difficulty: NORMAL
+    pvp: false
+    mob-spawning: false
+    weather-cycle: false
+    fire-spread: false
+    mob-griefing: false
+    keep-inventory: true
+  tmpl_mm_arch:
+    enabled: true
+    environment: NORMAL
+    type: VOID
+    fixed-time: 6000
+    difficulty: NORMAL
+    pvp: false
+    mob-spawning: false
+    weather-cycle: false
+    fire-spread: false
+    mob-griefing: false
+    keep-inventory: true
+  tmpl_mm_villa:
+    enabled: true
+    environment: NORMAL
+    type: VOID
+    fixed-time: 6000
+    difficulty: NORMAL
+    pvp: false
+    mob-spawning: false
+    weather-cycle: false
+    fire-spread: false
+    mob-griefing: false
+    keep-inventory: true
+  tmpl_duel_mace:
+    enabled: true
+    environment: NORMAL
+    type: VOID
     fixed-time: 6000
     difficulty: NORMAL
     pvp: true
@@ -101,20 +125,81 @@ worlds:
     weather-cycle: false
     fire-spread: false
     mob-griefing: false
-    # Must be false: LuckyPillar wants death drops. GameWorlds defaults
-    # keep-inventory to true, and then the death event's drop list is empty,
-    # so setKeepInventory(false) in the game only deletes the items.
+    keep-inventory: true
+  tmpl_duel_sumo:
+    enabled: true
+    environment: NORMAL
+    type: VOID
+    fixed-time: 6000
+    difficulty: NORMAL
+    pvp: true
+    mob-spawning: false
+    weather-cycle: false
+    fire-spread: false
+    mob-griefing: false
+    keep-inventory: true
+  tmpl_fb:
+    enabled: true
+    environment: NORMAL
+    type: VOID
+    fixed-time: 6000
+    difficulty: NORMAL
+    pvp: true
+    mob-spawning: false
+    weather-cycle: false
+    fire-spread: false
+    mob-griefing: false
+    keep-inventory: true
+  tmpl_bdr:
+    enabled: true
+    environment: NORMAL
+    type: VOID
+    fixed-time: 6000
+    difficulty: NORMAL
+    pvp: false
+    mob-spawning: false
+    weather-cycle: false
+    fire-spread: false
+    mob-griefing: false
+    keep-inventory: true
+  tmpl_gtb:
+    enabled: true
+    environment: NORMAL
+    type: VOID
+    fixed-time: 6000
+    difficulty: NORMAL
+    pvp: false
+    mob-spawning: false
+    weather-cycle: false
+    fire-spread: false
+    mob-griefing: false
+    keep-inventory: true
+  # 幸运之柱：柱子是插件运行时在虚空里生成的，模板世界本身是空世界；
+  # keep-inventory 必须 false（死亡要掉落）。
+  tmpl_lp:
+    enabled: true
+    environment: NORMAL
+    type: VOID
+    fixed-time: 6000
+    difficulty: NORMAL
+    pvp: true
+    mob-spawning: false
+    weather-cycle: false
+    fire-spread: false
+    mob-griefing: false
     keep-inventory: false
 
-  # Hold the Fort: dedicated arena world; the plugin builds the battlefield into it.
+  # ---------- 还没迁移的持久世界（保留） ----------
+  # HoldTheFort 是 git submodule：它的地图/世界方案还没接模板世界，先留着。
   world_htf:
     enabled: true
     environment: NORMAL
-    type: FLAT
+    type: VOID
     fixed-time: 6000
     difficulty: NORMAL
-    pvp: true
+    pvp: false
     mob-spawning: false
     weather-cycle: false
     fire-spread: false
     mob-griefing: false
+    keep-inventory: true

@@ -56,12 +56,21 @@ public final class OneShotArena {
     public void save() {
         plugin.reloadConfig();
         FileConfiguration cfg = plugin.getConfig();
-        cfg.set("arena.center", encode(center));
+        // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
+        if (center != null) {
+            cfg.set("arena.center", encode(center));
+        }
         cfg.set("arena.radius", radius);
         cfg.set("arena.height", height);
         cfg.set("arena.depth", depth);
-        cfg.set("arena.pos1", encode(pos1));
-        cfg.set("arena.pos2", encode(pos2));
+        // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
+        if (pos1 != null) {
+            cfg.set("arena.pos1", encode(pos1));
+        }
+        // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
+        if (pos2 != null) {
+            cfg.set("arena.pos2", encode(pos2));
+        }
         if (hasBox()) {
             ensureBounds();
             cfg.set("arena.box-min-y", boxMinY);
@@ -70,12 +79,17 @@ public final class OneShotArena {
             cfg.set("arena.box-min-y", null);
             cfg.set("arena.box-max-y", null);
         }
-        cfg.set("arena.lobby", encode(lobby));
+        // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
+        if (lobby != null) {
+            cfg.set("arena.lobby", encode(lobby));
+        }
         List<String> encoded = new ArrayList<>();
         for (Location spawn : spawns) {
             encoded.add(encode(spawn));
         }
-        cfg.set("arena.spawns", encoded);
+        if (!encoded.isEmpty()) {
+            cfg.set("arena.spawns", encoded);
+        }
         plugin.saveConfig();
     }
 

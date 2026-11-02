@@ -119,8 +119,9 @@ public final class GuessBuildPlugin extends JavaPlugin {
         Bukkit.getScheduler().runTaskLater(this, this::initFloorNpc, 20L);
         Bukkit.getScheduler().runTaskLater(this, this::spawnJoinSign, 20L);
         // 读取自定义地板商店告示牌位置（若之前用 /gtb floor sign 放置过）
+        // 走 Worlds.readLocation：固定世界照旧读序列化 Location，模板/房间作用域读 tpl: 令牌。
         if (getConfig().isSet("floor-sign")) {
-            floorSignLoc = (Location) getConfig().get("floor-sign");
+            floorSignLoc = com.hub.world.Worlds.readLocation(getConfig(), "floor-sign");
         }
         // 启动后上报场地给 GameHub 中央菜单（延迟等待 GameHub 就绪；场地未配置则不上报）
         Bukkit.getScheduler().runTaskLater(this, () -> game.reportArenaToHub(), 40L);
@@ -450,7 +451,8 @@ public final class GuessBuildPlugin extends JavaPlugin {
         sign.line(3, net.kyori.adventure.text.Component.empty());
         sign.update();
         floorSignLoc = block.getLocation();
-        getConfig().set("floor-sign", floorSignLoc);
+        // 同上：房间世界里放告示牌时写 tpl: 令牌，绝不把房间世界名写进磁盘
+        com.hub.world.Worlds.writeLocation(getConfig(), "floor-sign", floorSignLoc);
         saveConfig();
         Chat.send(p, "&a地板商店告示牌已放置于 &e" + block.getX() + ", " + block.getY() + ", " + block.getZ()
                 + "&a，右键即可更换地板（不会被杀死）。");

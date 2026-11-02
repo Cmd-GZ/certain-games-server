@@ -111,6 +111,8 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
     private boolean roundResolved;
 
     private Location lobby;
+    /** 等待区坐标原始串（可能是 tpl: 令牌，需延迟解析）。 */
+    private String lobbyRaw = "";
     private Location audience;
     private Location firstSpot;
     private Location secondSpot;
@@ -291,7 +293,10 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         countdown.cancel();
         cancelTasks();
         restoreAll();
-        lobby = parse(plugin.getConfig().getString("lobby", ""));
+        // 坐标串可能是 `tpl:<模板>`：那种令牌**只有存活房间时才能解析**，
+        // 所以这里保留原始串，真正用到时再解析（见 getLobby()）。
+        lobbyRaw = plugin.getConfig().getString("lobby", "");
+        lobby = parse(lobbyRaw);
         audience = parse(plugin.getConfig().getString("podium.audience", ""));
         firstSpot = parse(plugin.getConfig().getString("podium.first", ""));
         secondSpot = parse(plugin.getConfig().getString("podium.second", ""));
@@ -521,6 +526,9 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
     }
 
     public Location getLobby() {
+        if (lobby == null && lobbyRaw != null && !lobbyRaw.isBlank()) {
+            lobby = parse(lobbyRaw);   // 房间出现后再试一次（tpl: 令牌此时才解析得出来）
+        }
         return lobby == null ? null : lobby.clone();
     }
 
@@ -640,18 +648,28 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
 
     public void setLobby(Location loc) {
         lobby = loc;
-        plugin.getConfig().set("lobby", encode(loc));
+        lobbyRaw = loc == null ? "" : encode(loc);
+        // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
+        if (loc != null) {
+            plugin.getConfig().set("lobby", encode(loc));
+        }
         plugin.saveConfig();
     }
 
     public void setAudience(Location loc) {
         audience = loc;
-        plugin.getConfig().set("podium.audience", encode(loc));
+        // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
+        if (loc != null) {
+            plugin.getConfig().set("podium.audience", encode(loc));
+        }
         plugin.saveConfig();
     }
 
     public void setPodium(String place, Location loc) {
-        plugin.getConfig().set("podium." + place, encode(loc));
+        // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
+        if (loc != null) {
+            plugin.getConfig().set("podium." + place, encode(loc));
+        }
         plugin.saveConfig();
         if ("first".equals(place)) {
             firstSpot = loc;
@@ -678,7 +696,9 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             Chat.send(player, "&c派对等待队列已满（" + maxPlayers() + " 人）。");
             return;
         }
-        if (lobby == null) {
+        // 用 getLobby()：等待区可能写成 `tpl:` 令牌，需要等房间存在后才能解析
+        Location lobbyNow = getLobby();
+        if (lobbyNow == null) {
             Chat.send(player, "&c派对还没配置等待区（/arcade setlobby）。");
             return;
         }
@@ -686,7 +706,7 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         player.getInventory().clear();
         player.setGameMode(GameMode.SURVIVAL);
         resetPlayer(player);
-        player.teleport(lobby);
+        player.teleport(lobbyNow);
         giveWaitItems(player);
         HubAPI.setGame(id, GAME);
         HubAPI.announceJoin(plugin.getName(), player.getName());

@@ -48,14 +48,22 @@ public final class AnimalSlaughterArena {
     public void save() {
         plugin.reloadConfig();
         FileConfiguration cfg = plugin.getConfig();
-        cfg.set("arena.center", encode(center));
+        // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
+        if (center != null) {
+            cfg.set("arena.center", encode(center));
+        }
         cfg.set("arena.radius", radius);
-        cfg.set("arena.lobby", encode(lobby));
+        // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
+        if (lobby != null) {
+            cfg.set("arena.lobby", encode(lobby));
+        }
         List<String> encoded = new ArrayList<>();
         for (Location spawn : spawns) {
             encoded.add(encode(spawn));
         }
-        cfg.set("arena.spawns", encoded);
+        if (!encoded.isEmpty()) {
+            cfg.set("arena.spawns", encoded);
+        }
         plugin.saveConfig();
     }
 

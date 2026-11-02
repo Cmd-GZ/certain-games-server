@@ -218,24 +218,36 @@ public class DuelArena {
         return id.equals(fighter1) || id.equals(fighter2);
     }
 
-    /** 保存场配置到配置段。 */
+    /**
+     * 保存场配置到配置段。
+     *
+     * <p>⚠ 坐标必须走 {@link com.hub.world.Worlds#writeLocation}：场地搬进模板世界之后，
+     * 直接 {@code sec.set("pos1", loc)} 会把**房间世界名**写进磁盘，房间一删，
+     * 下次启动 {@code Location.deserialize} 就报 `unknown world`（历史事故，见 boundWorld 的注释）。
+     * 固定世界（主城这类）的行为完全不变 —— writeLocation 对非房间世界照旧写序列化 Location。
+     */
     public void save(ConfigurationSection sec) {
-        sec.set("pos1", pos1);
-        sec.set("pos2", pos2);
-        sec.set("spawn1", spawn1);
-        sec.set("manual-lobby", manualLobby);
-        sec.set("spawn2", spawn2);
+        com.hub.world.Worlds.writeLocation(sec, "pos1", pos1);
+        com.hub.world.Worlds.writeLocation(sec, "pos2", pos2);
+        com.hub.world.Worlds.writeLocation(sec, "spawn1", spawn1);
+        com.hub.world.Worlds.writeLocation(sec, "manual-lobby", manualLobby);
+        com.hub.world.Worlds.writeLocation(sec, "spawn2", spawn2);
         kit.save(com.hub.world.Worlds.getOrCreate(sec, "kit"));
     }
 
-    /** 从配置段读取。 */
+    /**
+     * 从配置段读取。
+     *
+     * <p>坐标走 {@link com.hub.world.Worlds#readLocation}：既认老的序列化 Location（固定世界），
+     * 也认 {@code tpl:<模板>,x,y,z} 字符串令牌（模板/房间作用域）。
+     */
     public static DuelArena load(String name, ConfigurationSection sec) {
         DuelArena a = new DuelArena(name);
-        a.pos1 = (Location) sec.get("pos1");
-        a.pos2 = (Location) sec.get("pos2");
-        a.spawn1 = (Location) sec.get("spawn1");
-        a.manualLobby = (Location) sec.get("manual-lobby");
-        a.spawn2 = (Location) sec.get("spawn2");
+        a.pos1 = com.hub.world.Worlds.readLocation(sec, "pos1");
+        a.pos2 = com.hub.world.Worlds.readLocation(sec, "pos2");
+        a.spawn1 = com.hub.world.Worlds.readLocation(sec, "spawn1");
+        a.manualLobby = com.hub.world.Worlds.readLocation(sec, "manual-lobby");
+        a.spawn2 = com.hub.world.Worlds.readLocation(sec, "spawn2");
         a.kit = Kit.load(sec.getConfigurationSection("kit"));
         return a;
     }

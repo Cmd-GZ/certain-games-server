@@ -1,23 +1,27 @@
 templates:
-  mini_game:
-    folder: tmpl_mini_game
-  duel:
-    folder: tmpl_duel
-  tr:
-    folder: tmpl_tr
-  tnt:
-    folder: tmpl_tnt
-  mm:
-    folder: tmpl_mm
-  hp:
-    folder: tmpl_hp
-  lp:
-    folder: tmpl_lp
-  gtb:
-    folder: tmpl_gtb
-  pvp_mini_games:
-    folder: tmpl_pvp_mini_games
+  mini_games:
+    folder: tmpl_mini_games
+  tntbt_twins:
+    folder: tmpl_tntbt_twins
+  tntbt_ruins:
+    folder: tmpl_tntbt_ruins
+  mm_xft:
+    folder: tmpl_mm_xft
+  mm_ship:
+    folder: tmpl_mm_ship
+  mm_arch:
+    folder: tmpl_mm_arch
+  mm_villa:
+    folder: tmpl_mm_villa
+  duel_mace:
+    folder: tmpl_duel_mace
   duel_sumo:
     folder: tmpl_duel_sumo
-  hillking_test:
-    folder: tmpl_hillking_test
+  fb:
+    folder: tmpl_fb
+  bdr:
+    folder: tmpl_bdr
+  gtb:
+    folder: tmpl_gtb
+  lp:
+    folder: tmpl_lp

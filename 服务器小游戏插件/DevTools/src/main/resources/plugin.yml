@@ -2,8 +2,17 @@ name: DevTools
 version: '0.1.0'
 main: com.devtools.DevToolsPlugin
 api-version: '1.21'
-description: 开发期一次性工具（区域复制等）。**永不发布**：目录里有 .build-skip。
+description: 开发期一次性工具（区域复制/探针）。**永不发布**：目录里有 .build-skip。
 commands:
   rcopy:
-    description: 把一块区域从一个世界复制到另一个世界
-    usage: /rcopy <源世界> <x1> <y1> <z1> <x2> <y2> <z2> <目标世界> [dx dy dz]
+    description: 把一块区域从一个世界复制到另一个世界（分批，不卡服）
+    usage: /rcopy <源世界> <x1> <y1> <z1> <x2> <y2> <z2> <目标世界> [dx dy dz] [no-air]
+  rscan:
+    description: 统计一块区域里的非空气方块
+    usage: /rscan <世界> <x1> <y1> <z1> <x2> <y2> <z2>
+  rprobe:
+    description: 探针：该点方块 + 脚下最近实体地面
+    usage: /rprobe <世界> <x> <y> <z>
+  rstat:
+    description: 复制队列进度
+    usage: /rstat

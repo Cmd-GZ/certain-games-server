@@ -147,18 +147,20 @@ public class HotPotatoArena {
 
     /** 保存。 */
     public void save(ConfigurationSection sec) {
-        sec.set("pos1", pos1);
-        sec.set("pos2", pos2);
-        sec.set("center", center);
-        sec.set("lobby", lobbyPoint);
+        // R2：走 Worlds.writeLocation —— 房间世界的坐标写回 tpl:<模板>，绝不把房间世界名写进磁盘
+        com.hub.world.Worlds.writeLocation(sec, "pos1", pos1);
+        com.hub.world.Worlds.writeLocation(sec, "pos2", pos2);
+        com.hub.world.Worlds.writeLocation(sec, "center", center);
+        com.hub.world.Worlds.writeLocation(sec, "lobby", lobbyPoint);
     }
 
     public static HotPotatoArena load(String name, ConfigurationSection sec) {
         HotPotatoArena a = new HotPotatoArena(name);
-        a.pos1 = (Location) sec.get("pos1");
-        a.pos2 = (Location) sec.get("pos2");
-        a.center = (Location) sec.get("center");
-        a.lobbyPoint = (Location) sec.get("lobby");
+        // 既认老的序列化 Location，也认 tpl:<模板>,x,y,z 令牌（模板/房间作用域）
+        a.pos1 = com.hub.world.Worlds.readLocation(sec, "pos1");
+        a.pos2 = com.hub.world.Worlds.readLocation(sec, "pos2");
+        a.center = com.hub.world.Worlds.readLocation(sec, "center");
+        a.lobbyPoint = com.hub.world.Worlds.readLocation(sec, "lobby");
         return a;
     }
 }

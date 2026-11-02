@@ -365,12 +365,12 @@ public class FootballArena {
         com.hub.world.Worlds.writeLocation(sec, "pos2", pos2);
         com.hub.world.Worlds.writeLocation(sec, "center", center);
         com.hub.world.Worlds.writeLocation(sec, "lobby", lobbyPoint);
-        sec.set("spawn-red", spawnRed);
-        sec.set("spawn-blue", spawnBlue);
-        sec.set("goal-red-1", goalRedPos1);
-        sec.set("goal-red-2", goalRedPos2);
-        sec.set("goal-blue-1", goalBluePos1);
-        sec.set("goal-blue-2", goalBluePos2);
+        com.hub.world.Worlds.writeLocation(sec, "spawn-red", spawnRed);
+        com.hub.world.Worlds.writeLocation(sec, "spawn-blue", spawnBlue);
+        com.hub.world.Worlds.writeLocation(sec, "goal-red-1", goalRedPos1);
+        com.hub.world.Worlds.writeLocation(sec, "goal-red-2", goalRedPos2);
+        com.hub.world.Worlds.writeLocation(sec, "goal-blue-1", goalBluePos1);
+        com.hub.world.Worlds.writeLocation(sec, "goal-blue-2", goalBluePos2);
     }
 
     public static FootballArena load(String name, ConfigurationSection sec) {
@@ -379,12 +379,12 @@ public class FootballArena {
         a.pos2 = com.hub.world.Worlds.readLocation(sec, "pos2");
         a.center = com.hub.world.Worlds.readLocation(sec, "center");
         a.lobbyPoint = com.hub.world.Worlds.readLocation(sec, "lobby");
-        a.spawnRed = (Location) sec.get("spawn-red");
-        a.spawnBlue = (Location) sec.get("spawn-blue");
-        a.goalRedPos1 = (Location) sec.get("goal-red-1");
-        a.goalRedPos2 = (Location) sec.get("goal-red-2");
-        a.goalBluePos1 = (Location) sec.get("goal-blue-1");
-        a.goalBluePos2 = (Location) sec.get("goal-blue-2");
+        a.spawnRed = com.hub.world.Worlds.readLocation(sec, "spawn-red");
+        a.spawnBlue = com.hub.world.Worlds.readLocation(sec, "spawn-blue");
+        a.goalRedPos1 = com.hub.world.Worlds.readLocation(sec, "goal-red-1");
+        a.goalRedPos2 = com.hub.world.Worlds.readLocation(sec, "goal-red-2");
+        a.goalBluePos1 = com.hub.world.Worlds.readLocation(sec, "goal-blue-1");
+        a.goalBluePos2 = com.hub.world.Worlds.readLocation(sec, "goal-blue-2");
         return a;
     }
 }

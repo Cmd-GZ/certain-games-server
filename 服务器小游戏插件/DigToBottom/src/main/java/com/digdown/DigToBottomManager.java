@@ -152,8 +152,15 @@ public class DigToBottomManager {
 
     public void saveAll() {
         publishRegions();   // 场地可能刚被改过，重新声明（I2）
-        plugin.getConfig().set("arenas", null);
         ConfigurationSection sec = com.hub.world.Worlds.getOrCreate(plugin.getConfig(), "arenas");
+        // ⚠ 不能 `set("arenas", null)` 再整段重写：当前**解析不出世界**的坐标
+        // （比如模板世界还没有存活房间）会被 writeLocation 跳过 → 磁盘上的坐标永久丢失（R2）。
+        // 只删"内存里已经没有的场地"，其余原地写回。
+        for (String key : new java.util.ArrayList<>(sec.getKeys(false))) {
+            if (!arenas.containsKey(key)) {
+                sec.set(key, null);
+            }
+        }
         for (DigToBottomArena a : arenas.values()) {
             a.save(com.hub.world.Worlds.getOrCreate(sec, a.getName()));
         }

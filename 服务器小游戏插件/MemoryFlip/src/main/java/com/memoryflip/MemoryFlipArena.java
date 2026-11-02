@@ -76,7 +76,15 @@ public final class MemoryFlipArena {
     public void save() {
         plugin.reloadConfig();
         FileConfiguration cfg = plugin.getConfig();
-        cfg.set("lobby", encode(lobby));
+        // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
+        if (lobby != null) {
+            cfg.set("lobby", encode(lobby));
+        }
+        // ⚠ 只有读到棋盘时才重写 boards 段：读不出来就**别动它**（R2，否则一次开服就会清空）
+        if (boards.isEmpty()) {
+            plugin.saveConfig();
+            return;
+        }
         cfg.set("boards", null);
         for (int i = 0; i < boards.size(); i++) {
             Board board = boards.get(i);

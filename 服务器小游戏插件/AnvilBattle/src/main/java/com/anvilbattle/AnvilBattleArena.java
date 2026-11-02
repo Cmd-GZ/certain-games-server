@@ -47,14 +47,25 @@ public final class AnvilBattleArena {
     public void save() {
         plugin.reloadConfig();
         FileConfiguration cfg = plugin.getConfig();
-        cfg.set("arena.pos1", encode(pos1));
-        cfg.set("arena.pos2", encode(pos2));
-        cfg.set("arena.lobby", encode(lobby));
+        // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
+        if (pos1 != null) {
+            cfg.set("arena.pos1", encode(pos1));
+        }
+        // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
+        if (pos2 != null) {
+            cfg.set("arena.pos2", encode(pos2));
+        }
+        // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
+        if (lobby != null) {
+            cfg.set("arena.lobby", encode(lobby));
+        }
         List<String> encoded = new ArrayList<>();
         for (Location spawn : spawns) {
             encoded.add(encode(spawn));
         }
-        cfg.set("arena.spawns", encoded);
+        if (!encoded.isEmpty()) {
+            cfg.set("arena.spawns", encoded);
+        }
         cfg.set("arena.void-y", voidY);
         cfg.set("arena.anvil-y", anvilY);
         plugin.saveConfig();

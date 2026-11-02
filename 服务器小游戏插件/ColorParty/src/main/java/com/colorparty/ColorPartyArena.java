@@ -413,8 +413,8 @@ public class ColorPartyArena {
         com.hub.world.Worlds.writeLocation(sec, "pos2", pos2);
         com.hub.world.Worlds.writeLocation(sec, "spawn", spawn);
         com.hub.world.Worlds.writeLocation(sec, "lobby", lobbyPoint);
-        sec.set("panel-pos1", panelPos1);
-        sec.set("panel-pos2", panelPos2);
+        com.hub.world.Worlds.writeLocation(sec, "panel-pos1", panelPos1);
+        com.hub.world.Worlds.writeLocation(sec, "panel-pos2", panelPos2);
         if (cutoffY != CUTOFF_UNSET) {
             sec.set("cutoff-y", cutoffY);
         }
@@ -426,8 +426,8 @@ public class ColorPartyArena {
         a.pos2 = com.hub.world.Worlds.readLocation(sec, "pos2");
         a.spawn = com.hub.world.Worlds.readLocation(sec, "spawn");
         a.lobbyPoint = com.hub.world.Worlds.readLocation(sec, "lobby");
-        a.panelPos1 = (Location) sec.get("panel-pos1");
-        a.panelPos2 = (Location) sec.get("panel-pos2");
+        a.panelPos1 = com.hub.world.Worlds.readLocation(sec, "panel-pos1");
+        a.panelPos2 = com.hub.world.Worlds.readLocation(sec, "panel-pos2");
         a.cutoffY = sec.contains("cutoff-y") ? sec.getInt("cutoff-y") : CUTOFF_UNSET;
         return a;
     }
