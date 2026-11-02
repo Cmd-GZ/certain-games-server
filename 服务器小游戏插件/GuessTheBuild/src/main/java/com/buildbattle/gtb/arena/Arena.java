@@ -286,6 +286,32 @@ public class Arena {
                 * (max.getBlockZ() - min.getBlockZ() + 1);
     }
 
+    /**
+     * 房间化（R1.5）：把场地换绑到"这一局实际跑的世界"（坐标不变，只换世界实例）。
+     *
+     * <p>取世界走 {@code RoomBinding}（**父级委派优先**，其次房间上下文/唯一房间）；
+     * 拿不到就不动，保持静态配置的行为。
+     */
+    public void bindRoomWorld() {
+        World target = com.hub.room.RoomBinding.worldFor("gtb");
+        if (target == null || target.equals(world)) {
+            return;
+        }
+        org.bukkit.Bukkit.getLogger().info("[GuessTheBuild] 场地已换绑到房间世界："
+                + target.getName());
+        world = target;
+        min = move(min, target);
+        max = move(max, target);
+        spawn = move(spawn, target);
+    }
+
+    private static Location move(Location loc, World w) {
+        if (loc == null) {
+            return null;
+        }
+        return new Location(w, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+    }
+
     public World getWorld() {
         return world;
     }

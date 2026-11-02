@@ -596,3 +596,26 @@ maps:
           x2: 304
           y2: 114
           z2: 642
+  gtb:
+    糖果屋:
+      entry:
+        template: gtb
+        x: -17
+        y: 70
+        z: 17
+      worlds:
+      - template: gtb
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 糖果屋
+          x1: -30
+          y1: 69
+          z1: 4
+          x2: -4
+          y2: 69
+          z2: 30

@@ -217,7 +217,21 @@ public class GameManager {
         reportArena();
     }
 
+    /** 房间化：把当前生效场地的世界换绑到"这一局实际跑的世界"（委派/房间上下文）。 */
+    private void bindArenaRoom() {
+        var mgr = plugin.getArenas();
+        var active = mgr.getActiveName();
+        if (active == null) {
+            return;
+        }
+        var a = mgr.getArena(active);
+        if (a != null) {
+            a.bindRoomWorld();
+        }
+    }
+
     public synchronized void join(Player p) {
+        bindArenaRoom();
         join(p, null);
     }
 
