@@ -41,7 +41,7 @@ public abstract class GameSession {
 
     private final String gameKey;
     private final String arenaName;
-    private final GameSession parent;
+    private GameSession parent;
     private final List<GameSession> children = new ArrayList<>();
     private final Set<UUID> players = new LinkedHashSet<>();
     private final Set<BukkitTask> tasks = new LinkedHashSet<>();
@@ -80,6 +80,27 @@ public abstract class GameSession {
 
     public final String arenaName() {
         return arenaName;
+    }
+
+    /**
+     * 被父级收养（委派场景用）。
+     *
+     * <p>为什么需要：子小游戏被派对叫起来时，它的会话是**自己 new 出来的**，创建时并不知道父级
+     * （改所有游戏的构造签名代价太大）。所以允许在"还没人加入"时补挂父级 ——
+     * 这与 D17 允许的嵌套形态一致：派对（父）⊃ 当前子游戏（子）。
+     *
+     * @return 是否挂上了（已经有父级 / 不是空会话时返回 false，幂等且不覆盖）
+     */
+    public final boolean adoptUnder(GameSession newParent) {
+        if (newParent == null || newParent == this || this.parent != null) {
+            return false;
+        }
+        if (!players.isEmpty()) {
+            return false;   // 已经有人了再改父子关系会打乱归属链，宁可不挂
+        }
+        this.parent = newParent;
+        newParent.children.add(this);
+        return true;
     }
 
     public final GameSession parent() {
@@ -273,6 +294,12 @@ public abstract class GameSession {
         // 玩家已经在**另一个并列对局**里 —— 这是正常的玩家操作（在 GUI 里点了别的游戏），
         // 不是程序错误，所以**不记 Failures**（那是给真异常用的，混进去会把 doctor 刷满、
         // 让真正的问题被淹掉）。这里留一行 INFO 足够定位。
+        // **父级委派**：子游戏被派对叫起来时，先把自己的会话挂到派对会话下，
+        // 这样归属链是"派对 ⊃ 子游戏"（I1 允许嵌套），下面的并列检查才不会误杀。
+        com.hub.room.GameDelegation.Task task = com.hub.room.GameDelegation.current();
+        if (task != null && gameKey.equals(task.game()) && task.parentSession() != null) {
+            adoptUnder(task.parentSession());
+        }
         List<GameSession> chain = PlayerSessions.chainOf(p.getUniqueId());
         for (GameSession other : chain) {
             if (other != this && !isAncestorOrDescendant(other)) {

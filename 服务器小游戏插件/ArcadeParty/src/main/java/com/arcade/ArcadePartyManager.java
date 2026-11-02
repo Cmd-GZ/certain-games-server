@@ -562,7 +562,15 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
     private com.hub.room.RoomManager.Room partyRoom() {
         // 注意：本类的 GAME 是**显示名**（"街机派对"），而房间的 game 是**游戏 key**（arcadeparty）。
         // 两者不能混用 —— 混了的结果是"房间明明在，派对却看不见它"（池子不取交集、也不委派）。
-        com.hub.room.RoomManager.Room r = com.hub.room.RoomManager.activeFor("arcadeparty");
+        // ① 框架在 /hub join 时告诉我们的房间（唯一可靠来源：多房间时 activeFor 会返回 null）
+        com.hub.room.RoomManager.Room r = com.hub.room.RoomContext.roomOf("arcadeparty");
+        if (r == null) {
+            r = com.hub.room.RoomContext.roomOf("arcade");
+        }
+        // ② 没有上下文（例如老路径直接 /arcade join）才退回"搜唯一房间"
+        if (r == null) {
+            r = com.hub.room.RoomManager.activeFor("arcadeparty");
+        }
         if (r == null) {
             r = com.hub.room.RoomManager.activeFor("arcade");
         }
@@ -973,8 +981,9 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
                 }
                 if (stageWorld != null) {
                     currentArena = stageArena;
+                    // 带上派对会话：子游戏会话会挂到它下面（I1 嵌套：派对 ⊃ 当前子游戏）
                     com.hub.room.GameDelegation.begin(currentGameKey, stageWorld,
-                            stageArena, new ArrayList<>(transitionParticipants));
+                            stageArena, new ArrayList<>(transitionParticipants), session);
                     plugin.getLogger().info("[派对] 已委派 " + currentGameKey + " 到房间 "
                             + room.roomId + " 的世界 " + stageWorld.getName()
                             + "（场地 " + currentArena + "，"

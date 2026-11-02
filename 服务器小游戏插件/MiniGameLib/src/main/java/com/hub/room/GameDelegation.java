@@ -25,7 +25,8 @@ import java.util.UUID;
 public final class GameDelegation {
 
     /** 一次委派。 */
-    public record Task(String game, World world, String arenaName, List<UUID> players) {
+    public record Task(String game, World world, String arenaName, List<UUID> players,
+                       com.hub.session.GameSession parentSession) {
     }
 
     private static Task current;
@@ -35,8 +36,14 @@ public final class GameDelegation {
 
     /** 开始一次委派（覆盖上一个）。 */
     public static void begin(String game, World world, String arenaName, List<UUID> players) {
+        begin(game, world, arenaName, players, null);
+    }
+
+    /** 带父会话的委派：子游戏会话会挂到它下面（I1 的嵌套形态）。 */
+    public static void begin(String game, World world, String arenaName, List<UUID> players,
+                             com.hub.session.GameSession parentSession) {
         current = new Task(game, world, arenaName,
-                players == null ? List.of() : List.copyOf(players));
+                players == null ? List.of() : List.copyOf(players), parentSession);
     }
 
     /** 结束委派。 */

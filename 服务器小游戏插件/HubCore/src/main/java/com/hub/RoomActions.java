@@ -68,8 +68,12 @@ public final class RoomActions {
         if (join != null && !join.isBlank()) {
             // {arena} 用房间记住的场地名（一个模板世界多张地图时，这决定进哪块）
             join = join.replace("{arena}", room.arena == null ? "" : room.arena).trim();
+            // **告诉游戏它在哪个房间**：派对/子游戏据此取场地与委派，不用自己去搜
+            //（activeFor 在多房间时返回 null，靠搜是搜不到的）。
+            com.hub.room.RoomContext.bind(gameKey, room);
             if (plugin != null) {
-                plugin.getLogger().info("[/hub join] " + p.getName() + " 执行 " + join);
+                plugin.getLogger().info("[/hub join] " + p.getName() + " 执行 " + join
+                        + "（房间上下文已绑定 " + gameKey + " -> " + room.roomId + "）");
             }
             p.performCommand(join);
             p.sendMessage(LEGACY.deserialize("&a已进入房间 &f" + roomId
