@@ -423,7 +423,7 @@ public final class OneShotArena {
     }
 
     public Location center() {
-        return center == null ? null : center.clone();
+        return com.hub.room.RoomBinding.apply("oneshot", center);
     }
 
     /** 场地所在世界：手动区域取 pos1 的世界，自动圆形取圆心世界。 */
@@ -449,11 +449,11 @@ public final class OneShotArena {
     }
 
     public Location getPos1() {
-        return pos1 == null ? null : pos1.clone();
+        return com.hub.room.RoomBinding.apply("oneshot", pos1);
     }
 
     public Location getPos2() {
-        return pos2 == null ? null : pos2.clone();
+        return com.hub.room.RoomBinding.apply("oneshot", pos2);
     }
 
     /** 切回自动建场（圆形）时清掉手动区域。 */
@@ -464,6 +464,11 @@ public final class OneShotArena {
     }
 
     public Location spectatorSpot() {
+        Location spot = spectatorSpot0();
+        return com.hub.room.RoomBinding.apply("oneshot", spot);
+    }
+
+    private Location spectatorSpot0() {
         if (hasBox()) {
             double cx = (minX() + maxX() + 1) / 2.0;
             double cz = (minZ() + maxZ() + 1) / 2.0;
@@ -473,7 +478,7 @@ public final class OneShotArena {
     }
 
     public Location getLobby() {
-        return lobby;
+        return com.hub.room.RoomBinding.apply("oneshot", lobby);
     }
 
     public void setLobby(Location lobby) {

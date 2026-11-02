@@ -573,3 +573,26 @@ maps:
         rules: *id001
         regions:
         - *id006
+  oneshot:
+    oneshot_mini_game:
+      entry:
+        template: mini_game
+        x: 260.49
+        y: 74.5
+        z: 648.93
+      worlds:
+      - template: mini_game
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: OneShot
+          x1: 203
+          y1: 112
+          z1: 566
+          x2: 304
+          y2: 114
+          z2: 642
