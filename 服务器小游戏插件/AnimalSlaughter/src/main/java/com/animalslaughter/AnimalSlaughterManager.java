@@ -80,6 +80,9 @@ public final class AnimalSlaughterManager {
     private final NamespacedKey kindKey;
     private final NamespacedKey dropKey;
     private final WaitCountdown countdown;
+    /** D21：加入 tick 与同 tick 内随机名次（同时进入的几人随机决出主持人）。 */
+    private final java.util.Map<UUID, Long> joinTick = new java.util.HashMap<>();
+    private final java.util.Map<UUID, Long> joinSeed = new java.util.HashMap<>();
     private final Random random = new Random();
 
     private State state = State.WAITING;
@@ -200,6 +203,75 @@ public final class AnimalSlaughterManager {
                     }
                 }
             }
+
+            // ---------- D21 主持人流程（配置 flow: host 才启用，默认走上游） ----------
+
+            @Override
+
+            public boolean hostFlow() {
+
+                return "host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"));
+
+            }
+
+            @Override
+
+            public int waitSeconds() {
+
+                return Math.max(5, plugin.getConfig().getInt("wait-seconds", 300));
+
+            }
+
+            @Override
+
+            public java.util.List<UUID> waitingOrder() {
+
+                java.util.List<UUID> order = new ArrayList<>(waiting);
+
+                order.sort(java.util.Comparator
+
+                        .comparingLong((UUID id) -> joinTick.getOrDefault(id, 0L))
+
+                        .thenComparingLong(id -> joinSeed.getOrDefault(id, 0L)));
+
+                return order;
+
+            }
+
+            @Override
+
+            public void onHostTimeout(UUID host) {
+
+                Player hp = Bukkit.getPlayer(host);
+
+                String hname = hp == null ? host.toString() : hp.getName();
+
+                waiting.remove(host);
+
+                if (session != null && hp != null && !session.state().isFinal()) {
+
+                    session.leave(hp);
+
+                }
+
+                if (hp != null && hp.isOnline()) {
+
+                    Chat.send(hp, "&c倒计时结束还没开始，你被移出本局（主持人超时）。");
+
+                    HubAPI.teleportToLobby(hp);
+
+                }
+
+                plugin.getLogger().info("[AnimalSlaughter] 主持人 " + hname
+
+                        + " 超时未开始，已移出本局（剩余 " + waiting.size() + " 人）");
+
+                broadcast("&e主持人 &f" + hname + " &e超时未开始，已移出本局。");
+
+                countdown.update();
+
+            }
+
 
             @Override
             public void onStart() {
@@ -466,10 +538,6 @@ public final class AnimalSlaughterManager {
         return player.isOp() || player.hasPermission("animal.admin");
     }
 
-    public int waitingCount() {
-        return waiting.size();
-    }
-
     public int playingCount() {
         return playing.size();
     }
@@ -483,6 +551,26 @@ public final class AnimalSlaughterManager {
     }
 
     // ---------- 加入 / 离开 ----------
+
+    /** 发送者是否是当前主持人（D21；仅 flow: host 时成立）。 */
+    public boolean isHost(org.bukkit.command.CommandSender sender) {
+        if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
+            return false;
+        }
+        if (!(sender instanceof Player p)) {
+            return false;
+        }
+        UUID host = countdown.currentHost();
+        return host != null && host.equals(p.getUniqueId());
+    }
+
+    public int waitingCount() {
+        return waiting.size();
+    }
+
+    public int minPlayersPublic() {
+        return minPlayers();
+    }
 
     public void join(Player player) {
         UUID id = player.getUniqueId();
@@ -503,6 +591,8 @@ public final class AnimalSlaughterManager {
             return;
         }
         waiting.add(id);
+        joinTick.put(id, (long) Bukkit.getCurrentTick());
+        joinSeed.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
         ensureSession();
         if (session != null && !session.join(player)) {
             plugin.getLogger().warning("[AnimalSlaughter] " + player.getName() + " 加入归属链失败（见 [被吞异常]）");
