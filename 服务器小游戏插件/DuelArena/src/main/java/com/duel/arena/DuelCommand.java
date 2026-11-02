@@ -241,6 +241,14 @@ public class DuelCommand implements CommandExecutor, TabCompleter {
                 m.placeTopSign(p);
                 return true;
             }
+            case "start" -> {
+                // D21：主持人或管理员开局（/hub start 也走这里）
+                if (!(sender instanceof Player sp)) {
+                    Chat.send(sender, "&c该命令需要玩家执行。");
+                    return true;
+                }
+                m.handleStartPaper(sp);
+            }
             case "join" -> {
                 if (args.length < 2) {
                     Chat.send(sender, "&c用法：/duel join <场名>（可 /duel list 查看）");

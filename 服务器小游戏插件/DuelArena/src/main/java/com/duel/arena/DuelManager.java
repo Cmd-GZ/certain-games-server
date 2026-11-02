@@ -534,6 +534,7 @@ public class DuelManager {
         }
         playerArena.put(id, arenaName);
         a.getQueue().add(id);
+        a.recordJoin(id);   // D21
 
         p.getInventory().clear();
         p.setGameMode(GameMode.SURVIVAL);
@@ -650,14 +651,44 @@ public class DuelManager {
         if (arenaName == null) return;
         DuelArena a = arenas.get(arenaName);
         if (a == null || a.getState() != DuelArena.State.WAITING) return;
-        if (!p.isOp() && !p.hasPermission("duel.admin")) {
-            Chat.send(p, "&c只有管理员（OP 或 duel.admin）可以开始。");
-            return;
+        // D21：管理员随时可开；**主持人**也可以开，但不能少于 2 人
+        boolean isAdmin = p.isOp() || p.hasPermission("duel.admin");
+        if (!isAdmin) {
+            UUID host = wait(a).currentHost();
+            if (host == null || !host.equals(p.getUniqueId())) {
+                Chat.send(p, "&c只有本场**主持人**或管理员可以开始。");
+                return;
+            }
+            if (a.getQueue().size() < 2) {
+                Chat.send(p, "&c需要 &f2 名玩家&c才能开始（现在是 " + a.getQueue().size() + " 人）。");
+                return;
+            }
         }
         startFight(a);
     }
 
     /** 该场的等待倒计时（每场一份；OP 暂停/人数不足取消/满人 3 秒/达标 30 秒的规则在公共库）。 */
+    public int waitingCountOf(String arenaName) {
+        DuelArena a = arenas.get(arenaName);
+        return a == null ? 0 : a.getQueue().size();
+    }
+
+    public int minPlayersOf(String arenaName) {
+        return plugin.getConfig().getInt("min-players", 2);
+    }
+
+    public boolean isHostOf(Player p, String arenaName) {
+        if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
+            return false;
+        }
+        DuelArena a = arenas.get(arenaName);
+        if (a == null || p == null) {
+            return false;
+        }
+        UUID host = wait(a).currentHost();
+        return host != null && host.equals(p.getUniqueId());
+    }
+
     private WaitCountdown wait(DuelArena a) {
         return waits.computeIfAbsent(a.getName(), n -> new WaitCountdown(plugin, new WaitCountdown.Host() {
             @Override
@@ -701,6 +732,78 @@ public class DuelManager {
             public void onMessage(String message) {
                 broadcastToArena(a, message);
             }
+
+            // ---------- D21 主持人流程（配置 flow: host 才启用，默认走上游） ----------
+
+                        @Override
+            public boolean hostFlow() {
+                // Duel 也走主持人流程（用户定）：**必须手动开始**（右键"开始纸"或 /duel start），
+                // 倒计时超时则踢掉主持人 —— 目的是防止主持人恶意占着房间不开局。
+                return "host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"));
+            }
+
+            @Override
+
+            public int waitSeconds() {
+
+                return Math.max(5, plugin.getConfig().getInt("wait-seconds", 300));
+
+            }
+
+            @Override
+
+            public java.util.List<UUID> waitingOrder() {
+
+                java.util.List<UUID> order = new ArrayList<>(a.getQueue());
+
+                order.sort(java.util.Comparator
+
+                        .comparingLong((UUID id) -> a.joinTickOf(id))
+
+                        .thenComparingLong(id -> a.joinSeedOf(id)));
+
+                return order;
+
+            }
+
+            @Override
+
+            public void onHostTimeout(UUID host) {
+
+                Player hp = Bukkit.getPlayer(host);
+
+                String hname = hp == null ? host.toString() : hp.getName();
+
+                a.getQueue().remove(host);
+
+                playerArena.remove(host);
+
+                DuelSession sess = sessions.get(a.getName());
+
+                if (sess != null && hp != null && !sess.state().isFinal()) {
+
+                    sess.leave(hp);
+
+                }
+
+                if (hp != null && hp.isOnline()) {
+
+                    Chat.send(hp, "&c倒计时结束还没开始，你被移出本局（主持人超时）。");
+
+                    com.hub.api.HubAPI.teleportToLobby(hp);
+
+                }
+
+                plugin.getLogger().info("[DuelArena] 场 " + a.getName() + "：主持人 " + hname
+
+                        + " 超时未开始，已移出（剩余 " + a.getQueue().size() + " 人）");
+
+                broadcastToArena(a, "&e主持人 &f" + hname + " &e超时未开始，已移出本局。");
+
+                DuelManager.this.wait(a).update();
+
+            }
+
 
             @Override
             public void onStart() {
