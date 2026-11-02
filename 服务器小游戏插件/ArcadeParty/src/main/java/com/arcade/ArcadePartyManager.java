@@ -990,10 +990,16 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
                             + transitionParticipants.size() + " 人）");
                 }
             }
+            plugin.getLogger().info("[派对] 给 " + transitionParticipants.size()
+                    + " 人执行关卡命令：/" + join + "（委派=" + (com.hub.room.GameDelegation.current() == null
+                    ? "无" : com.hub.room.GameDelegation.current().game()) + "）");
             for (UUID id : transitionParticipants) {
                 Player p = Bukkit.getPlayer(id);
                 if (p != null) {
-                    p.performCommand(join);
+                    boolean ok = p.performCommand(join);
+                    if (!ok) {
+                        plugin.getLogger().warning("[派对] 关卡命令执行失败（未知命令？）：/" + join);
+                    }
                 }
             }
         }

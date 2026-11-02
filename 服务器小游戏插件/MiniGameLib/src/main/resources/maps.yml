@@ -16,7 +16,7 @@ maps:
           fixed-time: 6000
         regions:
         - &id003
-          name: ''
+          name: 蛇行派对
           x1: 198.5
           y1: 34
           z1: 236.5
@@ -41,7 +41,7 @@ maps:
           fixed-time: 6000
         regions:
         - &id004
-          name: ''
+          name: 动物屠宰
           x1: -7.5
           y1: 50
           z1: 281.5
@@ -65,7 +65,7 @@ maps:
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - name: ''
+        - name: 铁砧掘战
           x1: 578.7
           y1: 58
           z1: -214.7
@@ -111,7 +111,7 @@ maps:
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - name: ''
+        - name: 跃火者
           x1: 624
           y1: 78
           z1: 573
@@ -263,7 +263,7 @@ maps:
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - name: ''
+        - name: 占地风云1
           x1: 10
           y1: -14
           z1: -217
@@ -334,7 +334,7 @@ maps:
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - name: ''
+        - name: 花落水家
           x1: 18
           y1: 0
           z1: 18
@@ -402,7 +402,7 @@ maps:
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - name: ''
+        - name: 群友竞速
           x1: -283.1
           y1: 27.7
           z1: -221.4
@@ -449,7 +449,7 @@ maps:
           fixed-time: 6000
         regions:
         - &id002
-          name: ''
+          name: 高台之王
           x1: 620.5
           y1: 53
           z1: 300.5
@@ -521,7 +521,7 @@ maps:
           keep-inventory: false
           fixed-time: 6000
         regions:
-        - name: ''
+        - name: 击退大战
           x1: 232.7
           y1: 30.5
           z1: -238.1
