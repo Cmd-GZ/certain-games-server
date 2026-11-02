@@ -53,8 +53,8 @@ public final class RoomActions {
         if (entry != null) {
             p.teleport(entry);
         }
-        String gameKey = room.game != null && !room.game.isBlank()
-                ? room.game : room.template.gameKey();
+        String gameKey = room.game() != null && !room.game().isBlank()
+                ? room.game() : room.template.gameKey();
         if (plugin != null) {
             plugin.getLogger().info("[/hub join] " + p.getName() + " -> " + roomId + "（" + gameKey + "）");
         }

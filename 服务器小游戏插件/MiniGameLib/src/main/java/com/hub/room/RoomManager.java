@@ -74,16 +74,48 @@ public final class RoomManager {
         public final long createdAt = System.currentTimeMillis();
         public long lastActiveAt = System.currentTimeMillis();
 
-        /** 这个房间服务的是哪个游戏 / 哪张地图（按地图造房时填；旧的按模板造房时为空）。 */
-        public String game = "";
-        public String map = "";
+        /**
+         * 这个房间服务的是哪个游戏 / 哪张地图。**对游戏只读**（同 {@link #entry}：
+         * 数据来源是地图声明、写者是框架；游戏能改就会让 {@code activeFor(game)} 之类查不到自己的房间）。
+         */
+        private String game = "";
+        private String map = "";
+
+        public String game() {
+            return game;
+        }
+
+        public String map() {
+            return map;
+        }
+
+        /** 框架建房时写入一次。 */
+        void setGameAndMap(String gameKey, String mapName) {
+            this.game = gameKey == null ? "" : gameKey;
+            this.map = mapName == null ? "" : mapName;
+        }
 
         /**
          * 房间持有的**全部世界实例**（一张地图可能散在多个世界，例如派对就有 3 个）。
          *
          * <p>{@link #world} 始终等于**第一个**实例的世界，保留给"单世界房间"的既有代码使用。
          */
-        public final java.util.List<WorldInstance> instances = new java.util.ArrayList<>();
+        private final java.util.List<WorldInstance> instances = new java.util.ArrayList<>();
+
+        /** 世界实例列表（**只读视图**）。外部不得直接增删，只有框架在建房/回滚时改。 */
+        public java.util.List<WorldInstance> instances() {
+            return java.util.Collections.unmodifiableList(instances);
+        }
+
+        /** 仅框架用：追加一个世界实例。 */
+        void addInstance(WorldInstance wi) {
+            instances.add(wi);
+        }
+
+        /** 仅框架用：回滚时清空。 */
+        void clearInstances() {
+            instances.clear();
+        }
 
         /**
          * 入口点：{@code /hub join} 后玩家先出现在这。**对游戏只读**。
@@ -453,8 +485,7 @@ public final class RoomManager {
         }
 
         Room room = new Room(roomId, null);
-        room.game = map.game();
-        room.map = map.name();
+        room.setGameAndMap(map.game(), map.name());
         java.util.List<File> created = new java.util.ArrayList<>();
         long t0 = System.nanoTime();
 
@@ -502,7 +533,7 @@ public final class RoomManager {
                     Failures.recordAndWarn("RoomManager.region/" + roomId, ex);
                 }
             }
-            room.instances.add(new WorldInstance(plan.templateKey(), plan, w));
+            room.addInstance(new WorldInstance(plan.templateKey(), plan, w));
             if (index == 0) {
                 room.world = w;
                 room.template = tpl;
@@ -519,12 +550,12 @@ public final class RoomManager {
 
         long tLoad = System.nanoTime();
         ROOMS.put(roomId, room);
-        for (WorldInstance wi : room.instances) {
+        for (WorldInstance wi : room.instances()) {
             if (wi.world != null) {
                 WORLD_INDEX.put(wi.world.getName(), room);
             }
         }
-        log("已创建房间 " + room.describe() + "（" + room.instances.size() + " 个世界 / 地图 "
+        log("已创建房间 " + room.describe() + "（" + room.instances().size() + " 个世界 / 地图 "
                 + map.name() + "，总耗时 " + (tLoad - t0) / 1_000_000 + "ms）");
         return room;
     }
@@ -539,9 +570,9 @@ public final class RoomManager {
                 return new Location(w, e.x(), e.y(), e.z());
             }
         }
-        if (!room.instances.isEmpty() && !room.instances.get(0).plan.regions().isEmpty()) {
-            GameMap.RegionPlan r = room.instances.get(0).plan.regions().get(0);
-            World w = room.instances.get(0).world;
+        if (!room.instances().isEmpty() && !room.instances().get(0).plan.regions().isEmpty()) {
+            GameMap.RegionPlan r = room.instances().get(0).plan.regions().get(0);
+            World w = room.instances().get(0).world;
             if (w != null) {
                 return new Location(w, r.centerX(), r.y1(), r.centerZ());
             }
@@ -551,7 +582,7 @@ public final class RoomManager {
 
     /** 建到一半失败：把已经造出来的世界和区域都回滚掉。 */
     private static void rollbackWorlds(Room room, java.util.List<File> created) {
-        for (WorldInstance wi : room.instances) {
+        for (WorldInstance wi : room.instances()) {
             if (wi.world != null) {
                 try {
                     Bukkit.unloadWorld(wi.world, false);
@@ -560,7 +591,7 @@ public final class RoomManager {
                 }
             }
         }
-        room.instances.clear();
+        room.clearInstances();
         for (File dir : created) {
             deleteDir(dir);
         }

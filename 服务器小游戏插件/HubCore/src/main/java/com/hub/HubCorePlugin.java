@@ -646,7 +646,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
                 return;
             }
             sender.sendMessage(LEGACY.deserialize("&a已创建房间 &f" + room.roomId
-                    + "&a（地图 &f" + map + "&a，&f" + room.instances.size() + "&a 个世界）。加入：&f/hub join "
+                    + "&a（地图 &f" + map + "&a，&f" + room.instances().size() + "&a 个世界）。加入：&f/hub join "
                     + room.roomId));
             return;
         }
