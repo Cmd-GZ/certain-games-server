@@ -6,7 +6,7 @@
 
     <groupId>com.hub</groupId>
     <artifactId>hub-core</artifactId>
-    <version>1.13.1</version>
+    <version>1.13.2</version>
     <packaging>jar</packaging>
 
     <name>HubCore</name>

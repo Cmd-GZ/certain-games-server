@@ -662,6 +662,17 @@ public class HubManager implements HubService {
             case "cmd" -> {
                 if (parsed[3] != null && !parsed[3].isEmpty()) {
                     p.closeInventory();
+                    // **兜底**：菜单里若配了直连命令（如 `gtb join`），而那个游戏已经房间化，
+                    // 直连必然失败（场地是 tpl: 令牌，没有存活房间 → "场地未配置完整"）。
+                    // 这里改成打开房间 UI，走正常的"造房/选房"流程。
+                    String head = parsed[3].split("\\s+")[0].toLowerCase(java.util.Locale.ROOT);
+                    String matchedCmd = matchRoomGame(head);
+                    if (matchedCmd != null) {
+                        plugin.getLogger().info("[/hub 菜单] 槽位直连命令 /" + parsed[3]
+                                + " 已房间化 → 转房间 UI（" + matchedCmd + "）");
+                        com.hub.gui.RoomGui.open(p, matchedCmd, com.hub.gui.RoomGui.Mode.ROOMS);
+                        return;
+                    }
                     Bukkit.dispatchCommand(p, parsed[3]);
                 }
             }

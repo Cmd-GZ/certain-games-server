@@ -121,15 +121,26 @@ public class GameManager {
     /** 设置等待点（OP /gtb lobby）。 */
     public void setLobbyPoint(Location loc) {
         this.lobbyPoint = loc.clone();
-        plugin.getConfig().set("lobby-point", loc);
+        com.hub.world.Worlds.writeLocation(plugin.getConfig(), "lobby-point", loc);
         plugin.saveConfig();
     }
 
+    /**
+     * 等待点。**必须走 {@code Worlds.readLocation}**：房间化之后配置里存的是
+     * {@code tpl:<模板键>,x,y,z} 这样的**字符串令牌**，直接 `(Location) get(...)`
+     * 会抛 ClassCastException（真实崩溃：点"加入"直接炸在 GUI 回调里）。
+     *
+     * <p>令牌要等模板有存活房间才解析得出来，所以**解析失败时不缓存**，下次再试。
+     */
     public Location getLobbyPoint() {
-        if (lobbyPoint == null) {
-            lobbyPoint = (Location) plugin.getConfig().get("lobby-point");
+        if (lobbyPoint != null) {
+            return lobbyPoint;
         }
-        return lobbyPoint;
+        Location parsed = com.hub.world.Worlds.readLocation(plugin.getConfig(), "lobby-point");
+        if (parsed != null) {
+            lobbyPoint = parsed;   // 只有真解析出来了才缓存
+        }
+        return parsed;
     }
     private final Set<String> usedWords = new HashSet<>();
 
