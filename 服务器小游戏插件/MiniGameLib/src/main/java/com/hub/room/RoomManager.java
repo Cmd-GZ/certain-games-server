@@ -479,8 +479,8 @@ public final class RoomManager {
                 rollbackWorlds(room, created);
                 return fail("地图 " + map.name() + " 引用的模板不存在：" + plan.templateKey());
             }
-            // 命名统一：<房间名>_1_<世界序号>（第一个世界也是 _1_1，不再特殊）
-            String worldName = roomId + "_1_" + (index + 1);
+            // 命名统一：<房间名>_<世界序号>（房间名本身已带序号，所以是 room_x_1 → room_x_1_1）
+            String worldName = roomId + "_" + (index + 1);
             File dest = new File(worldDimDir(), worldName);
             try {
                 copyDirectory(tpl.dir(), dest);
