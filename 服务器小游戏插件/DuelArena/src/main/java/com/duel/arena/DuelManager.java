@@ -673,7 +673,7 @@ public class DuelManager {
         if (room == null || room.world == null) {
             return;
         }
-        DuelArena a = arenas.get(room.arena);
+        DuelArena a = arenas.get(room.arena());
         if (a == null) {
             return;
         }

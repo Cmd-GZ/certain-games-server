@@ -73,7 +73,17 @@ public final class RoomManager {
          * <p>为什么需要：一个模板世界可能装多张地图（`world_mini_game` 就是），
          * 而一个房间只服务一张。空串表示"整个模板世界算一张图"。
          */
-        public String arena = "";
+        private String arena = "";
+
+        /** 这个房间服务模板世界里的哪张地图（空串 = 整个世界算一张图）。只读。 */
+        public String arena() {
+            return arena;
+        }
+
+        /** 框架建房时写入（一次）。 */
+        void setArena(String arenaName) {
+            this.arena = arenaName == null ? "" : arenaName;
+        }
         public World world;
         public final long createdAt = System.currentTimeMillis();
         public long lastActiveAt = System.currentTimeMillis();
@@ -234,7 +244,7 @@ public final class RoomManager {
             String sg = subGames().isEmpty() ? "" : " 子游戏=" + subGames();
             return roomId + " ← " + template.key()
                     + " [" + (world == null ? "未加载" : world.getName()) + "]"
-                    + (arena == null || arena.isBlank() ? "" : " 地图=" + arena)
+                    + (arena() == null || arena().isBlank() ? "" : " 地图=" + arena())
                     + " 人=" + playerCount() + " 年龄=" + ageSeconds() + "s 空置=" + idleSeconds() + "s"
                     + sg;
         }
@@ -710,7 +720,7 @@ public final class RoomManager {
                                    java.util.function.Consumer<Room> done) {
         createAsync(templateKey, desiredRoomId, room -> {
             if (room != null && arenaName != null && !arenaName.isBlank()) {
-                room.arena = arenaName;
+                room.setArena(arenaName);
             }
             done.accept(room);
         });
