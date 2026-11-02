@@ -610,8 +610,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
         String templateKey = null;
         String arenaName = "";
         for (com.hub.room.WorldTemplate t : com.hub.room.RoomManager.templates()) {
-            boolean gameOk = t.gameKey().equalsIgnoreCase(game)
-                    || registry.canonicalName(game).equalsIgnoreCase(t.gameKey());
+            boolean gameOk = t.serves(game) || t.serves(registry.canonicalName(game));
             if (!gameOk) {
                 continue;
             }

@@ -25,6 +25,41 @@ public record WorldTemplate(
         List<Box> regions
 ) {
 
+    /**
+     * 这个模板是否服务指定的游戏。
+     *
+     * <p>**为什么模板可以服务多个游戏**：同一个模板世界经常被多个游戏共用 ——
+     * 最典型的是"派对的子小游戏被单独拉出来包装成独立小游戏"：**同一张地图**
+     * 既要给派对用、又要给那个独立游戏用。上游的 {@code world_mini_game} 本身就是这样
+     * （一个世界装着 11 个游戏的地图）。所以 {@code gameKey} 允许写成
+     * {@code "hillking,snakeparty,..."}，判定用本方法。
+     */
+    public boolean serves(String game) {
+        if (game == null || gameKey == null) {
+            return false;
+        }
+        for (String one : gameKey.split(",")) {
+            if (one.trim().equalsIgnoreCase(game)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 服务哪些游戏（拆好、去空）。 */
+    public java.util.List<String> gameKeys() {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (gameKey != null) {
+            for (String one : gameKey.split(",")) {
+                String t = one.trim();
+                if (!t.isEmpty()) {
+                    out.add(t);
+                }
+            }
+        }
+        return out;
+    }
+
     /** 世界规则声明。 */
     public record Rules(boolean pvp, String difficulty, boolean mobSpawning,
                         boolean keepInventory, long fixedTime) {

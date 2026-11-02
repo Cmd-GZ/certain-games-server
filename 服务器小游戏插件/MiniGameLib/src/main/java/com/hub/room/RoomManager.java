@@ -217,7 +217,7 @@ public final class RoomManager {
     public static int roomCountOf(String gameKey) {
         int n = 0;
         for (Room r : ROOMS.values()) {
-            if (r.template.gameKey().equals(gameKey)) {
+            if (r.template.serves(gameKey)) {
                 n++;
             }
         }
@@ -265,7 +265,7 @@ public final class RoomManager {
         Room only = null;
         int n = 0;
         for (Room room : ROOMS.values()) {
-            if (room.world != null && room.template.gameKey().equals(gameKey)) {
+            if (room.world != null && room.template.serves(gameKey)) {
                 only = room;
                 n++;
             }
