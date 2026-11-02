@@ -467,6 +467,12 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             sec = plugin.getConfig().createSection("arenas");
         }
         for (Map.Entry<String, MurderMysteryArena> e : arenas.entrySet()) {
+            // 场地没加载成功（世界缺失）时内存里没有坐标：整段跳过，别动磁盘上已有的值
+            if (e.getValue().getCenter() == null) {
+                plugin.getLogger().warning("[保存] 场地 " + e.getKey()
+                        + " 未加载（世界缺失？），跳过回写以免丢坐标");
+                continue;
+            }
             ConfigurationSection arenaSec = sec.getConfigurationSection(e.getKey());
             if (arenaSec == null) {
                 arenaSec = sec.createSection(e.getKey());

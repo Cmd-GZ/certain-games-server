@@ -169,7 +169,15 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
         ConfigurationSection sec = com.hub.world.Worlds.getOrCreate(plugin.getConfig(), "arenas");
         for (Map.Entry<String, DuelArena> e : arenas.entrySet()) {
-            e.getValue().save(com.hub.world.Worlds.getOrCreate(sec, e.getKey()));
+            DuelArena a = e.getValue();
+            // **未加载成功的场地跳过回写**：世界缺失时它内存里没有坐标，
+            // 写回去等于把磁盘上的坐标抹掉（真实事故：删掉世界后场地配置被清空）。
+            if (a.getPos1() == null || a.getPos1().getWorld() == null) {
+                plugin.getLogger().warning("[保存] 场地 " + e.getKey()
+                        + " 未加载（世界缺失？），跳过回写以免丢坐标");
+                continue;
+            }
+            a.save(com.hub.world.Worlds.getOrCreate(sec, e.getKey()));
         }
         ConfigurationSection signSec = com.hub.world.Worlds.getOrCreate(plugin.getConfig(), "signs");
         for (Map.Entry<String, List<Location>> e : signLocations.entrySet()) {
