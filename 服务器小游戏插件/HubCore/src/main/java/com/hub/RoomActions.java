@@ -100,6 +100,11 @@ public final class RoomActions {
                         + "（房间上下文已绑定 " + gameKey + " -> " + room.roomId + "）");
             }
             p.performCommand(join);
+
+            // **精确盖章**：房间上下文是"按游戏"存的一个槽，同一游戏开两个房间时会互相覆盖。
+            // 所以这里以"玩家实际进的那个房间"为准，把房间 id 记到他的会话上——
+            // 对局结束时框架靠它决定销毁哪个房间（同游戏多房间时不会删错）。
+            stampRoomLater(p, room.roomId, 0);
             p.sendMessage(LEGACY.deserialize("&a已进入房间 &f" + roomId
                     + " &7并加入 &f/" + join + "&7（模板 &f" + room.template.key() + "&7）"));
         } else {
@@ -146,4 +151,32 @@ public final class RoomActions {
         }
     }
 
+
+    /**
+     * 把"玩家实际进的房间"盖到他的会话上（**同一游戏开两个房间时不会盖错**）。
+     *
+     * <p>为什么要延迟：很多游戏的 session 是在 join 之后（甚至下一 tick）才创建的，
+     * 立刻查会拿到 null。这里最多重试 3 次（1 tick / 5 tick / 20 tick）。
+     */
+    private static void stampRoomLater(Player p, String roomId, int attempt) {
+        if (p == null || roomId == null) {
+            return;
+        }
+        com.hub.session.GameSession session =
+                com.hub.session.PlayerSessions.sessionOf(p.getUniqueId());
+        if (session != null) {
+            session.bindRoom(roomId);
+            if (plugin != null) {
+                plugin.getLogger().info("[/hub join] " + p.getName() + " 的会话已绑定房间 "
+                        + roomId + "（" + session.gameKey() + "）");
+            }
+            return;
+        }
+        if (attempt >= 3) {
+            return;   // 这个游戏可能压根没有会话（例如公共设施型），放弃
+        }
+        long[] delays = {1L, 5L, 20L};
+        org.bukkit.Bukkit.getScheduler().runTaskLater(plugin,
+                () -> stampRoomLater(p, roomId, attempt + 1), delays[Math.min(attempt, 2)]);
+    }
 }
