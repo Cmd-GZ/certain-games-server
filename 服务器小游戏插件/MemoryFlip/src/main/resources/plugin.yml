@@ -8,6 +8,7 @@ softdepend: [GameWorlds]
 
 minigame-game: true
 minigame:
+  key: memoryflip          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
   name: 记忆翻牌
   icon: FILLED_MAP
   color: 'b'

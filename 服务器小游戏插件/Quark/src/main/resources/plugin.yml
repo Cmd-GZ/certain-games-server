@@ -9,6 +9,7 @@ softdepend: [GameWorlds]
 # ===== 给主城插件（HubCore）的标记：自动登记到 tab / 播报 =====
 minigame-game: true
 minigame:
+  key: quark          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
   name: 粒子枪战
   icon: IRON_HOE
   color: b

@@ -25,6 +25,7 @@ permissions:
 # ===== 给 HubCore 的小游戏标记 =====
 minigame-game: true
 minigame:
+  key: landclaim          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
   name: 'battlefield 1 (占地1)'
   icon: DIAMOND_HOE
   color: 'a'

@@ -4,6 +4,7 @@ main: com.tntrun.TntRunPlugin
 api-version: '1.21'
 description: 雪塔大作战（原 TNT Run）：踩雪层层塌、挖雪得雪球、雪球砸雪块
 minigame:
+  key: tntrun          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
   name: 雪塔大作战
   icon: SNOWBALL
   color: b

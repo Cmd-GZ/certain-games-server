@@ -35,6 +35,13 @@ public class GameRegistry {
     private final HubCorePlugin plugin;
     private final Map<String, GameInfo> byId = new LinkedHashMap<>();   // id -> 游戏
     private final Map<String, String> byName = new LinkedHashMap<>();   // 显示名/别名 -> id
+    /** 小写游戏 key（maps.yml / games.yml / players.yml 用的那套）→ 注册表 id（显示名）。 */
+    private final Map<String, String> byKey = new java.util.LinkedHashMap<>();
+
+    /** 玩家 key 映射（同时同步进 byKey）。 */
+    /** scanPluginsFolder 阶段先记 key→插件名，等 register() 完成后回填 key→id。 */
+    private final Map<String, String> pendingKeys = new java.util.LinkedHashMap<>();
+
     private final Map<String, String> byPlugin = new LinkedHashMap<>(); // 插件名 -> id（插件用自己的插件名就能引用到游戏）
 
     public GameRegistry(HubCorePlugin plugin) {
@@ -47,7 +54,16 @@ public class GameRegistry {
         byName.clear();
         byPlugin.clear();
         registerFromConfig();
+        pendingKeys.clear();
         scanPluginsFolder();
+        // 回填：把"key → 插件名"解析成"key → 注册表 id"
+        for (Map.Entry<String, String> e : pendingKeys.entrySet()) {
+            String id = canonicalName(e.getValue());
+            if (id != null) {
+                byKey.put(e.getKey(), id);
+            }
+        }
+        pendingKeys.clear();
         plugin.getLogger().info("HubCore 已登记 " + byId.size() + " 个游戏：" + String.join(", ", byId.keySet()));
     }
 
@@ -120,6 +136,13 @@ public class GameRegistry {
                     pluginName = cfg.getString("name", jar.getName());
                     if (mg != null) {
                         display = mg.getString("name", pluginName);
+                        String key = mg.getString("key", "");
+                        if (key != null && !key.isBlank()) {
+                            synchronized (this) {
+                                byKey.put(key.toLowerCase(java.util.Locale.ROOT), null);
+                                pendingKeys.put(key.toLowerCase(java.util.Locale.ROOT), pluginName);
+                            }
+                        }
                         icon = mg.getString("icon", "GRASS_BLOCK");
                         color = mg.getString("color", "");
                     } else {
@@ -188,6 +211,30 @@ public class GameRegistry {
     }
 
     /** 当前登记的全部游戏（保持登记顺序）。 */
+    /** 这个显示名对应的**小写游戏 key**（maps.yml / games.yml 那套）；没有就 null。 */
+    public synchronized String keyOf(String idOrDisplay) {
+        String id = canonicalName(idOrDisplay);
+        if (id == null) {
+            return null;
+        }
+        for (Map.Entry<String, String> e : byKey.entrySet()) {
+            if (id.equals(e.getValue())) {
+                return e.getKey();
+            }
+        }
+        return null;
+    }
+
+    /** 小写游戏 key → 注册表 id（显示名）；没有就 null。 */
+    public synchronized String displayOfKey(String key) {
+        return key == null ? null : byKey.get(key.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    /** 所有登记过 key 的游戏（小写 key）。 */
+    public synchronized java.util.Set<String> keys() {
+        return new java.util.LinkedHashSet<>(byKey.keySet());
+    }
+
     public synchronized List<GameInfo> getGames() {
         return new ArrayList<>(byId.values());
     }

@@ -744,6 +744,9 @@ public class HubManager implements HubService {
             }
         }
 
+        // ⑤ 注册表里登记了 key 的游戏数（供确认 plugin.yml 的 minigame.key 是否齐全）
+        int regKeys = plugin.getRegistry() == null ? 0 : plugin.getRegistry().keys().size();
+        plugin.getLogger().info("[key审计] 注册表已登记小写 key " + regKeys + " 个");
         boolean clean = noCmd.isEmpty() && noMap.isEmpty() && subNoMap.isEmpty();
         if (clean) {
             plugin.getLogger().info("[key审计] 游戏 key 一致：maps.yml " + inMaps.size()

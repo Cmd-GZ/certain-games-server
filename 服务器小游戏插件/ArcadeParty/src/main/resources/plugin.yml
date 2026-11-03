@@ -8,6 +8,7 @@ softdepend: [GameWorlds, DigToBottom, AnvilBattle, AnimalSlaughter, SnakeParty]
 
 minigame-game: true
 minigame:
+  key: arcadeparty          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
   name: 街机派对
   icon: FIREWORK_ROCKET
   color: 'e'

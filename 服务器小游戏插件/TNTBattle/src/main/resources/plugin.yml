@@ -25,6 +25,7 @@ permissions:
 # ===== 给 HubCore 的小游戏标记 =====
 minigame-game: true
 minigame:
+  key: tntbattle          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
   name: TNT 对战
   icon: TNT
   color: 'c'

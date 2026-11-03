@@ -12,6 +12,7 @@ softdepend: [GameWorlds]
 # 公屏的"加入了游戏"播报（HubAPI.announceJoin(plugin.getName(), ...)）才不会显示成 [DuelArena]。
 minigame-game: true
 minigame:
+  key: duel          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
   name: 单挑 PvP
   icon: DIAMOND_SWORD
   color: c

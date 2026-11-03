@@ -11,6 +11,7 @@ description: 建筑猜猜乐 - Hypixel Guess the Build 风格中文猜词小游�
 # name 与 HubCore config.yml games 段的名字一致（alias: 猜猜乐 指向插件 API 传入名）
 minigame-game: true
 minigame:
+  key: gtb          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
   name: 建筑猜猜乐      # tab 分区显示名
   icon: GRASS_BLOCK    # 中央菜单图标（物品英文名）
   color: '6'           # tab 分区标题颜色，0-9 a-f

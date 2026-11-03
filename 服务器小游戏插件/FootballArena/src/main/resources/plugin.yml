@@ -12,6 +12,7 @@ softdepend: [GameWorlds]
 # 公屏的"加入了游戏"播报（HubAPI.announceJoin(plugin.getName(), ...)）才不会显示成 [FootballArena]。
 minigame-game: true
 minigame:
+  key: football          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
   name: 绿茵足球
   icon: LEATHER_BOOTS
   color: a

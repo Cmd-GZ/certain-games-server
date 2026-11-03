@@ -10,6 +10,7 @@ softdepend: [GameWorlds]
 # name 必须与 HubCore config.yml games 段的 name 一致（显示名 幸运之柱）。
 minigame-game: true
 minigame:
+  key: luckypillar          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
   name: 幸运之柱
   icon: CRYING_OBSIDIAN
   color: '5'

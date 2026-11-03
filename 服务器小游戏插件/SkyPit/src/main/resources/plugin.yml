@@ -21,6 +21,7 @@ permissions:
 # ===== 给主城插件的标记（tab 分区显示"天坑"）=====
 minigame-game: true
 minigame:
+  key: skypit          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
   name: 天坑
   icon: IRON_SWORD
   color: '6'

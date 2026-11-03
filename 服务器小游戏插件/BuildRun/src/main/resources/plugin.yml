@@ -4,6 +4,7 @@ main: com.buildrun.BuildRunPlugin
 api-version: '1.21'
 description: 你建我跑：每人建一条跑酷，然后按顺序轮流让建造者和其他人跑
 minigame:
+  key: buildrun          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
   name: 你建我跑
   icon: LADDER
   color: '3'
