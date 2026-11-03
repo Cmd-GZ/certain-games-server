@@ -369,6 +369,25 @@ public abstract class GameSession {
         }
     }
 
+    /**
+     * 参与者**试图丢弃物品**（{@code PlayerDropItemEvent}），在框架的 {@link SessionRules} 之前派发。
+     *
+     * <p>为什么需要它：约一半的游戏只禁**自己的道具**（回城床 / 开始纸 / 球 / 咸鱼 / 手上的 TNT…），
+     * 其余物品允许丢（挖矿类要把多余的方块丢掉）。一个 boolean 表达不了这种"按物品判断"的规则，
+     * 所以这类游戏覆盖本钩子，自己看 {@code event.getItemDrop()} 决定要不要
+     * {@code setCancelled(true)} —— 但**监听器**仍然只在框架里注册一处（I3 的目的就是这个）。
+     */
+    protected void onPlayerDropItem(org.bukkit.event.player.PlayerDropItemEvent event) {
+    }
+
+    final void firePlayerDropItem(org.bukkit.event.player.PlayerDropItemEvent event) {
+        try {
+            onPlayerDropItem(event);
+        } catch (RuntimeException ex) {
+            Failures.recordAndWarn(gameKey + ".掉物品/" + arenaName, ex);
+        }
+    }
+
     // ---------- 参与者 ----------
 
     /** other 是否与本会话存在父子关系（派对嵌套是允许的，不算冲突）。 */

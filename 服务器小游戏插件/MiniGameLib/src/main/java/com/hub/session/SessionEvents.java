@@ -125,11 +125,21 @@ public final class SessionEvents implements Listener {
         }
     }
 
-    /** 局内禁止丢弃物品（{@link SessionRules#noItemDrop()}，由游戏声明）。 */
+    /**
+     * 局内丢弃物品：先派发给会话钩子（游戏按物品判断），再套环境规则（{@link SessionRules#noItemDrop()}）。
+     *
+     * <p>顺序是刻意的：钩子负责"只禁他自己那些道具"（回城床 / 开始纸 / 球 / 咸鱼…），
+     * 规则负责"本局干脆一个都不许丢"。两者合一之后，游戏模块里不再需要
+     * {@code PlayerDropItemEvent} 监听器（I3）。
+     */
     @EventHandler(priority = EventPriority.LOWEST)
     public void onDropItem(PlayerDropItemEvent event) {
         GameSession s = PlayerSessions.sessionOf(event.getPlayer().getUniqueId());
-        if (s != null && s.rules().noItemDrop()) {
+        if (s == null) {
+            return;
+        }
+        s.firePlayerDropItem(event);
+        if (!event.isCancelled() && s.rules().noItemDrop()) {
             event.setCancelled(true);
         }
     }

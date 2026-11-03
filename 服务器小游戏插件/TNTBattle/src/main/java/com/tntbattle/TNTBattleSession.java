@@ -11,6 +11,11 @@ final class TNTBattleSession extends GameSession {
     TNTBattleSession(TNTBattleManager manager, String arenaName) {
         super("tntbattle", arenaName);
         this.manager = manager;
+        // 框架默认"局内不掉饥饿"（与其它 24 个游戏的处理器一致），但**本局是例外**：
+        // TNT 大战在对局中故意允许掉饥饿（玩家吃牛排回血是玩法的一部分），
+        // 所以这里显式关掉这条环境规则，仍旧由 TNTBattleListener.onHunger 按
+        // "isPlaying && !isRunning" 自己分流。
+        rules().noHunger(false);
         enterWaiting();
     }
 

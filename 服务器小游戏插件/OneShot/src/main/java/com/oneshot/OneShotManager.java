@@ -851,6 +851,14 @@ public final class OneShotManager {
         }
     }
 
+    /**
+     * I3 A 批：重生后下一 tick 收尾（原来写在 {@code OneShotListener.onRespawn} 里）。
+     * 由 {@link OneShotSession#onPlayerRespawn} 调用 —— 游戏模块里不再监听 {@code PlayerRespawnEvent}。
+     */
+    void respawnedNextTick(Player player) {
+        Bukkit.getScheduler().runTask(plugin, () -> onRespawned(player));
+    }
+
     /** 淘汰后重生完成：切成旁观并送到观战点（重生没生效就再试一次）。 */
     public void onRespawned(Player player) {
         if (!player.isOnline() || state != State.RUNNING
