@@ -805,7 +805,10 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         if (state != State.WAITING) {
             return;
         }
-        if (lobby == null) {
+        // **必须用 getLobby()**：等待区可能写成 `tpl:<模板键>`，字段 lobby 在插件启用时
+        // 解析不到（那时还没有房间），只有等到房间存在后才能解析出来。
+        // 之前这里读字段 → 倒计时到点后静默 return，表现为"派对永远不开局"。
+        if (getLobby() == null) {
             broadcastWaiting("&c派对还没配置等待区（/arcade setlobby）。");
             return;
         }
