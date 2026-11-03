@@ -875,7 +875,15 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         // flow-game 非空 = 本场只允许这几个小游戏（两种 flow 都生效；房间化之后它会来自房间模板）
         String pinned = flowGame();
         if (!pinned.isEmpty()) {
-            pool.retainAll(List.of(pinned));
+            // 支持**逗号分隔的多个**（`hillking,hotpotato`）。以前直接 List.of(pinned)，
+            // 整串被当成一个 key -> 池子直接空 -> 派对永远不开局（踩过两次）。
+            List<String> wanted = new ArrayList<>();
+            for (String one : pinned.split("[,，\\s]+")) {
+                if (!one.isBlank()) {
+                    wanted.add(one.trim());
+                }
+            }
+            pool.retainAll(wanted);
             if (pool.isEmpty()) {
                 broadcastWaiting("&c本场指定的小游戏 &f" + pinned
                         + " &c当前不可用（未启用 / 没有空场地 / join-start 命令不完整）。");
