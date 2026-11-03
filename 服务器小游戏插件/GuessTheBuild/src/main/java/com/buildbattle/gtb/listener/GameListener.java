@@ -246,27 +246,54 @@ public class GameListener implements Listener {
      * 未加入游戏的玩家不能破坏任何方块；
      * 游戏内非建造者不能破坏（旁观者双保险）；建造者不能挖场地地板层。
      */
+    /**
+     * 破坏：**只在 GTB 场地范围内**表态（I3）。
+     *
+     * <p>改之前这两处 `setCancelled(true)` 是**无条件**的 —— 不在局里的玩家、
+     * 甚至别的游戏的世界里，挖方块都会被 GTB 先吃掉。真实后果：
+     * ① 别的游戏"局内禁破坏"到底生不生效根本验不出来（GTB 先取消了）；
+     * ② 它属于不变量里点名的"全局否定"那一类（和 SkyPit 的伤害事故同型）。
+     *
+     * <p>现在：不在局内的玩家只在自己**场地范围内**受保护；局内非建造者同样只限场地内。
+     */
     @EventHandler
     public void onBreak(BlockBreakEvent event) {
         // OP 豁免：管理员可以自由破坏（主城建造/清理等）
         if (event.getPlayer().isOp()) {
             return;
         }
+        Block block = event.getBlock();
         var game = plugin.getGame();
         UUID id = event.getPlayer().getUniqueId();
         if (!game.isInGame(id)) {
-            event.setCancelled(true);
+            if (inArena(block)) {
+                event.setCancelled(true);
+            }
             return;
         }
         if (!game.isBuilder(id)) {
-            event.setCancelled(true);
+            if (inArena(block)) {
+                event.setCancelled(true);
+            }
             return;
         }
-        Block block = event.getBlock();
         if (isFloorBlock(block)) {
             Chat.send(event.getPlayer(), "&c不能破坏场地地板！");
             event.setCancelled(true);
         }
+    }
+
+    /** 这块方块是否落在 GTB 场地范围内（用于把保护限制在自己地盘，见 {@link #onBreak}）。 */
+    private boolean inArena(Block block) {
+        var arena = plugin.getArena();
+        if (!arena.isReady()) {
+            return false;
+        }
+        Location min = arena.getMin();
+        Location max = arena.getMax();
+        return block.getX() >= min.getBlockX() && block.getX() <= max.getBlockX()
+                && block.getY() >= min.getBlockY() && block.getY() <= max.getBlockY()
+                && block.getZ() >= min.getBlockZ() && block.getZ() <= max.getBlockZ();
     }
 
     /**

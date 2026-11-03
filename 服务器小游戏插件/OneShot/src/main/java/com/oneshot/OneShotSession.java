@@ -17,6 +17,11 @@ final class OneShotSession extends GameSession {
         this.manager = manager;
         // 本局禁止丢任何物品（原 listener 里那段 @EventHandler，逐字等价）
         rules().noItemDrop(true);
+
+        // I3 C1（区域裁决）：本局禁改方块，且**只在自家场地范围内**表态。
+        arbiter()
+                .on(com.hub.session.EventKind.BLOCK_BREAK, ctx -> ctx.cancel())
+                .on(com.hub.session.EventKind.BLOCK_PLACE, ctx -> ctx.cancel());
         enterWaiting();
     }
 

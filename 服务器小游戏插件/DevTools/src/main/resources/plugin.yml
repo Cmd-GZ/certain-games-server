@@ -22,3 +22,9 @@ commands:
   rworld:
     description: 加载/卸载服务器目录里已存在的世界（不经过 GameWorlds 登记）
     usage: /rworld load|unload <世界名>
+  devbreak:
+    description: 让指定玩家真的去挖某个方块（触发 BlockBreakEvent，开发期验证用）
+    usage: /devbreak <玩家> <x> <y> <z>
+  devplace:
+    description: 让指定玩家真的去放一个方块（触发 BlockPlaceEvent）
+    usage: /devplace <玩家> <x> <y> <z> <材质>

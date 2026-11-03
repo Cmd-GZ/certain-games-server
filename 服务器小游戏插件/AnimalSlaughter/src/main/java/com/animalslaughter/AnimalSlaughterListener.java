@@ -7,8 +7,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
@@ -108,22 +106,6 @@ public final class AnimalSlaughterListener implements Listener {
     public void onMove(PlayerMoveEvent event) {
         if (event.getTo() != null) {
             manager.handleMove(event.getPlayer(), event.getTo());
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onBlockBreak(BlockBreakEvent event) {
-        Player player = event.getPlayer();
-        if (manager.isInGame(player) && manager.arena().contains(event.getBlock().getLocation())) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onBlockPlace(BlockPlaceEvent event) {
-        Player player = event.getPlayer();
-        if (manager.isInGame(player) && manager.arena().contains(event.getBlock().getLocation())) {
-            event.setCancelled(true);
         }
     }
 

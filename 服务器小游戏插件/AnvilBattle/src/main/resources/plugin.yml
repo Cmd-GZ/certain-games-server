@@ -1,5 +1,5 @@
 name: AnvilBattle
-version: '1.4.0'
+version: '1.5.0'
 main: com.anvilbattle.AnvilBattlePlugin
 api-version: '1.21'
 description: 铁砧掘战：躲开随机落下的铁砧，活到最后

@@ -3,11 +3,14 @@ package com.devtools;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
+import org.bukkit.entity.Player;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.WorldType;
 import org.bukkit.block.Banner;
 import org.bukkit.block.Block;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Container;
 import org.bukkit.block.Jukebox;
@@ -521,8 +524,63 @@ public final class DevToolsPlugin extends JavaPlugin {
         if (name.equals("rworld")) {
             return rworld(sender, args);
         }
+        if (name.equals("devbreak")) {
+            return devBreak(sender, args);
+        }
         return false;
     }
+
+    /**
+     * `/devbreak <玩家> <x> <y> <z>` —— 让指定玩家**真的去挖**那个方块。
+     *
+     * <p>为什么需要它：I3 的 C 类（方块/交互）要验的是"玩家挖不动"，
+     * 而假玩家（`tools/fakeclient.py`）只会发聊天命令，发不出
+     * `ServerboundPlayerActionPacket`。Paper 的 {@code Player#breakBlock(Block)}
+     * 会**完整触发** `BlockBreakEvent`（含插件取消），所以一行就够。
+     *
+     * <p>只用于开发期验证；本插件目录有 `.build-skip`，**永不发布**。
+     */
+    private boolean devBreak(CommandSender sender, String[] args) {
+        if (args.length < 1) {
+            sender.sendMessage("用法：/devbreak <玩家> [x y z]   （不给坐标 = 挖**脚下**那块）");
+            return true;
+        }
+        Player target = Bukkit.getPlayerExact(args[0]);
+        if (target == null) {
+            sender.sendMessage("玩家不在线：" + args[0]);
+            return true;
+        }
+        Block block;
+        if (args.length >= 4) {
+            try {
+                block = new Location(target.getWorld(), Integer.parseInt(args[1]),
+                        Integer.parseInt(args[2]), Integer.parseInt(args[3])).getBlock();
+            } catch (NumberFormatException ex) {
+                sender.sendMessage("坐标不是整数");
+                return true;
+            }
+        } else {
+            // 不给坐标 = 挖**服务端视角脚下**那块
+            block = target.getLocation().clone().subtract(0, 1, 0).getBlock();
+        }
+
+        // 直接构造并触发 BlockBreakEvent，而不是 Player#breakBlock ——
+        // 后者对"假玩家"永远返回 false（实测：大厅里都能失败，因为它要求玩家端真的做了破坏动作）。
+        // 我们要验的恰恰是**插件的裁决**，所以触发事件本身就是被测对象。
+        Material before = block.getType();
+        BlockBreakEvent event = new BlockBreakEvent(block, target);
+        Bukkit.getPluginManager().callEvent(event);
+        boolean cancelled = event.isCancelled();
+        if (!cancelled) {
+            block.breakNaturally();
+        }
+        String line = "DEVBREAK " + target.getName() + " " + before.name() + " -> "
+                + block.getType().name() + (cancelled ? " CANCELLED" : " OK");
+        sender.sendMessage(line);
+        Bukkit.getLogger().info(line);
+        return true;
+    }
+
 
     private boolean rcopy(CommandSender sender, String[] args) {
         if (args.length < 8) {
