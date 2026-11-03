@@ -525,6 +525,10 @@ public final class RoomManager {
 
         Room room = new Room(roomId, null);
         room.setGameAndMap(map.game(), map.name());
+        // **场地名**：`{arena}` 要替换成它（很多游戏的 join 命令是 `<cmd> join <场名>`）。
+        // 之前这里没设 → 房间 arena 是空串 → 命令少一个参数 → 游戏只回一句用法提示、不建会话。
+        // 取法：优先"属于这个游戏"的第一块区域；没有就取整张地图的第一块区域。
+        room.setArena(firstArenaOf(map));
         java.util.List<File> created = new java.util.ArrayList<>();
         long t0 = System.nanoTime();
 
@@ -976,5 +980,24 @@ public final class RoomManager {
         } catch (Throwable ignored) {
             System.out.println(msg);
         }
+    }
+
+    /** 这张地图的"代表场地名"（用于 `{arena}` 替换）。见 createForMap 里的说明。 */
+    private static String firstArenaOf(GameMap map) {
+        String fallback = "";
+        for (GameMap.WorldPlan plan : map.worlds()) {
+            for (GameMap.RegionPlan region : plan.regions()) {
+                if (region.name() == null || region.name().isBlank()) {
+                    continue;
+                }
+                if (fallback.isEmpty()) {
+                    fallback = region.name();
+                }
+                if (region.game() != null && region.game().equalsIgnoreCase(map.game())) {
+                    return region.name();
+                }
+            }
+        }
+        return fallback;
     }
 }
