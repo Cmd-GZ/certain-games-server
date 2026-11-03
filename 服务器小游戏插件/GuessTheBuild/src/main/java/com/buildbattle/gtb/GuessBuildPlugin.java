@@ -298,13 +298,16 @@ public final class GuessBuildPlugin extends JavaPlugin {
      * 不再硬编码旧地图的 y=-60。
      */
     public void spawnJoinSign() {
-        if (getConfig().isSet("join-sign")) {
-            Object raw = getConfig().get("join-sign");
-            if (raw instanceof Location loc && loc.getWorld() != null) {
-                joinSignLoc = loc;
-                getLogger().info("加入游戏告示牌位置已从配置读取。");
-                return;
-            }
+        // R2（2026-11-04 修）：别再把 Location 对象直接 set 进配置 —— 它会以
+        // `==: org.bukkit.Location` + `world_key: minecraft:overworld` 的形态落盘，
+        // 而 Worlds 里主世界文件夹是 `world`，Paper 每次加载配置都抛
+        // `IllegalArgumentException: unknown world`（每次启动 2~12 条 ERROR，
+        // 把冒烟的 ERROR 断言彻底搅浑）。改成和其他游戏一致的字符串形态（`世界, x, y, z[, yaw, pitch]`）。
+        Location fromConfig = com.hub.world.Worlds.readLocation(getConfig(), "join-sign");
+        if (fromConfig != null && fromConfig.getWorld() != null) {
+            joinSignLoc = fromConfig;
+            getLogger().info("加入游戏告示牌位置已从配置读取。");
+            return;
         }
         World world = Bukkit.getWorlds().get(0);
         int groundY = Math.max(world.getHighestBlockYAt(0, -6), 1);
@@ -318,7 +321,7 @@ public final class GuessBuildPlugin extends JavaPlugin {
         sign.line(3, net.kyori.adventure.text.Component.empty());
         sign.update();
         joinSignLoc = loc.clone();
-        getConfig().set("join-sign", joinSignLoc);
+        com.hub.world.Worlds.writeLocation(getConfig(), "join-sign", joinSignLoc);
         saveConfig();
         getLogger().info("加入游戏告示牌已放置于主城 (0," + (groundY + 1) + ",-6)。");
     }
@@ -338,7 +341,7 @@ public final class GuessBuildPlugin extends JavaPlugin {
         sign.line(3, net.kyori.adventure.text.Component.empty());
         sign.update();
         joinSignLoc = block.getLocation();
-        getConfig().set("join-sign", joinSignLoc);
+        com.hub.world.Worlds.writeLocation(getConfig(), "join-sign", joinSignLoc);
         saveConfig();
         Chat.send(p, "&a已将加入告示牌放置于 &e" + block.getX() + ", " + block.getY() + ", " + block.getZ() + "&a，右键即可加入。");
     }

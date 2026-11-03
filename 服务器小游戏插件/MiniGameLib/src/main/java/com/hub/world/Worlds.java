@@ -202,12 +202,15 @@ public final class Worlds {
         if (sec == null || loc == null || loc.getWorld() == null) {
             return;
         }
-        String token = tokenOf(loc.getWorld());
-        if (token.equals(loc.getWorld().getName())) {
-            sec.set(key, loc);   // 普通世界，照 Bukkit 默认写法即可
-            return;
-        }
-        // 房间实例世界：写字符串 token，绝不改写序列化 Location 的 world 字段
+        // **一律写字符串**（`token, x, y, z[, yaw, pitch]`），不再写序列化 Location。
+        //
+        // 为什么（2026-11-04 修，踩过一次）：
+        // ① 序列化 Location 落盘是 `==: org.bukkit.Location` + `world_key: minecraft:overworld`，
+        //    而 Paper 解析它时按 world **key** 找世界 —— 主世界文件夹叫 `world`，
+        //    于是每次加载配置都抛 `IllegalArgumentException: unknown world`（启动 2~12 条 ERROR，
+        //    把冒烟的 ERROR 断言彻底搅浑，还掩盖真错误）。
+        // ② 房间里写的是 `tpl:` 令牌，两种形态混在一份配置里，读的人容易只处理一种。
+        // ③ `readLocation` 本来就优先认字符串形态，所以写侧统一之后读写对称。
         sec.set(key, encode(loc));
     }
 
