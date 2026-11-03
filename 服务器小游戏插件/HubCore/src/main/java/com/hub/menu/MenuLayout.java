@@ -676,6 +676,17 @@ public final class MenuLayout {
             addedRoot++;
         }
 
+        // —— 清理"同一游戏两份入口"里的坏那份（上游手配的 `cmd:<游戏> join`）——
+        // 现在每个游戏已经有 `game:<显示名>` 入口了，而旧的 `cmd:` 直连在房间化后是**点不通的**
+        //（`/buildrun join` 少了场地名、`/gtb join` 虽然能跑但不带房间上下文）。
+        int removed = 0;
+        removed += dropLegacyCmdEntries("menu.items");
+        removed += dropLegacyCmdEntries(subBase + ".items");
+        if (removed > 0) {
+            plugin.getLogger().info("[菜单派生] 清掉 " + removed
+                    + " 个重复的旧 `cmd:<游戏> join` 入口（同一游戏已有 game: 入口）");
+        }
+
         if (addedRoot > 0 || addedSub > 0) {
             save();
             plugin.getLogger().info("[菜单派生] 已补入口：根菜单 " + addedRoot
@@ -1194,4 +1205,59 @@ public final class MenuLayout {
     public void save() {
         plugin.saveConfig();
     }
+
+    /**
+     * 删掉"某个游戏已经有 `game:` 入口"时残留的 `cmd:<前缀> join` 旧入口。
+     *
+     * <p>判断依据：`games.yml` 里每个游戏的 join-command 首词（`br join` → `br`）。
+     * 只有**该游戏已经有 `game:` 入口**时才删，避免把唯一入口删掉。
+     */
+    private int dropLegacyCmdEntries(String path) {
+        var items = plugin.getConfig().getConfigurationSection(path);
+        if (items == null) {
+            return 0;
+        }
+        java.util.Set<String> reached = new java.util.HashSet<>();
+        for (String key : items.getKeys(false)) {
+            String a = items.getString(key + ".action");
+            if (a != null && a.startsWith("game:")) {
+                reached.add(a.substring("game:".length()));
+            }
+        }
+        // ⚠️ join-command 在**独立的 games.yml**里，不在 HubCore 的 config.yml
+        var gamesCfg = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
+                new java.io.File(plugin.getDataFolder(), "games.yml"));
+        var games = gamesCfg.getConfigurationSection("games");
+        int removed = 0;
+        for (String key : new java.util.ArrayList<>(items.getKeys(false))) {
+            String action = items.getString(key + ".action");
+            if (action == null || !action.startsWith("cmd:")) {
+                continue;
+            }
+            String cmd = action.substring(4).trim();
+            String head = cmd.split("\\s+")[0].toLowerCase(java.util.Locale.ROOT);
+            String gameKey = null;
+            if (games != null) {
+                for (String g : games.getKeys(false)) {
+                    String join = games.getString(g + ".join-command", "");
+                    if (!join.isBlank()
+                            && join.split("\\s+")[0].toLowerCase(java.util.Locale.ROOT).equals(head)) {
+                        gameKey = g;
+                        break;
+                    }
+                }
+            }
+            if (gameKey == null) {
+                continue;   // 不是游戏入口（例如 cmd:titles / cmd:hub menu）
+            }
+            String display = plugin.getRegistry() == null ? null
+                    : plugin.getRegistry().displayOfKey(gameKey);
+            if (display != null && reached.contains(display)) {
+                plugin.getConfig().set(path + "." + key, null);
+                removed++;
+            }
+        }
+        return removed;
+    }
+
 }
