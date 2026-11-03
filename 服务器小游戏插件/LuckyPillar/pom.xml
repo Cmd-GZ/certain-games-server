@@ -6,7 +6,7 @@
 
     <groupId>com.luckypillar</groupId>
     <artifactId>lucky-pillar</artifactId>
-    <version>1.3.2</version>
+    <version>1.4.0</version>
     <packaging>jar</packaging>
 
     <name>LuckyPillar</name>

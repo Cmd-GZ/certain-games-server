@@ -1,5 +1,5 @@
 name: FootballArena
-version: '1.3.3'
+version: '1.4.0'
 main: com.football.FootballPlugin
 api-version: '1.21'
 description: 绿茵足球：红蓝两队踢球进球

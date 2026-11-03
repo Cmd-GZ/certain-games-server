@@ -12,13 +12,10 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.player.PlayerAnimationEvent;
 import org.bukkit.event.player.PlayerAnimationType;
-import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSignOpenEvent;
 import org.bukkit.inventory.ItemStack;
 
@@ -99,23 +96,7 @@ public class FootballListener implements Listener {
     }
 
     /** 饿肚子关掉（比赛里不扣饥饿）。 */
-    @EventHandler
-    public void onFood(FoodLevelChangeEvent event) {
-        if (event.getEntity() instanceof Player p
-                && plugin.getManager().arenaOf(p.getUniqueId()) != null) {
-            event.setCancelled(true);
-        }
-    }
-
     /** 带标记的功能道具不能丢弃（防止背包里没有退出床/队旗后卡住）。 */
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onDrop(PlayerDropItemEvent event) {
-        if (plugin.getManager().items().tag(event.getItemDrop().getItemStack()) != null) {
-            event.setCancelled(true);
-            event.getPlayer().sendMessage("§c足球道具不能丢弃！");
-        }
-    }
-
     /** 带标记的功能道具不能放置（红床是方块，退出时点床别把床放地上——单挑踩过的坑）。 */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlace(BlockPlaceEvent event) {
@@ -146,11 +127,6 @@ public class FootballListener implements Listener {
     }
 
     /** 退出清理（一队走光直接判负另一队）。 */
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        plugin.getManager().handleQuit(event.getPlayer());
-    }
-
     /** 进服清理（观战残留 / 滞留足球世界送回主城）。 */
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {

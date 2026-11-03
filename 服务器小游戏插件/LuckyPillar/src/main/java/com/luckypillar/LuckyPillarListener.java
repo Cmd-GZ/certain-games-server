@@ -19,12 +19,9 @@ import org.bukkit.event.block.BlockSpreadEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
-import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 
@@ -47,35 +44,8 @@ public class LuckyPillarListener implements Listener {
      * 死亡：RUNNING = 淘汰（物品照常掉落）；ENDING（结算展示期）= 不淘汰，只转旁观。
      * 两种情况都交给 {@code handleDeath} 去「跳过死亡界面 → 旁观」。
      */
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onDeath(PlayerDeathEvent event) {
-        Player p = event.getEntity();
-        LuckyPillarArena a = plugin.getManager().activeArenaOf(p.getUniqueId());
-        if (a == null || a.getState() == LuckyPillarArena.State.WAITING) {
-            return;
-        }
-        if (a.getState() == LuckyPillarArena.State.RUNNING && !a.getPlayers().contains(p.getUniqueId())) {
-            return;
-        }
-        // 死亡掉落：不 keepInventory，也**不清 drops**（原来这里清空 = 谁死了身上东西直接没）
-        event.setKeepInventory(false);
-        event.setDroppedExp(0);
-        event.deathMessage(null);
-        plugin.getManager().handleDeath(p);
-    }
-
     /** 淘汰后重生 → 旁观点 + 旁观模式。 */
-    @EventHandler
-    public void onRespawn(PlayerRespawnEvent event) {
-        plugin.getManager().handleRespawn(event.getPlayer(), event);
-    }
-
     /** 掉线 = 淘汰（设计稿 §6）。 */
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        plugin.getManager().handleQuit(event.getPlayer());
-    }
-
     /** 进服兜底：旁观模式残留还原、不在对局却留在对局世界则送回主城。 */
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
