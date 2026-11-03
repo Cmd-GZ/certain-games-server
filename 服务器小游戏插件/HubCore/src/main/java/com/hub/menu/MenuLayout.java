@@ -1236,12 +1236,23 @@ public final class MenuLayout {
             }
             String cmd = action.substring(4).trim();
             String head = cmd.split("\\s+")[0].toLowerCase(java.util.Locale.ROOT);
+            // 命令别名也要认：`party` 是 `/arcade` 的别名（同一个插件命令），
+            // 不识别就会留下 `cmd:party join` 这种和 `game:街机派对` 重复的坏入口。
+            var cmdObj = org.bukkit.Bukkit.getPluginCommand(head);
             String gameKey = null;
             if (games != null) {
                 for (String g : games.getKeys(false)) {
                     String join = games.getString(g + ".join-command", "");
-                    if (!join.isBlank()
-                            && join.split("\\s+")[0].toLowerCase(java.util.Locale.ROOT).equals(head)) {
+                    if (join.isBlank()) {
+                        continue;
+                    }
+                    String joinHead = join.split("\\s+")[0].toLowerCase(java.util.Locale.ROOT);
+                    boolean same = joinHead.equals(head);
+                    if (!same && cmdObj != null) {
+                        var joinCmd = org.bukkit.Bukkit.getPluginCommand(joinHead);
+                        same = joinCmd != null && joinCmd.getPlugin() == cmdObj.getPlugin();
+                    }
+                    if (same) {
                         gameKey = g;
                         break;
                     }
