@@ -268,13 +268,11 @@ public class DigToBottomCommand implements CommandExecutor, TabCompleter {
             }
             case "help" -> help(sender);
             case "reload" -> {
-                // 框架会在 /hub join 时调用它做**场地懒加载**：
-                // 配置里的 `tpl:<模板键>` 只有存活房间才解析得出来，插件启用时解析必然失败。
                 plugin.reloadConfig();
                 if (plugin.getManager() != null) {
                     plugin.getManager().load();
                 }
-                sender.sendMessage(net.kyori.adventure.text.Component.text("配置已重新载入。"));
+                sender.sendMessage("配置已重新载入。");
             }
             default -> Chat.send(sender, "&c未知子命令。");
         }
