@@ -128,6 +128,163 @@ public final class RegionEvents implements Listener {
         owner.firePlayerMove(event);
     }
 
+
+    // ---------- 兜底桥接：孤立事件类型 ----------
+    //
+    // 这里**只做"算归属 + 转发"**，判断永远在游戏侧。注册的都是"没有玩家主体的位置类事件"
+    // 以及少数"有玩家但类型很冷门"的事件；有玩家主体的走 ownerOfPlayer。
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onExplode(org.bukkit.event.entity.EntityExplodeEvent event) {
+        bridgeLocation(event, event.getLocation());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlockExplode(org.bukkit.event.block.BlockExplodeEvent event) {
+        bridgeLocation(event, event.getBlock().getLocation());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlockFromTo(org.bukkit.event.block.BlockFromToEvent event) {
+        bridgeLocation(event, event.getBlock().getLocation());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlockBurn(org.bukkit.event.block.BlockBurnEvent event) {
+        bridgeLocation(event, event.getBlock().getLocation());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlockIgnite(org.bukkit.event.block.BlockIgniteEvent event) {
+        bridgeLocation(event, event.getBlock().getLocation());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlockSpread(org.bukkit.event.block.BlockSpreadEvent event) {
+        bridgeLocation(event, event.getBlock().getLocation());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlockForm(org.bukkit.event.block.BlockFormEvent event) {
+        bridgeLocation(event, event.getBlock().getLocation());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBucketEmpty(org.bukkit.event.player.PlayerBucketEmptyEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityChangeBlock(org.bukkit.event.entity.EntityChangeBlockEvent event) {
+        bridgeLocation(event, event.getBlock().getLocation());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onItemSpawn(org.bukkit.event.entity.ItemSpawnEvent event) {
+        bridgeLocation(event, event.getLocation());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onProjectileHit(org.bukkit.event.entity.ProjectileHitEvent event) {
+        // 抛射物：先看射手是不是某个会话的人（谁打出去的谁管），否则看落点
+        if (event.getEntity().getShooter() instanceof Player shooter) {
+            GameSession s = ownerOfPlayer(shooter);
+            if (s != null) {
+                s.fireGameEvent(event);
+                return;
+            }
+        }
+        bridgeLocation(event, event.getEntity().getLocation());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onProjectileLaunch(org.bukkit.event.entity.ProjectileLaunchEvent event) {
+        if (event.getEntity().getShooter() instanceof Player shooter) {
+            bridgePlayer(event, shooter);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityDeath(org.bukkit.event.entity.EntityDeathEvent event) {
+        bridgeLocation(event, event.getEntity().getLocation());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerJoin(org.bukkit.event.player.PlayerJoinEvent event) {
+        // 刚进服还没有归属 —— 派发给**所有**活动会话，各自判断要不要管（每人自己看条件）
+        for (GameSession s : GameSession.activeSessions()) {
+            if (s.isActive()) {
+                s.fireGameEvent(event);
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onSignOpen(org.bukkit.event.player.PlayerSignOpenEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onInventoryClick(org.bukkit.event.inventory.InventoryClickEvent event) {
+        if (event.getWhoClicked() instanceof Player p) {
+            GameSession s = ownerOfPlayer(p);
+            if (s != null) {
+                s.fireGameEvent(event);
+                return;
+            }
+            bridgeLocation(event, p.getLocation());
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onInventoryDrag(org.bukkit.event.inventory.InventoryDragEvent event) {
+        if (event.getWhoClicked() instanceof Player p) {
+            GameSession s = ownerOfPlayer(p);
+            if (s != null) {
+                s.fireGameEvent(event);
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onInteractEntity(org.bukkit.event.player.PlayerInteractEntityEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onCommandPreprocess(org.bukkit.event.player.PlayerCommandPreprocessEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTeleport(org.bukkit.event.player.PlayerTeleportEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    private static void bridgePlayer(org.bukkit.event.Event event, Player player) {
+        GameSession s = ownerOfPlayer(player);
+        if (s != null) {
+            s.fireGameEvent(event);
+        }
+    }
+
+    /** 位置类事件：按 I2 区域表算归属，只发给那一个会话。 */
+    private static void bridgeLocation(org.bukkit.event.Event event, Location where) {
+        if (where == null) {
+            return;
+        }
+        String gameKey = RegionRegistry.ownerAt(where);
+        if (gameKey == null) {
+            return;
+        }
+        for (GameSession s : GameSession.activeSessions()) {
+            if (s.isActive() && gameKey.equalsIgnoreCase(s.gameKey())) {
+                s.fireGameEvent(event);
+                return;
+            }
+        }
+    }
+
     // ---------- 归属判定 ----------
 
     /** 玩家 → 他归属链的叶子会话（大厅玩家返回 null）。 */

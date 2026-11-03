@@ -432,6 +432,27 @@ public abstract class GameSession {
         }
     }
 
+    /**
+     * **兜底钩子**：任何被框架桥接过来的事件，只派发给归属本局的那一个会话。
+     *
+     * <p>为什么要有它：剩下的处理器里有不少"孤例"（`PlayerEggThrowEvent`、
+     * `BlockBurnEvent`、`ItemSpawnEvent`…），为每一种都加一个专用钩子不划算。
+     * 用这一个方法 + `instanceof` 就能把它们全部搬出游戏模块（I3 要求：监听器只在框架里注册）。
+     *
+     * <p>约定：**只有归属本局的事件会被派发过来**，所以这里不需要再判断"是不是我的场地"。
+     * 拿不准归属的事件（例如没有任何玩家参与、也不在任何已声明区域内）**不会**被派发。
+     */
+    protected void onGameEvent(org.bukkit.event.Event event) {
+    }
+
+    final void fireGameEvent(org.bukkit.event.Event event) {
+        try {
+            onGameEvent(event);
+        } catch (RuntimeException ex) {
+            Failures.recordAndWarn(gameKey + ".事件/" + event.getClass().getSimpleName(), ex);
+        }
+    }
+
     // 派发入口：只给同包的 SessionEvents 用，游戏侧不接触。
 
     final void firePlayerQuit(Player p) {

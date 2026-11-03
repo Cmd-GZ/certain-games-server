@@ -24,7 +24,8 @@ public class LuckyPillarPlugin extends JavaPlugin {
         } else {
             getLogger().warning("plugin.yml 里没有 luckypillar 命令，/lp 不可用。");
         }
-        getServer().getPluginManager().registerEvents(new LuckyPillarListener(this), this);
+        // I3：本插件已**没有**任何 Listener —— 事件由框架（MiniGameLib 的 RegionEvents/SessionEvents）
+        // 按归属派发到 LuckyPillarSession 的钩子里。这一行删掉是有意为之，别加回来。
 
         // 登记到 HubCore（插件扫描一般已登记，这里只是兜底，重复登记是幂等的）
         HubAPI.registerGame(getName(), LuckyPillarManager.GAME, "CRYING_OBSIDIAN", "5");

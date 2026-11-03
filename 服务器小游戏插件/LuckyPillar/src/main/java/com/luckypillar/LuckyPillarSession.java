@@ -93,4 +93,66 @@ final class LuckyPillarSession extends GameSession {
             manager.handleLeaveBed(p);
         }
     }
+
+    // ---------- I3 C 类：LuckyPillar 其余监听（全部经框架按归属派发过来） ----------
+
+    /** 受伤：掉落伤害只保护"本局追踪的实体"（原 onFallDamage）。 */
+    @Override
+    protected void onEntityDamage(org.bukkit.event.entity.EntityDamageEvent event) {
+        if (event.getCause() != org.bukkit.event.entity.EntityDamageEvent.DamageCause.FALL) {
+            return;
+        }
+        if (manager.isTrackedEntity(event.getEntity())) {
+            event.setCancelled(true);
+        }
+    }
+
+    /** 其余事件（加入 / 苦力怕爆炸 / PvP / 点火 / 放方块 / 倒水 / 蔓延 / 结冰…）。 */
+    @Override
+    protected void onGameEvent(org.bukkit.event.Event event) {
+        if (event instanceof org.bukkit.event.player.PlayerJoinEvent join) {
+            manager.handleJoin(join.getPlayer());
+            return;
+        }
+        if (event instanceof org.bukkit.event.entity.EntityExplodeEvent explode) {
+            if (!(explode.getEntity() instanceof org.bukkit.entity.Creeper)) {
+                return;
+            }
+            var arena = manager.runningArenaIn(explode.getLocation().getWorld());
+            if (arena == null) {
+                return;   // 不是本世界 / 不是本场对局：原样放行
+            }
+            explode.blockList().clear();
+            return;
+        }
+        if (event instanceof org.bukkit.event.block.BlockIgniteEvent ignite) {
+            if (ignite.getCause() == org.bukkit.event.block.BlockIgniteEvent.IgniteCause.FLINT_AND_STEEL) {
+                return;   // 玩家自己点的火属于玩法
+            }
+            if (manager.runningArenaIn(ignite.getBlock().getWorld()) == null) {
+                return;
+            }
+            ignite.setCancelled(true);
+            return;
+        }
+        if (event instanceof org.bukkit.event.block.BlockPlaceEvent place) {
+            manager.trackBlock(place.getBlockPlaced());
+            return;
+        }
+        if (event instanceof org.bukkit.event.player.PlayerBucketEmptyEvent bucket) {
+            manager.trackBlock(bucket.getBlockClicked().getRelative(bucket.getBlockFace()));
+            return;
+        }
+        if (event instanceof org.bukkit.event.block.BlockSpreadEvent spread) {
+            manager.trackBlock(spread.getBlock());
+            return;
+        }
+        if (event instanceof org.bukkit.event.block.BlockFromToEvent fromTo) {
+            manager.trackBlock(fromTo.getToBlock());
+            return;
+        }
+        if (event instanceof org.bukkit.event.block.BlockFormEvent form) {
+            manager.trackBlock(form.getBlock());
+        }
+    }
 }

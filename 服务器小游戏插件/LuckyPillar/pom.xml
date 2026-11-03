@@ -6,7 +6,7 @@
 
     <groupId>com.luckypillar</groupId>
     <artifactId>lucky-pillar</artifactId>
-    <version>1.5.0</version>
+    <version>1.6.0</version>
     <packaging>jar</packaging>
 
     <name>LuckyPillar</name>
@@ -39,7 +39,7 @@
         <dependency>
             <groupId>com.hub</groupId>
             <artifactId>minigame-lib</artifactId>
-            <version>1.28.0</version>
+            <version>1.29.1</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
