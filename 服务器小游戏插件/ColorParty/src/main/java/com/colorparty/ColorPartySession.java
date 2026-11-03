@@ -16,6 +16,10 @@ final class ColorPartySession extends GameSession {
     ColorPartySession(ColorPartyManager manager, String arenaName) {
         super("colorparty", arenaName);
         this.manager = manager;
+        // I3 C1：禁改方块（OP 豁免；玩家在本场，或方块落在**正在跑的场地**里都算）
+        arbiter()
+                .on(com.hub.session.EventKind.BLOCK_BREAK, this::cancelBlockChange)
+                .on(com.hub.session.EventKind.BLOCK_PLACE, this::cancelBlockChange);
         enterWaiting();
     }
 
@@ -56,6 +60,17 @@ final class ColorPartySession extends GameSession {
                 : (a.getLobbyPoint() != null ? a.getLobbyPoint() : a.getSpawn());
         if (loc != null) {
             event.setRespawnLocation(loc);
+        }
+    }
+
+    /** I3 C1：本场禁改方块（原 `onBlockBreak`/`onBlockPlace` 的逐字等价搬运）。 */
+    private void cancelBlockChange(com.hub.session.EventContext ctx) {
+        if (ctx.player() != null && ctx.player().isOp()) {
+            return;   // OP 豁免：主城建造/清理
+        }
+        if (ctx.player() != null && manager.arenaOf(ctx.player().getUniqueId()) != null
+                || (ctx.block() != null && manager.inRunningArena(ctx.block()))) {
+            ctx.cancel();
         }
     }
 }

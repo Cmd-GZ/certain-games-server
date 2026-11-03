@@ -11,8 +11,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
@@ -432,21 +430,7 @@ public class MurderMysteryListener implements Listener {
     }
 
     /** 对局中禁止破坏方块。 */
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onBreak(BlockBreakEvent event) {
-        if (inArena(event.getPlayer())) {
-            event.setCancelled(true);
-        }
-    }
-
     /** 对局中禁止放置方块。 */
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onPlace(BlockPlaceEvent event) {
-        if (inArena(event.getPlayer())) {
-            event.setCancelled(true);
-        }
-    }
-
     /** 飞剑命中后移除弹射物（无论命中玩家还是方块）和跟着它飞的铁剑外形。 */
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {

@@ -9,7 +9,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerAnimationEvent;
@@ -106,26 +105,6 @@ public class FootballListener implements Listener {
     }
 
     /** 场内玩家不能挖场地（把球场挖出洞球就卡住了）。等待中与对局中都保护。 */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onBreak(BlockBreakEvent event) {
-        Player p = event.getPlayer();
-        String name = plugin.getManager().arenaOf(p.getUniqueId());
-        if (name == null) {
-            return;
-        }
-        FootballArena a = plugin.getManager().getArena(name);
-        if (a == null || !a.isReady()) {
-            return;
-        }
-        if (inArenaBounds(a, event.getBlock().getLocation())) {
-            event.setCancelled(true);
-        }
-    }
-
-    private boolean inArenaBounds(FootballArena a, Location loc) {
-        return a.contains(loc);
-    }
-
     /** 退出清理（一队走光直接判负另一队）。 */
     /** 进服清理（观战残留 / 滞留足球世界送回主城）。 */
     @EventHandler

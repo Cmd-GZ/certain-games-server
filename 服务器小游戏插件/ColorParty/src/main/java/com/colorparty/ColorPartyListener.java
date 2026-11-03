@@ -6,8 +6,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -43,30 +41,6 @@ public class ColorPartyListener implements Listener {
 
     /** 场内玩家不掉饥饿（全局约定：各插件 Listener 在自己的域内取消 FoodLevelChangeEvent）。 */
     /** 对局中保护地板/面板：场内玩家不许挖/放，路人在彩色地板上挖/放也拦下（OP 不拦，方便调试）。 */
-    @EventHandler
-    public void onBlockBreak(BlockBreakEvent event) {
-        Player p = event.getPlayer();
-        if (p.isOp()) {
-            return;
-        }
-        if (plugin.getManager().arenaOf(p.getUniqueId()) != null
-                || plugin.getManager().inRunningArena(event.getBlock())) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler
-    public void onBlockPlace(BlockPlaceEvent event) {
-        Player p = event.getPlayer();
-        if (p.isOp()) {
-            return;
-        }
-        if (plugin.getManager().arenaOf(p.getUniqueId()) != null
-                || plugin.getManager().inRunningArena(event.getBlock())) {
-            event.setCancelled(true);
-        }
-    }
-
     /** 配置模式工具 + 开始纸 / 退出床。 */
     @EventHandler
     public void onInteract(PlayerInteractEvent event) {

@@ -14,6 +14,18 @@ final class MurderMysterySession extends GameSession {
     MurderMysterySession(MurderMysteryManager manager, String arenaName) {
         super("murdermystery", arenaName);
         this.manager = manager;
+        // I3 C1：局内禁改方块（原 `onBreak`/`onPlace` 的逐字等价搬运）
+        arbiter()
+                .on(com.hub.session.EventKind.BLOCK_BREAK, ctx -> {
+                    if (ctx.player() != null && manager.arenaOf(ctx.player().getUniqueId()) != null) {
+                        ctx.cancel();
+                    }
+                })
+                .on(com.hub.session.EventKind.BLOCK_PLACE, ctx -> {
+                    if (ctx.player() != null && manager.arenaOf(ctx.player().getUniqueId()) != null) {
+                        ctx.cancel();
+                    }
+                });
         enterWaiting();
     }
 

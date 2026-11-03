@@ -13,6 +13,23 @@ final class FootballSession extends GameSession {
     FootballSession(FootballManager manager, String arenaName) {
         super("football", arenaName);
         this.manager = manager;
+        // I3 C1：禁破坏本场范围内的方块（`onPlace` 是"足球道具不能当方块放"，属玩法，留在 listener）
+        arbiter().on(com.hub.session.EventKind.BLOCK_BREAK, ctx -> {
+            if (ctx.player() == null) {
+                return;
+            }
+            String name = manager.arenaOf(ctx.player().getUniqueId());
+            if (name == null) {
+                return;
+            }
+            FootballArena a = manager.getArena(name);
+            if (a == null || !a.isReady()) {
+                return;
+            }
+            if (a.contains(ctx.block().getLocation())) {
+                ctx.cancel();
+            }
+        });
         enterWaiting();
     }
 
