@@ -22,7 +22,7 @@ public final class SnakePartyPlugin extends JavaPlugin {
             snake.setExecutor(command);
             snake.setTabCompleter(command);
         }
-        getServer().getPluginManager().registerEvents(new SnakePartyListener(manager), this);
+        // I3：本插件已无 Listener —— 事件由框架按归属派发到 Session 的钩子
         HubAPI.registerLobbyHandler(player -> manager.leave(player, true));
 
         getLogger().info("蛇行派对（SnakeParty）已启用。");

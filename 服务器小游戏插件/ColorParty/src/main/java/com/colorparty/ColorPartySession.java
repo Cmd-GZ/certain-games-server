@@ -2,6 +2,15 @@ package com.colorparty;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.Material;
+import org.bukkit.event.block.Action;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.event.Event;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerRespawnEvent;
@@ -71,6 +80,50 @@ final class ColorPartySession extends GameSession {
         if (ctx.player() != null && manager.arenaOf(ctx.player().getUniqueId()) != null
                 || (ctx.block() != null && manager.inRunningArena(ctx.block()))) {
             ctx.cancel();
+        }
+    }
+
+    // ---------- I3：由 listener 机械搬迁过来的处理器（按事件类型分派） ----------
+
+    @Override
+    protected void onGameEvent(org.bukkit.event.Event event) {
+        if (event instanceof PlayerMoveEvent e) {
+        manager.plugin().getManager().handleMove(e.getPlayer());
+                return;
+        }
+        if (event instanceof EntityDamageEvent e) {
+        if (!(e.getEntity() instanceof Player p)) {
+            return;
+        }
+        if (manager.plugin().getManager().arenaOf(p.getUniqueId()) != null) {
+            e.setCancelled(true);
+        }
+                return;
+        }
+        if (event instanceof PlayerInteractEvent e) {
+        Player p = e.getPlayer();
+        // 配置模式：工具交互
+        if (manager.plugin().getManager().isInSetup(p.getUniqueId())) {
+            if (manager.plugin().getManager().handleSetupTool(p, e.getAction(), e.getClickedBlock())) {
+                e.setCancelled(true);
+                return;
+            }
+        }
+        if (e.getAction() != Action.RIGHT_CLICK_AIR && e.getAction() != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        ItemStack item = e.getItem();
+        if (item == null) {
+            return;
+        }
+        if (item.getType() == Material.PAPER) {
+            e.setCancelled(true);
+            manager.plugin().getManager().handleStartPaper(p);
+        } else if (item.getType() == Material.RED_BED) {
+            e.setCancelled(true);
+            manager.plugin().getManager().handleLeaveBed(p);
+        }
+                return;
         }
     }
 }

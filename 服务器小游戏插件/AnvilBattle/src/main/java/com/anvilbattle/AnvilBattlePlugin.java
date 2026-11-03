@@ -22,7 +22,7 @@ public final class AnvilBattlePlugin extends JavaPlugin {
             anvil.setExecutor(command);
             anvil.setTabCompleter(command);
         }
-        getServer().getPluginManager().registerEvents(new AnvilBattleListener(manager), this);
+        // I3：本插件已无 Listener —— 事件由框架按归属派发到 Session 的钩子
         HubAPI.registerLobbyHandler(player -> manager.leave(player, true));
 
         getLogger().info("铁砧掘战（AnvilBattle）已启用。");

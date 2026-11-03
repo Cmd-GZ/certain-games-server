@@ -40,7 +40,8 @@ public final class RegionEvents implements Listener {
         if (owner == null) {
             return;
         }
-        // 先给游戏自己的原始事件钩子（既有逻辑可以逐字搬过来），再套语义裁决器
+        // 先给通用钩子，再给"原始事件钩子"，最后才套语义裁决器
+        owner.fireGameEvent(event);
         owner.fireEntityDamage(event);
         if (event.isCancelled() || !owner.arbiter().handles(EventKind.DAMAGE)) {
             return;
@@ -62,6 +63,10 @@ public final class RegionEvents implements Listener {
         if (owner == null) {
             return;
         }
+        owner.fireGameEvent(event);
+        if (event.isCancelled()) {
+            return;
+        }
         owner.fireBlockBreak(event);
         if (event.isCancelled()) {
             return;   // 游戏自己的钩子已经决定了
@@ -76,6 +81,10 @@ public final class RegionEvents implements Listener {
     public void onBlockPlace(BlockPlaceEvent event) {
         GameSession owner = ownerOfPlayer(event.getPlayer());
         if (owner == null) {
+            return;
+        }
+        owner.fireGameEvent(event);
+        if (event.isCancelled()) {
             return;
         }
         owner.fireBlockPlace(event);
@@ -102,6 +111,10 @@ public final class RegionEvents implements Listener {
         if (owner == null) {
             return;
         }
+        owner.fireGameEvent(event);
+        if (event.isCancelled()) {
+            return;
+        }
         owner.firePlayerInteract(event);
         if (event.isCancelled()) {
             return;
@@ -125,6 +138,7 @@ public final class RegionEvents implements Listener {
         if (owner == null) {
             return;
         }
+        owner.fireGameEvent(event);
         owner.firePlayerMove(event);
     }
 

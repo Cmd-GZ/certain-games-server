@@ -2,6 +2,14 @@ package com.hillking;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import com.hub.util.Chat;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.Event;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.event.block.Action;
 import org.bukkit.entity.Player;
@@ -23,6 +31,7 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 final class HillKingSession extends GameSession {
 
     private final HillKingManager manager;
+
 
     HillKingSession(HillKingManager manager) {
         super("hillking", "");
@@ -123,6 +132,42 @@ final class HillKingSession extends GameSession {
         if (manager.isStartItem(item)) {
             event.setCancelled(true);
             manager.handleStartPaper(player);
+        }
+    }
+
+    // ---------- I3：由 listener 机械搬迁过来的处理器（按事件类型分派） ----------
+
+    @Override
+    protected void onGameEvent(org.bukkit.event.Event event) {
+        if (event instanceof EntityDamageByEntityEvent e) {
+        if (!(e.getEntity() instanceof Player victim)
+                || !(e.getDamager() instanceof Player attacker)) {
+            return;
+        }
+        if (manager.isInGame(victim)) {
+            e.setCancelled(true);
+        }
+        if (!manager.isPlaying(victim) || !manager.isPlaying(attacker)) {
+            return;
+        }
+        ItemStack main = attacker.getInventory().getItemInMainHand();
+        ItemStack off = attacker.getInventory().getItemInOffHand();
+        if (!manager.isFish(main) && !manager.isFish(off)) {
+            Chat.actionBar(attacker, "&e请手持咸鱼再左键拍人");
+            return;
+        }
+        if (manager.fishHit(attacker, victim)) {
+            Chat.actionBar(attacker, "&a拍飞！");
+        } else {
+            Chat.actionBar(attacker, "&c咸鱼冷却中…");
+        }
+                return;
+        }
+        if (event instanceof PlayerMoveEvent e) {
+            if (e.getTo() != null) {
+                manager.handleMove(e.getPlayer(), e.getTo());
+            }
+            return;
         }
     }
 }

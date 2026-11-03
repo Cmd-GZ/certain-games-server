@@ -2,6 +2,15 @@ package com.snakeparty;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.event.player.PlayerToggleSprintEvent;
+import org.bukkit.event.player.PlayerToggleSneakEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.Event;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.event.block.Action;
 import org.bukkit.Location;
@@ -103,6 +112,29 @@ final class SnakePartySession extends GameSession {
         if (manager.isStartItem(item)) {
             event.setCancelled(true);
             manager.handleStartPaper(player);
+        }
+    }
+
+    // ---------- I3：由 listener 机械搬迁过来的处理器（按事件类型分派） ----------
+
+
+    @Override
+    protected void onGameEvent(org.bukkit.event.Event event) {
+        if (event instanceof PlayerMoveEvent e) {
+        manager.handleMove(e);
+                return;
+        }
+        if (event instanceof PlayerToggleSprintEvent e) {
+        if (e.isSprinting() && manager.isInGame(e.getPlayer())) {
+            e.setCancelled(true);
+        }
+                return;
+        }
+        if (event instanceof EntityDamageEvent e) {
+        if (e.getEntity() instanceof Player player && manager.isInGame(player)) {
+            e.setCancelled(true);
+        }
+                return;
         }
     }
 }

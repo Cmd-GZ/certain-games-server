@@ -99,6 +99,11 @@ public class ColorPartyManager {
     private YamlConfiguration data;
     private final SetupMode setup;
 
+    /** I3：会话里的搬迁代码要用到 plugin（原 Listener 的字段）。 */
+    public ColorPartyPlugin plugin() {
+        return plugin;
+    }
+
     public ColorPartyManager(ColorPartyPlugin plugin) {
         this.plugin = plugin;
         this.liveSidebar = new LiveSidebar(plugin);

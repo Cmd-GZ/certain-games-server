@@ -2,6 +2,12 @@ package com.firejumper;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.event.Event;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.block.Action;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.Location;
@@ -97,6 +103,29 @@ final class FireJumperSession extends GameSession {
             if (player.hasPermission("firejumper.admin")) {
                 manager.startGame(true);
             }
+        }
+    }
+
+    // ---------- I3：由 listener 机械搬迁过来的处理器（按事件类型分派） ----------
+
+
+    @Override
+    protected void onGameEvent(org.bukkit.event.Event event) {
+        if (event instanceof EntityDamageEvent e) {
+        if (!(e.getEntity() instanceof Player victim)) {
+            return;
+        }
+        if (manager.isInGame(victim)) {
+            e.setCancelled(true);
+        }
+                return;
+        }
+        if (event instanceof PlayerMoveEvent e) {
+        if (e.getTo() == null) {
+            return;
+        }
+        manager.checkBounds(e.getPlayer());
+                return;
         }
     }
 }
