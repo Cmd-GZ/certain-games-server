@@ -1,6 +1,5 @@
 package com.animalslaughter;
 
-import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -14,14 +13,9 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityDropItemEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
-import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerAttemptPickupItemEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
 
 /** 动物屠宰事件：计分、逃跑、掉落物保护、玩家无伤、场地保护、等待室道具。 */
@@ -110,17 +104,6 @@ public final class AnimalSlaughterListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onDeath(PlayerDeathEvent event) {
-        Player player = event.getEntity();
-        if (!manager.isInGame(player)) {
-            return;
-        }
-        event.setCancelled(true);
-        player.setHealth(20.0);
-        player.setFoodLevel(20);
-    }
-
     @EventHandler
     public void onMove(PlayerMoveEvent event) {
         if (event.getTo() != null) {
@@ -144,34 +127,4 @@ public final class AnimalSlaughterListener implements Listener {
         }
     }
 
-    @EventHandler
-    public void onFood(FoodLevelChangeEvent event) {
-        if (event.getEntity() instanceof Player player && manager.isInGame(player)) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onPlayerDrop(PlayerDropItemEvent event) {
-        if (manager.isInGame(event.getPlayer())) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onQuit(PlayerQuitEvent event) {
-        manager.handleQuit(event.getPlayer());
-    }
-
-    @EventHandler
-    public void onRespawn(PlayerRespawnEvent event) {
-        Player player = event.getPlayer();
-        if (!manager.isInGame(player)) {
-            return;
-        }
-        Location target = manager.arena().getLobby();
-        if (target != null) {
-            event.setRespawnLocation(target);
-        }
-    }
 }

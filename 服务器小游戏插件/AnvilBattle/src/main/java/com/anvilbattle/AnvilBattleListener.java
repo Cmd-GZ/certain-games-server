@@ -1,6 +1,5 @@
 package com.anvilbattle;
 
-import org.bukkit.Location;
 import org.bukkit.entity.FallingBlock;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -12,13 +11,8 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
-import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
 
 /** 铁砧掘战事件：铁砧命中/落地、虚空淘汰、地图保护、等待室道具。 */
@@ -72,21 +66,6 @@ public final class AnvilBattleListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onDeath(PlayerDeathEvent event) {
-        Player player = event.getEntity();
-        if (!manager.isInGame(player)) {
-            return;
-        }
-        event.setCancelled(true);
-        if (manager.isPlaying(player)) {
-            manager.handleDeath(player);
-        } else {
-            player.setHealth(20.0);
-            player.setFoodLevel(20);
-        }
-    }
-
     /** 铁砧落地：取消变成铁砧方块，改为破坏周围方块。 */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onAnvilLand(EntityChangeBlockEvent event) {
@@ -120,36 +99,4 @@ public final class AnvilBattleListener implements Listener {
         }
     }
 
-    @EventHandler
-    public void onFood(FoodLevelChangeEvent event) {
-        if (event.getEntity() instanceof Player player && manager.isInGame(player)) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onDrop(PlayerDropItemEvent event) {
-        if (manager.isInGame(event.getPlayer())) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onQuit(PlayerQuitEvent event) {
-        manager.handleQuit(event.getPlayer());
-    }
-
-    @EventHandler
-    public void onRespawn(PlayerRespawnEvent event) {
-        Player player = event.getPlayer();
-        if (!manager.isInGame(player)) {
-            return;
-        }
-        Location target = manager.isWaiting(player) || manager.isPlaying(player)
-                ? manager.arena().getLobby()
-                : manager.spectatorSpot();
-        if (target != null) {
-            event.setRespawnLocation(target);
-        }
-    }
 }
