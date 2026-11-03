@@ -34,8 +34,9 @@ except ImportError:  # pragma: no cover
 WORLD_KEYS = ("world", "world_key", "worldKey", "level")
 
 # 字符串形式的坐标："world_mini_game,12.50,50.00,301.50[,yaw,pitch]"
+# 世界段可以是真实世界名，也可以是房间化后的 `tpl:<模板键>` 令牌
 STR_LOC = re.compile(
-    r"^\s*(?P<world>[A-Za-z0-9_\-]+)\s*,\s*(?P<x>-?\d+(?:\.\d+)?)\s*,\s*"
+    r"^\s*(?P<world>(?:tpl:)?[A-Za-z0-9_\-]+)\s*,\s*(?P<x>-?\d+(?:\.\d+)?)\s*,\s*"
     r"(?P<y>-?\d+(?:\.\d+)?)\s*,\s*(?P<z>-?\d+(?:\.\d+)?)\s*(?:,[-\d.]+\s*){0,2}$"
 )
 
@@ -44,6 +45,10 @@ def norm_world(v):
     if v is None:
         return None
     s = str(v).strip()
+    # `tpl:<模板键>` 要原样保留：它表示"这块场地在模板世界里、开房时复制到房间世界"，
+    # 去掉前缀会把它伪装成一个真实世界名（I2 取证就错了）。
+    if s.startswith("tpl:"):
+        return s
     return s.split(":")[-1] if ":" in s else s
 
 

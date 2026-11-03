@@ -288,8 +288,13 @@ public final class TNTBattleArena {
         if (location == null || location.getWorld() == null) {
             return "";
         }
+        // **不能写 getWorld().getName()**：房间化之后场地跑在 room_xxx 里，
+        // 把临时房间名写进配置（R2 违规）会让删房后配置永久失效
+        //（真实事故：TNTBattle 配置里出现 `pos1: room_tb3_1,334.00,...`）。
+        // Worlds.tokenOf 会把房间实例还原成 `tpl:<模板键>`。
         return String.format(Locale.ROOT, "%s,%.2f,%.2f,%.2f,%.2f,%.2f",
-                location.getWorld().getName(), location.getX(), location.getY(), location.getZ(),
+                com.hub.world.Worlds.tokenOf(location.getWorld()),
+                location.getX(), location.getY(), location.getZ(),
                 location.getYaw(), location.getPitch());
     }
 
