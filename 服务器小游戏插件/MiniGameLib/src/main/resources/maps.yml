@@ -71,30 +71,6 @@ maps:
           y2: 104.6
           z2: -144.3
           game: anvilbattle
-  digdown:
-    一号场:
-      entry:
-        template: mini_games
-        x: 647.0
-        y: 45
-        z: 19
-      worlds:
-      - template: mini_games
-        rules:
-          pvp: false
-          difficulty: NORMAL
-          mob-spawning: false
-          keep-inventory: false
-          fixed-time: 6000
-        regions:
-        - name: 一号场
-          x1: 627.4
-          y1: 45.0
-          z1: -0.8
-          x2: 667.4
-          y2: 69.0
-          z2: 39.2
-          game: digdown
   firejumper:
     firejumper_mini_game:
       entry:
@@ -592,10 +568,6 @@ maps:
   gtb:
     糖果屋:
       entry:
-        # 站在建造台上（27×27 橡木台在 y=69，脚踩 y=70），朝西看整块建造区。
-        # 数值 = GuessTheBuild/config.yml 的 lobby-point（/gtb join 时还会再传一次；
-        # 这里保证"刚进房间、还没 join"的那一瞬间也是站在台上、朝着场地）。
-        # yaw/pitch 是本次给 entry 新加的字段，缺省 0 等于原来的行为。
         template: gtb
         x: -13.32
         y: 70.0
@@ -690,7 +662,7 @@ maps:
           x2: 667.4
           y2: 69.0
           z2: 39.2
-          game: digdown
+          game: digtobottom
         - name: 跃火者
           x1: 624
           y1: 78
@@ -779,3 +751,27 @@ maps:
           y2: 47
           z2: 31
           game: arrowrain
+  digtobottom:
+    一号场:
+      entry:
+        template: mini_games
+        x: 647.0
+        y: 45
+        z: 19
+      worlds:
+      - template: mini_games
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 一号场
+          x1: 627.4
+          y1: 45.0
+          z1: -0.8
+          x2: 667.4
+          y2: 69.0
+          z2: 39.2
+          game: digtobottom

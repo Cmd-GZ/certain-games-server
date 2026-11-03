@@ -39,7 +39,7 @@
         <dependency>
             <groupId>com.hub</groupId>
             <artifactId>minigame-lib</artifactId>
-            <version>1.21.0</version>
+            <version>1.21.1</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
