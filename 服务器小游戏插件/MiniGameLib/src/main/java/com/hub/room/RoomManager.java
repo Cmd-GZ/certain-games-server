@@ -1012,7 +1012,13 @@ public final class RoomManager {
         if (room == null) {
             return false;   // 已经被回收 / 本来就不存在
         }
-        if (room.game() == null || !room.game().equalsIgnoreCase(gameKey)) {
+        // gameKey 可能是房间拥有者的**别名**：派对会话的 gameKey 是 `arcade`，
+        // 而房间的 game 是 `arcadeparty`（真实事故：派对收场后房间没被销毁）。
+        String owner = gameKey;
+        if ("arcade".equalsIgnoreCase(owner)) {
+            owner = "arcadeparty";
+        }
+        if (room.game() == null || !room.game().equalsIgnoreCase(owner)) {
             return false;   // 不是自己的房间（例如派对房间归父级）
         }
         boolean ok = delete(roomId);

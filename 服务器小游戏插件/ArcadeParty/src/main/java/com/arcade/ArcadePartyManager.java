@@ -918,6 +918,15 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         }
         // 会话（I1/I4/I5）：整场派对 = 一个 session，玩家挂到它的归属链上；无 children（D17）
         session = new ArcadePartySession(this);
+        // **把房间号盖到会话上**（D25：对局结束 -> 销毁房间）。
+        // 注意：派对会话的 gameKey 是 "arcade"，而房间上下文是按 room.game()（"arcadeparty"）绑的，
+        // 靠 GameSession 构造时自动盖章是拿不到的（真实事故：派对收场后房间没销毁，
+        //  一直占着到 300s 空置回收）。所以这里由派对自己盖章。
+        var partyRoomNow = partyRoom();
+        if (partyRoomNow != null) {
+            session.bindRoom(partyRoomNow.roomId);
+            plugin.getLogger().info("[派对] 会话已绑定房间 " + partyRoomNow.roomId);
+        }
         for (UUID id : playing) {
             Player p = Bukkit.getPlayer(id);
             if (p != null) {

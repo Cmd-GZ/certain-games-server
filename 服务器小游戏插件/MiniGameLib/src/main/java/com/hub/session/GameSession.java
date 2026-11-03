@@ -227,14 +227,20 @@ public abstract class GameSession {
     public final void end(EndReason reason) {
         EndReason why = reason == null ? EndReason.ABORT : reason;
         if (state == SessionState.ENDED) {
-            Failures.record(gameKey + ".重复end/" + arenaName,
-                    new IllegalStateException("已经结束（" + endReason + "），忽略本次 " + why));
+            // D6：重复 end 是**幂等**的正常路径 —— 最典型的来源是"父对局收场递归到已经结束的子会话"
+            // （派对打完最后一局 -> 子游戏先收尾 -> 派对再收场 -> 父死子必死把子会话又 end 一次）。
+            // 这种情况**不能记 Failures**：那会刷满 doctor，把真异常淹掉（实测已踩）。
+            org.bukkit.Bukkit.getLogger().info("[" + gameKey + "] 会话已结束（" + endReason
+                    + "），忽略本次 " + why);
             return;
         }
         this.endReason = why;
 
         // 1) 父死子必死
         for (GameSession child : new ArrayList<>(children)) {
+            if (child.state == SessionState.ENDED) {
+                continue;   // 已经结束的子会话不再递归（幂等，也不必打日志）
+            }
             try {
                 child.end(why);
             } catch (RuntimeException ex) {
