@@ -16,14 +16,11 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
-import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import com.duel.arena.DuelArena;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerSignOpenEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 
@@ -171,31 +168,21 @@ public class DuelListener implements Listener {
     }
 
     /** 死亡：判定对方获胜，不掉落物品。 */
-    @EventHandler
-    public void onDeath(PlayerDeathEvent event) {
-        Player p = event.getEntity();
-        if (plugin.getManager().arenaOf(p.getUniqueId()) == null) {
-            return;
-        }
-        event.setKeepInventory(true);
-        event.setKeepLevel(true);
-        event.getDrops().clear();
-        event.deathMessage(null);
-        plugin.getManager().handleDeath(p);
-    }
-
     /** 重生：在场的回等待点；只有「死在单挑世界、却已不在场」的才兜底回大厅。 */
+    /**
+     * 重生：**只保留"世界兜底"这一半**（I3 A 批）。
+     *
+     * <p>"在场内就把重生点设成等待点"那一半已经搬进 {@code DuelSession#onPlayerRespawn} ——
+     * 它只对**本局玩家**有意义，交给框架按归属派发即可。
+     *
+     * <p>这一半不能搬：它是**全服世界级**的兜底 —— 玩家已经不在任何会话里（例如局散了、
+     * 会话已 ENDED）却还站在决斗世界，需要把人送回主城。搬进会话钩子后永远走不到。
+     * 同理，`HubAPI.teleportToLobby` 会回调各游戏的 lobby handler，所以必须先用
+     * `isDuelWorld` 把自己限制在自家世界（AGENTS.md §5-5）。
+     */
     @EventHandler
     public void onRespawn(PlayerRespawnEvent event) {
         Player p = event.getPlayer();
-        String name = plugin.getManager().arenaOf(p.getUniqueId());
-        if (name != null) {
-            DuelArena a = plugin.getManager().getArena(name);
-            if (a != null && a.getLobbyPoint() != null) {
-                event.setRespawnLocation(a.getLobbyPoint());
-                return;
-            }
-        }
         // 世界判定（AGENTS.md §5-5）：PlayerRespawnEvent 是全服事件，别的小游戏也会重生
         // （例如幸运之柱淘汰后变旁观）。无条件 teleportToLobby 会把人从别人的游戏里踢回主城，
         // 而且 HubAPI.teleportToLobby 还会回调各游戏的 lobby handler，把对方的状态也清掉。
@@ -223,11 +210,6 @@ public class DuelListener implements Listener {
     }
 
     /** 退出：对战中对方获胜。 */
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        plugin.getManager().handleQuit(event.getPlayer());
-    }
-
     /** 右键告示牌：绑定模式变内容 / 查看战绩 / 点击加入。 */
     @EventHandler
     public void onInteract(PlayerInteractEvent event) {
@@ -300,11 +282,4 @@ public class DuelListener implements Listener {
     }
 
     /** 场内玩家不掉饥饿（等待中或对局中：饱食度保持满，回血也正常）。 */
-    @EventHandler
-    public void onFood(FoodLevelChangeEvent event) {
-        if (event.getEntity() instanceof Player p
-                && plugin.getManager().arenaOf(p.getUniqueId()) != null) {
-            event.setCancelled(true);
-        }
-    }
 }
