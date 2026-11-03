@@ -630,37 +630,51 @@ public class DigToBottomManager {
         }));
     }
 
+    /**
+     * 拒绝加入时**同时**写控制台。
+     *
+     * <p>R3（失败可见）真实教训：这个游戏在房间里一直开不了局，而拒绝文案只 sendMessage 给玩家，
+     * 控制台一个字都没有，害我查了三轮（对照 LandClaim/JumpFill 的 `tpl:` 读侧 bug）。
+     */
+    private void rejectJoin(Player p, String arenaName, String why) {
+        msg(p, why);
+        plugin.getLogger().info("[DigToBottom] 拒绝 " + p.getName() + " 加入 \"" + arenaName + "\"："
+                + org.bukkit.ChatColor.stripColor(why.replace('&', '\u00a7')));
+    }
+
     public boolean join(Player p, String arenaName) {
         DigToBottomArena a = arenas.get(arenaName);
         if (a == null) {
-            msg(p, "&c场 &e" + arenaName + "&c 不存在。");
+            rejectJoin(p, arenaName, "&c场 &e" + arenaName + "&c 不存在。");
             return false;
         }
         UUID id = p.getUniqueId();
         if (playerArena.containsKey(id)) {
-            msg(p, "&c你已在其他场。");
+            rejectJoin(p, arenaName, "&c你已在其他场。");
             return false;
         }
         if (a.getState() == DigToBottomArena.State.RUNNING) {
-            msg(p, "&c该场正在游戏中。");
+            rejectJoin(p, arenaName, "&c该场正在游戏中。");
             return false;
         }
         if (!a.isReady()) {
-            msg(p, "&c该场还没建好（OP 需要 /dig center、/dig build、/dig lobby）。");
+            rejectJoin(p, arenaName, "&c该场还没建好（OP 需要 /dig center、/dig build、/dig lobby）。");
             return false;
         }
         if (a.getBuiltHeight() != height()) {
-            msg(p, "&c柱高配置改过了（场内玻璃还是 &e" + a.getBuiltHeight() + " &c格），请 OP 重新 &e/dig build&c。");
+            rejectJoin(p, arenaName, "&c柱高配置改过了（场内玻璃还是 &e" + a.getBuiltHeight() + " &c格），请 OP 重新 &e/dig build&c。");
             return false;
         }
         int max = Math.max(1, Math.min(a.getLanes(), plugin.getConfig().getInt("max-players", 8)));
         if (a.totalPlayers() >= max) {
-            msg(p, "&c人数已满（坑位 &e" + a.getLanes() + "&c，人数上限 &e" + max + "&c）。");
+            rejectJoin(p, arenaName, "&c人数已满（坑位 &e" + a.getLanes() + "&c，人数上限 &e" + max + "&c）。");
             return false;
         }
         // I1（D23）：先挂会话再入队；冲突直接拒绝，避免半加入状态
         DigToBottomSession sess = ensureSession(arenaName);
         if (!sess.join(p)) {
+            plugin.getLogger().info("[DigToBottom] 拒绝 " + p.getName() + " 加入 \"" + arenaName
+                    + "\"：会话归属链挂接失败（" + sess.describe() + "）");
             // 刚建出来的空会话不能留着 —— 否则 doctor 里会多出一个"0 人的等待中场地"，
             // 看起来像场地被占了，其实谁也没进去
             if (sess.players().isEmpty()) {

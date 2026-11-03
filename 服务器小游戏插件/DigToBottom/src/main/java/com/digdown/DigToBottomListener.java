@@ -13,12 +13,8 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPhysicsEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.block.Action;
 import org.bukkit.inventory.ItemStack;
 
@@ -244,47 +240,8 @@ public class DigToBottomListener implements Listener {
         }
     }
 
-    @EventHandler
-    public void onFood(FoodLevelChangeEvent event) {
-        if (event.getEntity() instanceof Player player
-                && manager().arenaOf(player.getUniqueId()) != null) {
-            event.setCancelled(true);
-        }
-    }
-
     /** 对局中禁止丢道具；等待时也不许把发下去的钻石工具丢掉。 */
-    @EventHandler
-    public void onDrop(PlayerDropItemEvent event) {
-        Player player = event.getPlayer();
-        DigToBottomArena arena = manager().getArena(manager().arenaOf(player.getUniqueId()));
-        if (arena == null) {
-            return;
-        }
-        if (arena.getState() == DigToBottomArena.State.RUNNING
-                || manager().isTool(event.getItemDrop().getItemStack())) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        manager().handleQuit(event.getPlayer());
-    }
-
     /** 万一人死了：回到等待点，别重生在柱子里。 */
-    @EventHandler
-    public void onRespawn(PlayerRespawnEvent event) {
-        Player player = event.getPlayer();
-        DigToBottomArena arena = manager().getArena(manager().arenaOf(player.getUniqueId()));
-        if (arena == null) {
-            return;
-        }
-        Location spot = arena.getLobby() != null ? arena.getLobby() : arena.getCenter();
-        if (spot != null) {
-            event.setRespawnLocation(spot);
-        }
-    }
-
     @EventHandler
     public void onInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
