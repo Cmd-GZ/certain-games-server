@@ -24,35 +24,6 @@ public final class GroupRaceListener implements Listener {
         this.manager = manager;
     }
 
-    /** 等待室：床返回大厅，纸（仅管理员）开始游戏。 */
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onInteract(PlayerInteractEvent event) {
-        Action action = event.getAction();
-        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) {
-            return;
-        }
-        ItemStack item = event.getItem();
-        if (item == null) {
-            return;
-        }
-        Player player = event.getPlayer();
-        if (manager.isReturnItem(item)) {
-            event.setCancelled(true);
-            manager.leave(player, false);
-            return;
-        }
-        if (manager.isStartItem(item)) {
-            event.setCancelled(true);
-            if (!manager.isAdmin(player)) {
-                Chat.send(player, "&c只有管理员可以开始游戏。");
-            } else if (manager.isWaiting(player)) {
-                manager.startGame(true);
-            } else {
-                Chat.send(player, "&e你不在等待队列中。");
-            }
-        }
-    }
-
     /** 记录跳跃 / 下蹲键，供飞猪每 tick 控制升降。 */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onInput(PlayerInputEvent event) {

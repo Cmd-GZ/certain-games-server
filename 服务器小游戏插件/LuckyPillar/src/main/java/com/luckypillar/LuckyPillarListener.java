@@ -163,32 +163,4 @@ public class LuckyPillarListener implements Listener {
         plugin.getManager().trackBlock(event.getBlock());
     }
 
-    /** 配置模式道具 + 等待室"开始游戏"纸 / "退出游戏"床。 */
-    @EventHandler
-    public void onInteract(PlayerInteractEvent event) {
-        Player p = event.getPlayer();
-        if (plugin.getManager().isInSetup(p.getUniqueId())
-                && plugin.getManager().handleSetupTool(p, event.getAction(), event.getClickedBlock())) {
-            event.setCancelled(true);
-            return;
-        }
-        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
-            return;
-        }
-        // 主手/副手会各触发一次事件，只认主手（否则开局后会多打一条"正在游戏中"）
-        if (event.getHand() != null && event.getHand() != EquipmentSlot.HAND) {
-            return;
-        }
-        ItemStack item = event.getItem();
-        if (item == null || plugin.getManager().activeArenaOf(p.getUniqueId()) == null) {
-            return;
-        }
-        if (plugin.getManager().isStartPaper(item)) {
-            event.setCancelled(true);
-            plugin.getManager().handleStartPaper(p);
-        } else if (item.getType() == Material.RED_BED) {
-            event.setCancelled(true);
-            plugin.getManager().handleLeaveBed(p);
-        }
-    }
 }

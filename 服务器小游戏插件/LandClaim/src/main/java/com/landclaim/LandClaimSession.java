@@ -2,6 +2,10 @@ package com.landclaim;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.event.block.Action;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.EquipmentSlot;
+import com.hub.util.Chat;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerDropItemEvent;
 
@@ -45,6 +49,33 @@ final class LandClaimSession extends GameSession {
         org.bukkit.inventory.ItemStack item = event.getItemDrop().getItemStack();
         if (manager.isHoe(item) || manager.isStartItem(item) || manager.isLeaveItem(item)) {
             event.setCancelled(true);
+        }
+    }
+
+    @Override
+    protected void onPlayerInteract(org.bukkit.event.player.PlayerInteractEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND) {
+            return;
+        }
+        Player player = event.getPlayer();
+        if (manager.isStartItem(event.getItem())) {
+            event.setCancelled(true);
+            if (player.hasPermission("landclaim.admin")) {
+                manager.useStartItem(player);
+            }
+            return;
+        }
+        if (manager.isLeaveItem(event.getItem())) {
+            event.setCancelled(true);
+            manager.useLeaveItem(player);
+            return;
+        }
+        if (!manager.isHoe(event.getItem())) {
+            return;
+        }
+        event.setCancelled(true);
+        if (player.hasPermission("landclaim.play")) {
+            manager.claim(player, event.getClickedBlock());
         }
     }
 }

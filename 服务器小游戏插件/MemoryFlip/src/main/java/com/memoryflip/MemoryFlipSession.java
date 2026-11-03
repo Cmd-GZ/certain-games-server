@@ -2,6 +2,8 @@ package com.memoryflip;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.event.block.Action;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
@@ -71,6 +73,27 @@ final class MemoryFlipSession extends GameSession {
         Location target = manager.arena().getLobby();
         if (target != null) {
             event.setRespawnLocation(target);
+        }
+    }
+
+    @Override
+    protected void onPlayerInteract(org.bukkit.event.player.PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        Player player = event.getPlayer();
+        ItemStack item = event.getItem();
+        if (item == null) {
+            return;
+        }
+        if (manager.isReturnItem(item)) {
+            event.setCancelled(true);
+            manager.leave(player, false);
+            return;
+        }
+        if (manager.isStartItem(item)) {
+            event.setCancelled(true);
+            manager.handleStartPaper(player);
         }
     }
 }

@@ -118,23 +118,6 @@ public class HotPotatoListener implements Listener {
         plugin.getManager().handleJoin(event.getPlayer());
     }
 
-    /** 右键开始纸。 */
-    @EventHandler
-    public void onInteract(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
-            return;
-        }
-        ItemStack item = event.getItem();
-        if (item == null) return;
-        if (item.getType() == Material.PAPER) {
-            plugin.getManager().handleStartPaper(event.getPlayer());
-            return;
-        }
-        if (item.getType() == Material.RED_BED) {
-            plugin.getManager().handleLeaveBed(event.getPlayer());
-        }
-    }
-
     /** 配置模式道具 + 加入告示牌（绑定/点击加入）。 */
     @EventHandler
     public void onSetupAndSigns(PlayerInteractEvent event) {

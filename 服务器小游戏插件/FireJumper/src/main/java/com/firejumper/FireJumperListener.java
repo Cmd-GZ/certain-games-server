@@ -22,32 +22,6 @@ public final class FireJumperListener implements Listener {
         this.manager = manager;
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onInteract(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
-            return;
-        }
-        Player player = event.getPlayer();
-        if (!manager.isWaiting(player)) {
-            return;
-        }
-        ItemStack item = event.getItem();
-        if (item == null) {
-            return;
-        }
-        if (manager.isReturnItem(item)) {
-            event.setCancelled(true);
-            manager.leave(player, false);
-            return;
-        }
-        if (manager.isStartItem(item)) {
-            event.setCancelled(true);
-            if (player.hasPermission("firejumper.admin")) {
-                manager.startGame(true);
-            }
-        }
-    }
-
     /** 对局内免疫一切伤害（火焰线才是唯一的淘汰方式）。 */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onDamage(EntityDamageEvent event) {

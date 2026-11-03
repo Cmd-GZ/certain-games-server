@@ -1,5 +1,5 @@
 name: GroupRace
-version: '1.5.0'
+version: '1.6.0'
 main: com.grouprace.GroupRacePlugin
 api-version: '1.21'
 description: 群友竞速赛：骑飞猪穿过圆环，分数最高者获胜

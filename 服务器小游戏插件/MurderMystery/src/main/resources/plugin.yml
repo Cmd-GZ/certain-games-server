@@ -1,5 +1,5 @@
 name: MurderMystery
-version: '1.6.0'
+version: '1.7.0'
 main: com.murdermystery.MurderMysteryPlugin
 api-version: '1.21'
 description: 密室杀手：杀手持铁剑行凶，全体玩家用金锭商店购买一击必杀武器讨伐杀手

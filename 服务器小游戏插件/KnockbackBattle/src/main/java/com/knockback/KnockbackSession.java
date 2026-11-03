@@ -2,6 +2,9 @@ package com.knockback;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import com.hub.util.Chat;
+import org.bukkit.event.block.Action;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerDropItemEvent;
 
@@ -53,6 +56,40 @@ final class KnockbackSession extends GameSession {
         if (manager.isStick(item) || manager.isWindCharge(item)
                 || manager.isReturnItem(item) || manager.isStartItem(item)) {
             event.setCancelled(true);
+        }
+    }
+
+    /** 右键：返回大厅床、管理员开始纸、风弹。 */
+    @Override
+    protected void onPlayerInteract(org.bukkit.event.player.PlayerInteractEvent event) {
+        Action action = event.getAction();
+        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        Player player = event.getPlayer();
+        ItemStack item = event.getItem();
+        if (item == null) {
+            return;
+        }
+        if (manager.isReturnItem(item)) {
+            event.setCancelled(true);
+            manager.leave(player, false);
+            return;
+        }
+        if (manager.isStartItem(item)) {
+            event.setCancelled(true);
+            if (!manager.isAdmin(player)) {
+                Chat.send(player, "&c只有管理员可以开始游戏。");
+            } else if (manager.isWaiting(player)) {
+                manager.startGame(true);
+            } else {
+                Chat.send(player, "&e你不在等待队列中。");
+            }
+            return;
+        }
+        if (manager.isWindCharge(item)) {
+            event.setCancelled(true);
+            manager.useWindCharge(player);
         }
     }
 }

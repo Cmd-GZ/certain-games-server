@@ -20,33 +20,6 @@ public final class LandClaimListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void onInteract(PlayerInteractEvent event) {
-        if (event.getHand() != EquipmentSlot.HAND) {
-            return;
-        }
-        Player player = event.getPlayer();
-        if (manager.isStartItem(event.getItem())) {
-            event.setCancelled(true);
-            if (player.hasPermission("landclaim.admin")) {
-                manager.useStartItem(player);
-            }
-            return;
-        }
-        if (manager.isLeaveItem(event.getItem())) {
-            event.setCancelled(true);
-            manager.useLeaveItem(player);
-            return;
-        }
-        if (!manager.isHoe(event.getItem())) {
-            return;
-        }
-        event.setCancelled(true);
-        if (player.hasPermission("landclaim.play")) {
-            manager.claim(player, event.getClickedBlock());
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
     public void onDamage(EntityDamageEvent event) {
         if (event.getEntity() instanceof Player player && manager.isPlaying(player)) {
             event.setCancelled(true);

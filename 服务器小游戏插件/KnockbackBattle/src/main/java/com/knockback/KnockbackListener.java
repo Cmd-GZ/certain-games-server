@@ -24,40 +24,6 @@ public final class KnockbackListener implements Listener {
         this.manager = manager;
     }
 
-    /** 右键：返回大厅床、管理员开始纸、风弹。 */
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onInteract(PlayerInteractEvent event) {
-        Action action = event.getAction();
-        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) {
-            return;
-        }
-        Player player = event.getPlayer();
-        ItemStack item = event.getItem();
-        if (item == null) {
-            return;
-        }
-        if (manager.isReturnItem(item)) {
-            event.setCancelled(true);
-            manager.leave(player, false);
-            return;
-        }
-        if (manager.isStartItem(item)) {
-            event.setCancelled(true);
-            if (!manager.isAdmin(player)) {
-                Chat.send(player, "&c只有管理员可以开始游戏。");
-            } else if (manager.isWaiting(player)) {
-                manager.startGame(true);
-            } else {
-                Chat.send(player, "&e你不在等待队列中。");
-            }
-            return;
-        }
-        if (manager.isWindCharge(item)) {
-            event.setCancelled(true);
-            manager.useWindCharge(player);
-        }
-    }
-
     /** 直接右键实体时走这个事件，风弹同样能发射。 */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onInteractEntity(PlayerInteractEntityEvent event) {

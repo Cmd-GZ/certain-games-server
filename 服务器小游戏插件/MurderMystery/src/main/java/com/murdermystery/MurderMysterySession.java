@@ -2,6 +2,12 @@ package com.murdermystery;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.block.Sign;
+import org.bukkit.Material;
+import org.bukkit.event.block.Action;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.EquipmentSlot;
+import com.hub.util.Chat;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
@@ -106,6 +112,87 @@ final class MurderMysterySession extends GameSession {
         if (manager.isRoleItem(dropped)) {
             event.setCancelled(true);
             manager.notifyRoleItemLocked(p);
+        }
+    }
+
+    /** 交互：配置工具（左右键都认）、金锭兑换、开始纸、退出床、杀手飞剑、加入告示牌。 */
+    @Override
+    protected void onPlayerInteract(org.bukkit.event.player.PlayerInteractEvent event) {
+        Player p = event.getPlayer();
+        MurderMysteryManager m = manager;
+        ItemStack item = event.getItem();
+
+        // 配置模式工具：木棍是"左键=范围角1、右键=范围角2"，所以这里必须先于右键过滤处理
+        if (m.isInSetup(p.getUniqueId())) {
+            Action action = event.getAction();
+            if ((action == Action.LEFT_CLICK_AIR || action == Action.LEFT_CLICK_BLOCK
+                    || action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK)
+                    && m.handleSetupTool(p, action, event.getClickedBlock())) {
+                event.setCancelled(true);
+                return;
+            }
+        }
+
+        // 下面是右键玩法（兑换/道具/告示牌），只处理右键
+        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+
+        // 对局内交互
+        String arenaName = m.arenaOf(p.getUniqueId());
+        if (arenaName != null) {
+            MurderMysteryArena a = m.getArena(arenaName);
+            if (a != null && a.getState() == MurderMysteryArena.State.RUNNING) {
+                // 商店弩不在这里拦截：交给原版弩自己装填/发射；猎人弓的无限箭由 EntityShootBowEvent 处理
+                if (item != null && m.isShopItem(item)) {
+                    m.openShop(p);
+                    event.setCancelled(true);
+                    return;
+                }
+                if (item != null && m.isTruthStone(item)) {
+                    event.setCancelled(true);
+                    m.openTruthMenu(p);
+                    return;
+                }
+                if (item != null && m.isDeathNote(item)) {
+                    event.setCancelled(true);
+                    m.useDeathNote(p);
+                    return;
+                }
+                if (item != null && m.isTrackCompass(item)) {
+                    event.setCancelled(true);
+                    m.handleTrackCompass(p);
+                    return;
+                }
+                if (item != null && item.getType() == Material.IRON_SWORD) {
+                    m.handleSwordThrow(p);
+                    event.setCancelled(true);
+                    return;
+                }
+            }
+            if (item != null && item.getType() == Material.PAPER) {
+                m.handleStartPaper(p);
+                return;
+            }
+            if (item != null && item.getType() == Material.RED_BED) {
+                m.handleLeaveBed(p);
+                return;
+            }
+        }
+
+        // 加入告示牌（绑定 / 点击加入）
+        if (event.getAction() == Action.RIGHT_CLICK_BLOCK && event.getClickedBlock() != null) {
+            if (!(event.getClickedBlock().getState() instanceof Sign)) {
+                return;
+            }
+            if (m.handleSignBind(p, event.getClickedBlock().getLocation())) {
+                event.setCancelled(true);
+                return;
+            }
+            if (m.isJoinSign(event.getClickedBlock().getLocation())) {
+                event.setCancelled(true);
+                m.onSignClick(p, event.getClickedBlock().getLocation());
+            }
         }
     }
 }

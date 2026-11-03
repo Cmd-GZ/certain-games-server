@@ -27,32 +27,6 @@ public final class ArrowRainListener implements Listener {
         this.manager = manager;
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onInteract(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
-            return;
-        }
-        Player player = event.getPlayer();
-        if (!manager.isWaiting(player)) {
-            return;
-        }
-        ItemStack item = event.getItem();
-        if (item == null) {
-            return;
-        }
-        if (manager.isReturnItem(item)) {
-            event.setCancelled(true);
-            manager.leave(player, false);
-            return;
-        }
-        if (manager.isStartItem(item)) {
-            event.setCancelled(true);
-            if (player.hasPermission("arrowrain.admin")) {
-                manager.startGame(true);
-            }
-        }
-    }
-
     /**
      * 伤害总控：
      * - 箭雨伤害由 ProjectileHit 处理，这里一律取消，避免原版伤害把人直接打死；

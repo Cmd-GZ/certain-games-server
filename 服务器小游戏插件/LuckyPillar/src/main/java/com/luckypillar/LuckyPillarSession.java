@@ -2,6 +2,11 @@ package com.luckypillar;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.Material;
+import org.bukkit.event.block.Action;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.EquipmentSlot;
+import com.hub.util.Chat;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
@@ -58,5 +63,34 @@ final class LuckyPillarSession extends GameSession {
     @Override
     protected void onPlayerRespawn(PlayerRespawnEvent event) {
         manager.handleRespawn(event.getPlayer(), event);
+    }
+
+    /** 配置模式道具 + 等待室"开始游戏"纸 / "退出游戏"床。 */
+    @Override
+    protected void onPlayerInteract(org.bukkit.event.player.PlayerInteractEvent event) {
+        Player p = event.getPlayer();
+        if (manager.isInSetup(p.getUniqueId())
+                && manager.handleSetupTool(p, event.getAction(), event.getClickedBlock())) {
+            event.setCancelled(true);
+            return;
+        }
+        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        // 主手/副手会各触发一次事件，只认主手（否则开局后会多打一条"正在游戏中"）
+        if (event.getHand() != null && event.getHand() != EquipmentSlot.HAND) {
+            return;
+        }
+        ItemStack item = event.getItem();
+        if (item == null || manager.activeArenaOf(p.getUniqueId()) == null) {
+            return;
+        }
+        if (manager.isStartPaper(item)) {
+            event.setCancelled(true);
+            manager.handleStartPaper(p);
+        } else if (item.getType() == Material.RED_BED) {
+            event.setCancelled(true);
+            manager.handleLeaveBed(p);
+        }
     }
 }

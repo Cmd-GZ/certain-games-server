@@ -28,27 +28,6 @@ public final class OneShotListener implements Listener {
         this.manager = manager;
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onInteract(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
-            return;
-        }
-        Player player = event.getPlayer();
-        ItemStack item = event.getItem();
-        if (item == null) {
-            return;
-        }
-        if (manager.isReturnItem(item)) {
-            event.setCancelled(true);
-            manager.leave(player, false);
-            return;
-        }
-        if (manager.isStartItem(item)) {
-            event.setCancelled(true);
-            manager.handleStartPaper(player);
-        }
-    }
-
     /** 玩家之间的伤害：弓箭直接秒杀，木剑走原版伤害；其它来源一律取消。 */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onDamageByEntity(EntityDamageByEntityEvent event) {

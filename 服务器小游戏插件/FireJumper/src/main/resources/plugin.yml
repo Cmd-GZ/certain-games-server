@@ -1,5 +1,5 @@
 name: FireJumper
-version: '1.6.0'
+version: '1.7.0'
 main: com.firejumper.FireJumperPlugin
 api-version: '1.21'
 description: 跃火者：跳过横扫场地的火焰线，最后存活者获胜

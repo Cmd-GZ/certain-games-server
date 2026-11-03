@@ -2,6 +2,10 @@ package com.hotpotato;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.event.block.Action;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.EquipmentSlot;
+import com.hub.util.Chat;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
@@ -104,5 +108,22 @@ final class HotPotatoSession extends GameSession {
         }
         event.setCancelled(true);
         p.sendMessage("§c烫手山芋不能丢弃！把它传给其他玩家吧！");
+    }
+
+    /** 右键开始纸。 */
+    @Override
+    protected void onPlayerInteract(org.bukkit.event.player.PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        ItemStack item = event.getItem();
+        if (item == null) return;
+        if (item.getType() == Material.PAPER) {
+            manager.handleStartPaper(event.getPlayer());
+            return;
+        }
+        if (item.getType() == Material.RED_BED) {
+            manager.handleLeaveBed(event.getPlayer());
+        }
     }
 }

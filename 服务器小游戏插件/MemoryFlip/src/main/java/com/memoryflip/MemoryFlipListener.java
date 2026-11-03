@@ -27,27 +27,6 @@ public final class MemoryFlipListener implements Listener {
         this.manager = manager;
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onInteract(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
-            return;
-        }
-        Player player = event.getPlayer();
-        ItemStack item = event.getItem();
-        if (item == null) {
-            return;
-        }
-        if (manager.isReturnItem(item)) {
-            event.setCancelled(true);
-            manager.leave(player, false);
-            return;
-        }
-        if (manager.isStartItem(item)) {
-            event.setCancelled(true);
-            manager.handleStartPaper(player);
-        }
-    }
-
     /** 右键点展示框：翻牌。 */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onInteractFrame(PlayerInteractAtEntityEvent event) {
