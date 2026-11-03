@@ -70,6 +70,13 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
         }
         menuLayout = new MenuLayout(this);
         menuEditor = new MenuEditor(this, menuLayout);
+        // 菜单可达性审计要在 menuLayout 就绪之后（第一次我放在前面 → getMenuLayout() 为 null，
+        // 被 R3 记成"[被吞的异常] HubCore.菜单可达性审计"——正好证明这类错误不会被埋掉）。
+        try {
+            menuLayout.auditMenuReachability();
+        } catch (Exception ex) {
+            Failures.recordAndWarn("HubCore.菜单可达性审计", ex);
+        }
         // 头衔插件存在时，菜单右下角自动放一个头衔入口（已占用则不覆盖）
         if (getServer().getPluginManager().getPlugin("PlayerTitles") != null) {
             menuLayout.ensureTitleMenuEntry();

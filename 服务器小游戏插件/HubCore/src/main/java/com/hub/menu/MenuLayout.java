@@ -526,6 +526,68 @@ public final class MenuLayout {
      * 把烫手山芋 / 雪塔大作战 / 色盲派对 / 跳水填格从主菜单收进「迷你小游戏」子菜单。
      * 6 行大箱子布局，只迁移一次；用 version 标记，旧版 3 行子菜单会自动升级。
      */
+    /**
+     * **菜单可达性审计**（R3）：注册了、也有地图，但菜单里**点不到**的游戏。
+     *
+     * <p>为什么要它：菜单是手配的（`menu.items.<槽位>` 的 action），加游戏/改名时很容易漏。
+     * 玩家面对的表现就是"某个游戏明明有，但找不到入口"。
+     * 这里只**报**不改：菜单是玩家看得见的东西，自动塞图标属于产品决策，得人拍板。
+     *
+     * <p>⚠️ 已知限制：注册表的 id 是**显示名**（"建筑猜猜乐"），而 maps.yml 用的是小写 key，
+     * 两套命名目前没有映射关系 —— 所以这里只能用显示名比对，**没法判断"这个游戏有没有地图"**。
+     * 要彻底解决，得让注册表把 key 也登记出来（下一步）。
+     */
+    public void auditMenuReachability() {
+        var reg = plugin.getRegistry();
+        if (reg == null) {
+            return;
+        }
+        java.util.Set<String> reachable = new java.util.LinkedHashSet<>();
+        collectReachable("menu.items", reachable, 0);
+        var subs = plugin.getConfig().getConfigurationSection("menu.sub");
+        if (subs != null) {
+            for (String sub : subs.getKeys(false)) {
+                collectReachable("menu.sub." + sub + ".items", reachable, 1);
+            }
+        }
+        java.util.List<String> missing = new java.util.ArrayList<>();
+        for (var info : reg.getGames()) {
+            if (!reachable.contains(info.id()) && !reachable.contains(info.displayName())) {
+                missing.add(info.displayName());
+            }
+        }
+        if (missing.isEmpty()) {
+            plugin.getLogger().info("[菜单审计] 所有已登记游戏都能从菜单进入（共 "
+                    + reg.getGames().size() + " 个）");
+        } else {
+            plugin.getLogger().warning("[菜单审计] 这些游戏已登记但菜单里点不到（共 "
+                    + missing.size() + " 个）：" + missing);
+        }
+    }
+
+    /** 递归收集 `game:` 动作指向的游戏显示名（子菜单里也可能有 game: 动作）。 */
+    private void collectReachable(String path, java.util.Set<String> out, int depth) {
+        if (depth > 3) {
+            return;
+        }
+        var items = plugin.getConfig().getConfigurationSection(path);
+        if (items == null) {
+            return;
+        }
+        for (String key : items.getKeys(false)) {
+            String action = items.getString(key + ".action");
+            String[] parsed = parseAction(action);
+            if (parsed == null) {
+                continue;
+            }
+            if ("game".equals(parsed[0]) || "arena".equals(parsed[0])) {
+                out.add(parsed[1]);
+            } else if ("open".equals(parsed[0]) && parsed[1] != null) {
+                collectReachable("menu.sub." + parsed[1] + ".items", out, depth + 1);
+            }
+        }
+    }
+
     public void ensureMiniGameList() {
         if (!hasMain()) {
             return;
