@@ -6,16 +6,12 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
-import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSignOpenEvent;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockPlaceEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -100,26 +96,6 @@ public class HotPotatoListener implements Listener {
     }
 
     /** 对局中的存活玩家不会死亡（防 /kill 等绕过伤害事件的击杀）。 */
-    @EventHandler
-    public void onDeath(PlayerDeathEvent event) {
-        Player p = event.getEntity();
-        String arenaName = plugin.getManager().arenaOf(p.getUniqueId());
-        if (arenaName == null) {
-            return;
-        }
-        HotPotatoArena a = plugin.getManager().getArena(arenaName);
-        if (a == null || a.getState() != HotPotatoArena.State.RUNNING) {
-            return;
-        }
-        if (!a.getPlayers().contains(p.getUniqueId())) {
-            return;
-        }
-        event.setCancelled(true);
-        p.setHealth(20);
-        p.setFoodLevel(20);
-        p.teleport(a.getCenter());
-    }
-
     /** 离开圈定区域 → 直接淘汰。 */
     @EventHandler
     public void onMove(PlayerMoveEvent event) {
@@ -137,11 +113,6 @@ public class HotPotatoListener implements Listener {
     }
 
     /** 退出清理。 */
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        plugin.getManager().handleQuit(event.getPlayer());
-    }
-
     /** 加入服务器：清理观战模式残留（防止上一局淘汰后重进仍是 SPECTATOR 导致"无敌"）。 */
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
@@ -208,18 +179,6 @@ public class HotPotatoListener implements Listener {
     }
 
     /** 持有 TNT 的玩家不能丢弃 TNT。 */
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onTntDrop(PlayerDropItemEvent event) {
-        if (event.getItemDrop().getItemStack().getType() != Material.TNT) {
-            return;
-        }
-        if (!isTntHolder(event.getPlayer())) {
-            return;
-        }
-        event.setCancelled(true);
-        event.getPlayer().sendMessage("§c烫手山芋不能丢弃！把它传给其他玩家吧！");
-    }
-
     /** 玩家是否在运行中的对局里且正持有 TNT。 */
     private boolean isTntHolder(Player p) {
         String arenaName = plugin.getManager().arenaOf(p.getUniqueId());
@@ -243,11 +202,4 @@ public class HotPotatoListener implements Listener {
     }
 
     /** 场内玩家不掉饥饿（等待中或对局中：arenaOf 在加入时就登记）。 */
-    @EventHandler
-    public void onFood(FoodLevelChangeEvent event) {
-        if (event.getEntity() instanceof Player p
-                && plugin.getManager().arenaOf(p.getUniqueId()) != null) {
-            event.setCancelled(true);
-        }
-    }
 }
