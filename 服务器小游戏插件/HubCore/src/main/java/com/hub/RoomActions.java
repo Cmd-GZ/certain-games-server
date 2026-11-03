@@ -78,7 +78,14 @@ public final class RoomActions {
             // 不需要每个游戏改代码。
             //
             // 只在"该游戏当前没有进行中的对局"时重载：否则会打断另一个房间里的比赛。
+            // 套壳房间（子小游戏 → 派对）的**拥有者**是 arcadeparty，真正要用场地的却是子游戏，
+            // 所以房间里的每个子游戏都要各自重载一次（否则子游戏仍停在"场地未配置"）。
             reloadIfIdle(gameKey);
+            for (String sub : room.subGames()) {
+                if (!sub.equalsIgnoreCase(gameKey)) {
+                    reloadIfIdle(sub);
+                }
+            }
             if (plugin != null) {
                 plugin.getLogger().info("[/hub join] " + p.getName() + " 执行 " + join
                         + "（房间上下文已绑定 " + gameKey + " -> " + room.roomId + "）");
@@ -106,9 +113,9 @@ public final class RoomActions {
                 log(hub, "[/hub join] " + gameKey + " 有人在局内，跳过配置重载（不打断对局）");
                 return;
             }
-            String cmd = gamesConfig().getString("games." + gameKey + ".reload-command");
+            String cmd = games().getString("games." + gameKey + ".reload-command");
             if (cmd == null || cmd.isBlank()) {
-                String join = gamesConfig().getString("games." + gameKey + ".join-command", "");
+                String join = games().getString("games." + gameKey + ".join-command", "");
                 if (join.isBlank()) {
                     return;
                 }
@@ -130,11 +137,4 @@ public final class RoomActions {
         }
     }
 
-    private static org.bukkit.configuration.ConfigurationSection gamesConfig() {
-        var hub = org.bukkit.Bukkit.getPluginManager().getPlugin("HubCore");
-        if (hub == null) {
-            return new org.bukkit.configuration.MemoryConfiguration();
-        }
-        return ((com.hub.HubCorePlugin) hub).getConfig();
-    }
 }
