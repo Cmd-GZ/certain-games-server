@@ -775,3 +775,26 @@ maps:
           y2: 69.0
           z2: 39.2
           game: digtobottom
+  memoryflip:
+    记忆翻牌:
+      entry:
+        template: mini_games
+        x: -261.1
+        y: 70.0
+        z: 283.05
+      worlds:
+      - template: mini_games
+        rules:
+          pvp: false
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: false
+          fixed-time: 6000
+        regions:
+        - name: 记忆翻牌
+          x1: -278
+          y1: 67
+          z1: 261
+          x2: -250
+          y2: 78
+          z2: 296
