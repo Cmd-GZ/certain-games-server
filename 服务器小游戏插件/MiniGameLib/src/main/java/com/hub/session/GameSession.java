@@ -334,6 +334,11 @@ public abstract class GameSession {
         return arbiter;
     }
 
+    /** 裁决器的只读视图（`/hub doctor` 的 `[裁决]` 段用，R3：声明了什么要看得见）。 */
+    public final SessionArbiter arbiterView() {
+        return arbiter;
+    }
+
     /**
      * 参与者**下线**（{@code PlayerQuitEvent}）。在框架把它从归属链摘掉**之前**调用，
      * 所以实现里看到的仍是"他还在局内"的状态。

@@ -7,8 +7,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDismountEvent;
 import org.bukkit.event.player.PlayerInputEvent;
@@ -84,20 +82,6 @@ public final class GroupRaceListener implements Listener {
         }
         if (event.getEntity() instanceof Pig pig
                 && (manager.isRacePig(pig) || manager.isLobbyPig(pig))) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onBreak(BlockBreakEvent event) {
-        if (manager.isInGame(event.getPlayer())) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onPlace(BlockPlaceEvent event) {
-        if (manager.isInGame(event.getPlayer())) {
             event.setCancelled(true);
         }
     }

@@ -1056,6 +1056,26 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
                 out.add("  &7- &f" + ses.describe());
             }
         }
+        // ---- 5b. 区域裁决（I3 C 类）：哪些会话对哪些事件表态 ----
+        int arbiterCount = 0;
+        StringBuilder arbiterLine = new StringBuilder();
+        for (var ses : activeSessions) {
+            var kinds = ses.arbiterView().kinds();
+            if (kinds.isEmpty()) {
+                continue;
+            }
+            arbiterCount++;
+            if (arbiterLine.length() > 0) {
+                arbiterLine.append("&7, ");
+            }
+            arbiterLine.append("&f").append(ses.gameKey()).append("&7=").append(kinds);
+        }
+        if (arbiterCount == 0) {
+            out.add("&b[裁决] &70 个会话声明了区域裁决 &7（I3：事件只派发给归属者）");
+        } else {
+            out.add("&b[裁决] &f" + arbiterCount + " 个会话声明了区域裁决：&7" + arbiterLine);
+        }
+
         out.add("&b[归属] &f" + com.hub.session.PlayerSessions.size() + " 人有归属"
                 + " &7（在某个对局里；其余在大厅）");
         var i1Problems = com.hub.session.PlayerSessions.audit();

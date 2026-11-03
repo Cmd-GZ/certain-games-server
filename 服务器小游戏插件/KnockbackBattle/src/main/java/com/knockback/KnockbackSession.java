@@ -13,6 +13,12 @@ final class KnockbackSession extends GameSession {
     KnockbackSession(KnockbackManager manager, String arenaName) {
         super("knockback", arenaName);
         this.manager = manager;
+
+        // I3 C1（区域裁决）：本局禁改方块。原来 listener 里的 BlockBreak/BlockPlace 两个处理器
+        // 都是"玩家在本局 → 取消"，框架只把**归属本局**的这类事件派发过来，所以这里直接取消。
+        arbiter()
+                .on(com.hub.session.EventKind.BLOCK_BREAK, ctx -> ctx.cancel())
+                .on(com.hub.session.EventKind.BLOCK_PLACE, ctx -> ctx.cancel());
         enterWaiting();
     }
 
