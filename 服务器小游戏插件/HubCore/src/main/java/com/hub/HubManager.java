@@ -697,6 +697,86 @@ public class HubManager implements HubService {
     }
 
     /**
+     * 启动审计（R3）：**游戏 key 在四处各写一遍**，天然容易不一致。
+     *
+     * <p>四处分别是：`maps.yml`（地图/<b>房间归属</b>）、`HubCore/games.yml`（join/start 命令）、
+     * `ArcadeParty/config.yml` 的 `games:`（子小游戏名单）、`MiniGameLib/players.yml`（统计键）。
+     * 真实踩过：`maps.yml` 写 `digdown` 而其它三处是 `digtobottom` → 没被识别成子游戏；
+     * `games.yml` 里 `mm join` 少了 `{arena}` → 命令层就返回"用法"，manager 根本没被调用。
+     *
+     * <p>这里不自动改写（改写会把"配置错了"藏起来），只**报出来**（R3），让人去修；
+     * 将来收敛成"由注册表派生"之后，这个审计就可以删掉。
+     */
+    public void auditGameKeys() {
+        var cfg = gamesCfg().getConfigurationSection("games");
+        java.util.Set<String> inMaps = new java.util.LinkedHashSet<>(com.hub.room.GameMaps.games());
+        java.util.Set<String> inGames = cfg == null ? java.util.Set.of() : cfg.getKeys(false);
+
+        // ① 有地图但**没有 join 命令** → 造得出房间却进不去（本轮真实踩过一类）
+        java.util.List<String> noCmd = new java.util.ArrayList<>();
+        for (String key : inMaps) {
+            if (!inGames.contains(key)) {
+                noCmd.add(key);
+            }
+        }
+        // ② 有 join 命令但**没有地图** → 永远造不出房间
+        java.util.List<String> noMap = new java.util.ArrayList<>();
+        for (String key : inGames) {
+            if (!inMaps.contains(key)) {
+                noMap.add(key);
+            }
+        }
+        // ③ 派对的子小游戏名单：没有地图的永远选不到
+        java.util.List<String> subNoMap = new java.util.ArrayList<>();
+        for (String sub : com.hub.room.PartyGames.all()) {
+            if (!inMaps.contains(sub)) {
+                subNoMap.add(sub);
+            }
+        }
+        // ④ join 命令里缺 {arena} 的（单场地型正常，只做汇总提示，不逐条刷屏）
+        int noArena = 0;
+        if (cfg != null) {
+            for (String key : inGames) {
+                String join = cfg.getString(key + ".join-command", "");
+                if (!join.isBlank() && !join.contains("{arena}")) {
+                    noArena++;
+                }
+            }
+        }
+
+        boolean clean = noCmd.isEmpty() && noMap.isEmpty() && subNoMap.isEmpty();
+        if (clean) {
+            plugin.getLogger().info("[key审计] 游戏 key 一致：maps.yml " + inMaps.size()
+                    + " 个 / games.yml " + inGames.size() + " 个 / 派对子游戏 "
+                    + com.hub.room.PartyGames.size() + " 个（其中 " + noArena
+                    + " 个是单场地型、join 命令不带 {arena}）");
+            return;
+        }
+        if (!noCmd.isEmpty()) {
+            plugin.getLogger().warning("[key审计] 这些游戏有地图但 games.yml 里没有 join-command"
+                    + "（造得出房间、进不去）：" + noCmd);
+        }
+        if (!noMap.isEmpty()) {
+            plugin.getLogger().warning("[key审计] 这些 key 在 games.yml 里但 maps.yml 里没有地图"
+                    + "（永远造不出房间）：" + noMap);
+        }
+        if (!subNoMap.isEmpty()) {
+            plugin.getLogger().warning("[key审计] 派对的子小游戏在 maps.yml 里没有地图"
+                    + "（派对永远选不到它）：" + subNoMap);
+        }
+    }
+
+    /** 读 games.yml（与 RoomActions 同源）。 */
+    private static org.bukkit.configuration.ConfigurationSection gamesCfg() {
+        var hub = org.bukkit.Bukkit.getPluginManager().getPlugin("HubCore");
+        if (hub == null) {
+            return new org.bukkit.configuration.MemoryConfiguration();
+        }
+        java.io.File f = new java.io.File(hub.getDataFolder(), "games.yml");
+        return org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(f);
+    }
+
+    /**
      * 启动审计（R3 失败可见）：菜单里如果还留着指向"已房间化游戏"的直连命令
      * （`cmd:gtb join` 这种），**开服时就报出来**。
      *

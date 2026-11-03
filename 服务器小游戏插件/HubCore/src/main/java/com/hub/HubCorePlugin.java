@@ -59,6 +59,11 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
         // （我第一版放在 new HubManager() 之后 → 开服必抛 NPE，被 Failures 吞成一行 WARN，
         //   审计等于没跑。R3 的价值就在这：异常没被吞掉，一眼看到。）
         try {
+            manager.auditGameKeys();   // R3：游戏 key 在四处各写一遍，启动时核对一次
+        } catch (Exception ex) {
+            Failures.recordAndWarn("HubCore.游戏key审计", ex);
+        }
+        try {
             manager.auditMenuActions();
         } catch (Exception ex) {
             Failures.recordAndWarn("HubCore.菜单审计", ex);
