@@ -17,20 +17,16 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.EntityShootBowEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
-import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
 import org.bukkit.event.hanging.HangingPlaceEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSignOpenEvent;
 import org.bukkit.inventory.ItemStack;
 
@@ -206,28 +202,6 @@ public class MurderMysteryListener implements Listener {
     /**
      * 死亡结算：杀手死亡 → 无辜者获胜；无辜者被环境/命令击杀则兜底复活。
      */
-    @EventHandler
-    public void onDeath(PlayerDeathEvent event) {
-        Player p = event.getEntity();
-        String arenaName = plugin.getManager().arenaOf(p.getUniqueId());
-        if (arenaName == null) {
-            return;
-        }
-        MurderMysteryArena a = plugin.getManager().getArena(arenaName);
-        if (a == null || a.getState() != MurderMysteryArena.State.RUNNING) {
-            return;
-        }
-        event.setCancelled(true);
-        if (a.isMurderer(p.getUniqueId())) {
-            plugin.getManager().murdererEliminated(a, p);
-        } else {
-            // 正常路径已被拦截（环境伤/友伤都取消），这里兜底防 /kill 等
-            p.setHealth(20);
-            p.setFoodLevel(20);
-            p.teleport(a.getCenter());
-        }
-    }
-
     /**
      * 弹射物的武器名：射出的箭带武器（弩 → 「弩」，弓 → 「弓」）；读不到时退回看射手手上拿着什么。
      * <p>
@@ -414,11 +388,6 @@ public class MurderMysteryListener implements Listener {
     }
 
     /** 退出清理。 */
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        plugin.getManager().handleQuit(event.getPlayer());
-    }
-
     /** 加入服务器：清理观战模式残留，防止滞留对局世界。 */
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
@@ -426,42 +395,6 @@ public class MurderMysteryListener implements Listener {
     }
 
     /** 丢物品：等待阶段全禁；运行阶段只允许丢金锭（金币分享），职业装备与商店道具一律不可丢。 */
-    @EventHandler
-    public void onDrop(PlayerDropItemEvent event) {
-        Player p = event.getPlayer();
-        String arenaName = plugin.getManager().arenaOf(p.getUniqueId());
-        if (arenaName == null) {
-            return;
-        }
-        MurderMysteryArena a = plugin.getManager().getArena(arenaName);
-        if (a == null) {
-            return;
-        }
-        if (a.getEliminated().contains(p.getUniqueId())) {
-            event.setCancelled(true);
-            return;
-        }
-        if (a.getState() == MurderMysteryArena.State.WAITING) {
-            event.setCancelled(true);
-            return;
-        }
-        if (a.getState() != MurderMysteryArena.State.RUNNING) {
-            return;
-        }
-        ItemStack dropped = event.getItemDrop().getItemStack();
-        if (plugin.getManager().isShopItem(dropped)) {
-            event.setCancelled(true);
-            plugin.getManager().notifyShopLocked(p);
-            return;
-        }
-        // 职业装备（杀手铁剑/追踪指南针、猎人弓）局内一律不可丢弃：
-        // 落到地上别人能捡，等于把职业武器送给对手（铁剑被捡走还能当飞剑扔）。
-        if (plugin.getManager().isRoleItem(dropped)) {
-            event.setCancelled(true);
-            plugin.getManager().notifyRoleItemLocked(p);
-        }
-    }
-
     /**
      * 猎人弓掉在地上后：杀手不能捡，其他存活玩家可以捡；
      * 场外玩家和观战者也不能把对局道具带出去。
@@ -618,10 +551,4 @@ public class MurderMysteryListener implements Listener {
     }
 
     /** 场内玩家不掉饥饿（等待中或对局中，复用 inArena）。 */
-    @EventHandler
-    public void onFood(FoodLevelChangeEvent event) {
-        if (event.getEntity() instanceof Player p && inArena(p)) {
-            event.setCancelled(true);
-        }
-    }
 }

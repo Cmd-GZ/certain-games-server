@@ -651,6 +651,22 @@ public final class TNTBattleManager {
         }
     }
 
+    /**
+     * I3 A 批：重生后下一 tick 切成旁观（原来写在 {@code TNTBattleListener.onRespawn} 里）。
+     * 由 {@link TNTBattleSession#onPlayerRespawn} 调用。
+     */
+    void spectateNextTick(Player player) {
+        org.bukkit.Bukkit.getScheduler().runTask(plugin(), () -> {
+            if (player.isOnline()) {
+                player.setGameMode(org.bukkit.GameMode.SPECTATOR);
+                player.setAllowFlight(true);
+                player.setFlying(true);
+                player.setGlowing(false);
+                giveNightVision(player);
+            }
+        });
+    }
+
     public void quit(Player player) {
         leave(player, true);
         // 玩家退出服务器：清掉个人背景音乐开关

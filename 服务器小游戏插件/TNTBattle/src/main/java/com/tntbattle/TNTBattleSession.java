@@ -2,6 +2,11 @@ package com.tntbattle;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.Location;
+import org.bukkit.entity.Player;
+import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
 
 /** TNT 大战的会话（D22：会话层按场地键索引；本游戏目前是单场地）。 */
 final class TNTBattleSession extends GameSession {
@@ -31,5 +36,46 @@ final class TNTBattleSession extends GameSession {
     @Override
     protected void onEnd(EndReason reason) {
         manager.doEndGame();
+    }
+
+    // ---------- I3 A 批：从 listener 搬过来的处理器 ----------
+    // 注意：onHunger（等待室不饿/局内允许掉饥饿）与 onQuit（要清 listener 里的 lastUseTick 冷却表）
+    // 仍留在 listener 里 —— 前者是本局特有的语义，后者要碰游戏自己的局部状态。
+
+    @Override
+    protected void onPlayerDeath(PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        if (!manager.isPlaying(player) || manager.isEliminated(player)) {
+            return;
+        }
+        event.getDrops().clear();
+        event.setDroppedExp(0);
+        event.setKeepInventory(false);
+        manager.eliminate(player, "死亡");
+    }
+
+    @Override
+    protected void onPlayerRespawn(PlayerRespawnEvent event) {
+        Player player = event.getPlayer();
+        if (!manager.isPlaying(player) || !manager.isEliminated(player) || manager.isRestoring()) {
+            return;
+        }
+        Location spectator = manager.arena().spectatorLocation();
+        if (spectator != null) {
+            event.setRespawnLocation(spectator);
+        }
+        manager.spectateNextTick(player);
+    }
+
+    /** 掉落：炸弹/开始纸/回城床/音乐盒/特殊道具一律不许丢（原 listener 里那段 @EventHandler）。 */
+    @Override
+    protected void onPlayerDropItem(PlayerDropItemEvent event) {
+        if (manager.isTntItem(event.getItemDrop().getItemStack())
+                || manager.isStartItem(event.getItemDrop().getItemStack())
+                || manager.isReturnItem(event.getItemDrop().getItemStack())
+                || manager.isMusicItem(event.getItemDrop().getItemStack())
+                || manager.isSpecialItem(event.getItemDrop().getItemStack())) {
+            event.setCancelled(true);
+        }
     }
 }

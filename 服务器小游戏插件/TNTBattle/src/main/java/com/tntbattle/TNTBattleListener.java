@@ -18,15 +18,12 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
-import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
@@ -213,39 +210,6 @@ public final class TNTBattleListener implements Listener {
         event.setCancelled(false);
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onDeath(PlayerDeathEvent event) {
-        Player player = event.getEntity();
-        if (!manager.isPlaying(player) || manager.isEliminated(player)) {
-            return;
-        }
-        event.getDrops().clear();
-        event.setDroppedExp(0);
-        event.setKeepInventory(false);
-        manager.eliminate(player, "死亡");
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onRespawn(PlayerRespawnEvent event) {
-        Player player = event.getPlayer();
-        if (!manager.isPlaying(player) || !manager.isEliminated(player) || manager.isRestoring()) {
-            return;
-        }
-        Location spectator = manager.arena().spectatorLocation();
-        if (spectator != null) {
-            event.setRespawnLocation(spectator);
-        }
-        Bukkit.getScheduler().runTask(manager.plugin(), () -> {
-            if (player.isOnline()) {
-                player.setGameMode(org.bukkit.GameMode.SPECTATOR);
-                player.setAllowFlight(true);
-                player.setFlying(true);
-                player.setGlowing(false);
-                manager.giveNightVision(player);
-            }
-        });
-    }
-
     @EventHandler(priority = EventPriority.MONITOR)
     public void onMove(PlayerMoveEvent event) {
         if (!manager.isRunning() || event.getTo() == null) {
@@ -319,17 +283,6 @@ public final class TNTBattleListener implements Listener {
         // 等待室不饿；对局中允许正常消耗饥饿值，这样牛排可以吃
         if (event.getEntity() instanceof Player player
                 && manager.isPlaying(player) && !manager.isRunning()) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onDrop(PlayerDropItemEvent event) {
-        if (manager.isTntItem(event.getItemDrop().getItemStack())
-                || manager.isStartItem(event.getItemDrop().getItemStack())
-                || manager.isReturnItem(event.getItemDrop().getItemStack())
-                || manager.isMusicItem(event.getItemDrop().getItemStack())
-                || manager.isSpecialItem(event.getItemDrop().getItemStack())) {
             event.setCancelled(true);
         }
     }
