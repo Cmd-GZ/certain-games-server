@@ -797,6 +797,9 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             return;
         }
         countdown.update();
+        plugin.getLogger().info("[派对诊断] state=" + state + " waiting=" + waiting.size()
+                + " min=" + minPlayers() + " 倒计时中=" + countdown.isRunning()
+                + " 剩余=" + countdown.remainingSeconds() + "s 等待区=" + (getLobby() == null ? "null" : "有"));
     }
 
     // ---------- 派对流程 ----------
