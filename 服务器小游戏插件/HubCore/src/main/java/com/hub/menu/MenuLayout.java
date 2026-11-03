@@ -588,6 +588,141 @@ public final class MenuLayout {
         }
     }
 
+    /**
+     * **菜单由注册表派生**（R1）：把"注册了、有地图、但菜单里还没有入口"的游戏补进去。
+     *
+     * <p>用户定的结构：
+     * <ul>
+     *   <li><b>子小游戏</b>（`PartyGames.all()` 那 16 个）→ 统一放进「迷你小游戏」子菜单（史莱姆球入口）；</li>
+     *   <li><b>其余游戏</b>（含街机派对）→ 根菜单各占一项。</li>
+     * </ul>
+     *
+     * <p>**只补不覆盖**：OP 已摆好的格子一律不动（玩家看得见的东西不能被自动改写），
+     * 只在空槽上补；没有空槽就报警让人手动加。
+     */
+    public void ensureDerivedGameEntries() {
+        var reg = plugin.getRegistry();
+        if (reg == null || !hasMain()) {
+            return;
+        }
+        var subGames = new java.util.LinkedHashSet<String>(com.hub.room.PartyGames.all());
+        int addedRoot = 0, addedSub = 0;
+
+        // —— 子小游戏 → 子菜单 ——
+        String subBase = "menu.sub.迷你小游戏";
+        if (!plugin.getConfig().isConfigurationSection(subBase)) {
+            plugin.getConfig().set(subBase + ".rows", 6);
+            plugin.getConfig().set(subBase + ".title", "&b&l迷你小游戏");
+        }
+        if (findItemSlot("menu.items", "open:迷你小游戏") < 0
+                && findItemSlot("menu.items", null) != Integer.MIN_VALUE) {
+            int slot = firstFreeSlot("menu.items", size(Place.MAIN, null));
+            if (slot >= 0) {
+                plugin.getConfig().set(itemPathMain(slot) + ".material", "SLIME_BALL");
+                plugin.getConfig().set(itemPathMain(slot) + ".name", "&b&l迷你小游戏");
+                plugin.getConfig().set(itemPathMain(slot) + ".lore",
+                        List.of("&7点击打开子菜单"));
+                plugin.getConfig().set(itemPathMain(slot) + ".action", "open:迷你小游戏");
+                addedRoot++;
+            }
+        }
+        for (String key : subGames) {
+            String display = reg.displayOfKey(key);
+            if (display == null || com.hub.room.GameMaps.mapNames(key).isEmpty()) {
+                continue;   // 没登记显示名 / 没地图：跳过（审计会单独报）
+            }
+            String action = "game:" + display;
+            if (findItemSlot(subBase + ".items", action) >= 0) {
+                continue;
+            }
+            int slot = firstFreeSlot(subBase + ".items", size(Place.SUB, "迷你小游戏"));
+            if (slot < 0) {
+                plugin.getLogger().warning("[菜单派生] 「迷你小游戏」子菜单没有空槽了，"
+                        + display + " 需手动加：/hub menu edit");
+                continue;
+            }
+            String path = subBase + ".items." + slot;
+            plugin.getConfig().set(path + ".material", "PAPER");
+            plugin.getConfig().set(path + ".name", "&f" + display);
+            plugin.getConfig().set(path + ".action", action);
+            addedSub++;
+        }
+
+        // —— 其余游戏 → 根菜单 ——
+        for (String key : reg.keys()) {
+            if (subGames.contains(key)) {
+                continue;
+            }
+            if (com.hub.room.GameMaps.mapNames(key).isEmpty()) {
+                continue;   // 没地图的游戏补了也点不开（quark / holdthefort），留给 key 审计报
+            }
+            String display = reg.displayOfKey(key);
+            if (display == null) {
+                continue;
+            }
+            String action = "game:" + display;
+            if (findItemSlot("menu.items", action) >= 0) {
+                continue;
+            }
+            int slot = firstFreeSlot("menu.items", size(Place.MAIN, null));
+            if (slot < 0) {
+                plugin.getLogger().warning("[菜单派生] 主菜单没有空槽了，" + display
+                        + " 需手动加：/hub menu edit");
+                continue;
+            }
+            plugin.getConfig().set(itemPathMain(slot) + ".material", "PAPER");
+            plugin.getConfig().set(itemPathMain(slot) + ".name", "&f" + display);
+            plugin.getConfig().set(itemPathMain(slot) + ".action", action);
+            addedRoot++;
+        }
+
+        if (addedRoot > 0 || addedSub > 0) {
+            save();
+            plugin.getLogger().info("[菜单派生] 已补入口：根菜单 " + addedRoot
+                    + " 个、「迷你小游戏」子菜单 " + addedSub + " 个（只填空槽，未改动已有布局）");
+        } else {
+            plugin.getLogger().info("[菜单派生] 菜单入口齐全，无需补充");
+        }
+    }
+
+    /** 在某个 items 段里找第一处 action 等于给定值（null = 找第一个空格）。 */
+    private int findItemSlot(String path, String action) {
+        var items = plugin.getConfig().getConfigurationSection(path);
+        if (items == null) {
+            return action == null ? Integer.MIN_VALUE : -1;
+        }
+        for (String key : items.getKeys(false)) {
+            String a = items.getString(key + ".action");
+            if (action == null ? a == null : action.equals(a)) {
+                return slotOfKey(key);
+            }
+        }
+        return action == null ? Integer.MIN_VALUE : -1;
+    }
+
+    /** items 段里第一个没有被占用的槽位；没有则 -1。 */
+    private int firstFreeSlot(String path, int limit) {
+        var items = plugin.getConfig().getConfigurationSection(path);
+        java.util.Set<Integer> used = new java.util.HashSet<>();
+        if (items != null) {
+            for (String key : items.getKeys(false)) {
+                int sl = slotOfKey(key);
+                if (sl >= 0) {
+                    used.add(sl);
+                }
+            }
+        }
+        for (int slot = 0; slot < limit; slot++) {
+            if (slot == limit - 1) {
+                continue;   // 右下角留给头衔/返回
+            }
+            if (!used.contains(slot)) {
+                return slot;
+            }
+        }
+        return -1;
+    }
+
     public void ensureMiniGameList() {
         if (!hasMain()) {
             return;
