@@ -21,6 +21,10 @@ public final class RoomActions {
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacySection();
     private static Plugin plugin;
 
+    /** 已经因"进房"而重载过配置的房间（每个房间只重载一次，避免把已在队列里的玩家清掉）。 */
+    private static final java.util.Set<String> RELOADED_ROOMS =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     public static void init(Plugin pl) {
         plugin = pl;
     }
@@ -80,10 +84,15 @@ public final class RoomActions {
             // 只在"该游戏当前没有进行中的对局"时重载：否则会打断另一个房间里的比赛。
             // 套壳房间（子小游戏 → 派对）的**拥有者**是 arcadeparty，真正要用场地的却是子游戏，
             // 所以房间里的每个子游戏都要各自重载一次（否则子游戏仍停在"场地未配置"）。
-            reloadIfIdle(gameKey);
-            for (String sub : room.subGames()) {
-                if (!sub.equalsIgnoreCase(gameKey)) {
-                    reloadIfIdle(sub);
+            // **每个房间只重载一次**：重载会触发游戏的 load()，很多游戏的 load() 会清空等待队列
+            // （真实事故：第二个玩家进房时又重载了一次，把第一个玩家从派对队列里挤掉，
+            //   于是 waiting 永远是 1，30 秒倒计时永远不满足 min-players）。
+            if (RELOADED_ROOMS.add(room.roomId)) {
+                reloadIfIdle(gameKey);
+                for (String sub : room.subGames()) {
+                    if (!sub.equalsIgnoreCase(gameKey)) {
+                        reloadIfIdle(sub);
+                    }
                 }
             }
             if (plugin != null) {
