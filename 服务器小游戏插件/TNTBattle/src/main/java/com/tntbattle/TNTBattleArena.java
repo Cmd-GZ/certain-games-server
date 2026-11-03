@@ -301,7 +301,9 @@ public final class TNTBattleArena {
         if (parts.length < 4) {
             return null;
         }
-        World world = Bukkit.getWorld(parts[0]);
+        // 房间化（R2/R1.5）：配置里的世界段可能是 `tpl:<模板键>` 令牌，
+        // 只有存活房间时才解析得出来。用 Bukkit.getWorld 会直接返回 null -> 场地永远"未配置"。
+        World world = com.hub.world.Worlds.resolve(parts[0]);
         if (world == null) {
             return null;
         }
