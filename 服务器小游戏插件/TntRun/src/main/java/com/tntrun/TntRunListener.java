@@ -3,13 +3,10 @@ package com.tntrun;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerSignOpenEvent;
 import org.bukkit.event.block.Action;
 import org.bukkit.inventory.ItemStack;
@@ -33,35 +30,7 @@ public class TntRunListener implements Listener {
         plugin.getManager().handleMove(event.getPlayer());
     }
 
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        plugin.getManager().handleQuit(event.getPlayer());
-    }
-
     /** 重生：仍在场地对局/等待中的玩家重生回场地对应点（HubCore 现在不接管游戏内玩家的重生）。 */
-    @EventHandler
-    public void onRespawn(PlayerRespawnEvent event) {
-        Player p = event.getPlayer();
-        String arenaName = plugin.getManager().arenaOf(p.getUniqueId());
-        if (arenaName == null) {
-            return;
-        }
-        TntRunArena a = plugin.getManager().getArena(arenaName);
-        if (a == null) {
-            return;
-        }
-        if (!a.getPlayers().contains(p.getUniqueId())) {
-            return;
-        }
-        // 对局中重生回自己开局那一格（圆边缘）；没记到（老场地/没设中心）退回出生点
-        org.bukkit.Location loc = a.getState() == TntRunArena.State.RUNNING
-                ? a.getRoundSpawns().getOrDefault(p.getUniqueId(), a.getSpawn())
-                : a.getLobbyPoint();
-        if (loc != null) {
-            event.setRespawnLocation(loc);
-        }
-    }
-
     /** 游戏中（RUNNING）关闭摔落伤害，防止从上层掉到下层时摔死。 */
     @EventHandler
     public void onDamage(EntityDamageEvent event) {
@@ -163,11 +132,4 @@ public class TntRunListener implements Listener {
     }
 
     /** 场内玩家不掉饥饿（等待中或对局中：arenaOf 在加入时就登记）。 */
-    @EventHandler
-    public void onFood(FoodLevelChangeEvent event) {
-        if (event.getEntity() instanceof Player p
-                && plugin.getManager().arenaOf(p.getUniqueId()) != null) {
-            event.setCancelled(true);
-        }
-    }
 }

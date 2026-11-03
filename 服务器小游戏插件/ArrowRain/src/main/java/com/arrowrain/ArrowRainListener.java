@@ -1,7 +1,5 @@
 package com.arrowrain;
 
-import org.bukkit.Bukkit;
-import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.entity.Arrow;
 import org.bukkit.entity.Entity;
@@ -14,13 +12,8 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
-import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
 
 /** 万箭齐发事件：等待室道具、箭雨命中、PvP 放行（优先级高于天坑）、死亡与退出。 */
@@ -114,35 +107,6 @@ public final class ArrowRainListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void onDeath(PlayerDeathEvent event) {
-        Player player = event.getEntity();
-        if (!manager.isPlaying(player)) {
-            return;
-        }
-        event.getDrops().clear();
-        event.setDroppedExp(0);
-        event.setKeepInventory(true);
-        manager.eliminate(player, "被其他玩家击杀");
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onRespawn(PlayerRespawnEvent event) {
-        Player player = event.getPlayer();
-        if (!manager.isInGame(player)) {
-            return;
-        }
-        Location lobby = manager.arena().lobby();
-        if (lobby != null) {
-            event.setRespawnLocation(lobby);
-        }
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            if (player.isOnline() && manager.isInGame(player)) {
-                player.setGameMode(GameMode.SPECTATOR);
-            }
-        });
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlace(BlockPlaceEvent event) {
         if (manager.isInGame(event.getPlayer())) {
             event.setCancelled(true);
@@ -156,22 +120,4 @@ public final class ArrowRainListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onDrop(PlayerDropItemEvent event) {
-        if (manager.isInGame(event.getPlayer())) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onHunger(FoodLevelChangeEvent event) {
-        if (event.getEntity() instanceof Player player && manager.isInGame(player)) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        manager.handleQuit(event.getPlayer());
-    }
 }

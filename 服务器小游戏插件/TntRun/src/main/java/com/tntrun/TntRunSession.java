@@ -2,6 +2,9 @@ package com.tntrun;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.Location;
+import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerRespawnEvent;
 
 /**
  * 雪塔大作战的对局会话 —— **第一个多场地游戏**接入 {@code com.hub.session}。
@@ -33,5 +36,35 @@ final class TntRunSession extends GameSession {
     @Override
     protected void onEnd(EndReason reason) {
         manager.doEndGame(arenaName());
+    }
+
+    // ---------- I3 A 批：从 listener 搬过来的处理器 ----------
+
+    @Override
+    protected void onPlayerQuit(Player player) {
+        manager.handleQuit(player);
+    }
+
+    @Override
+    protected void onPlayerRespawn(PlayerRespawnEvent event) {
+        Player p = event.getPlayer();
+        String arenaName = manager.arenaOf(p.getUniqueId());
+        if (arenaName == null) {
+            return;
+        }
+        TntRunArena a = manager.getArena(arenaName);
+        if (a == null) {
+            return;
+        }
+        if (!a.getPlayers().contains(p.getUniqueId())) {
+            return;
+        }
+        // 对局中重生回自己开局那一格（圆边缘）；没记到（老场地/没设中心）退回出生点
+        Location loc = a.getState() == TntRunArena.State.RUNNING
+                ? a.getRoundSpawns().getOrDefault(p.getUniqueId(), a.getSpawn())
+                : a.getLobbyPoint();
+        if (loc != null) {
+            event.setRespawnLocation(loc);
+        }
     }
 }

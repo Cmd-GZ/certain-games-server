@@ -458,6 +458,18 @@ public final class ArrowRainManager {
         reportArena();
     }
 
+    /**
+     * I3 A 批：重生后下一 tick 切成旁观（原来写在 {@code ArrowRainListener.onRespawn} 里）。
+     * 由 {@link ArrowRainSession#onPlayerRespawn} 调用 —— 游戏模块不再监听 {@code PlayerRespawnEvent}。
+     */
+    void spectateNextTick(Player player) {
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (player.isOnline() && isInGame(player)) {
+                player.setGameMode(GameMode.SPECTATOR);
+            }
+        });
+    }
+
     public void handleQuit(Player player) {
         UUID id = player.getUniqueId();
         boolean wasWaiting = waiting.remove(id);
