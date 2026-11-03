@@ -11,7 +11,6 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPhysicsEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
@@ -155,14 +154,6 @@ public class DigToBottomListener implements Listener {
             return;
         }
         debug("LEFT-CLICK cancelled=" + event.isCancelled() + " " + describe(event.getPlayer(), block));
-    }
-
-    @EventHandler
-    public void onBlockPlace(BlockPlaceEvent event) {
-        DigToBottomArena arena = manager().arenaAt(event.getBlock().getLocation());
-        if (arena != null && arena.getState() == DigToBottomArena.State.RUNNING) {
-            event.setCancelled(true);
-        }
     }
 
     /**

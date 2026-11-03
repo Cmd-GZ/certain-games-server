@@ -26,15 +26,19 @@ public final class EventContext {
     private final Block block;
     /** 事件发生位置（永远非 null，便于做区域判断）。 */
     private final Location where;
+    /** 涉及/手持的物品（交互、放置可能有；其它为 null）。 */
+    private final org.bukkit.inventory.ItemStack item;
     private final Object raw;
     private boolean cancelled;
 
-    EventContext(EventKind kind, Player player, Player damager, Block block, Location where, Object raw) {
+    EventContext(EventKind kind, Player player, Player damager, Block block, Location where,
+                 org.bukkit.inventory.ItemStack item, Object raw) {
         this.kind = kind;
         this.player = player;
         this.damager = damager;
         this.block = block;
         this.where = where;
+        this.item = item;
         this.raw = raw;
     }
 
@@ -58,6 +62,11 @@ public final class EventContext {
 
     public Location where() {
         return where;
+    }
+
+    /** 手持/涉及的物品（交互与放置事件有；其它为 null）。 */
+    public org.bukkit.inventory.ItemStack item() {
+        return item;
     }
 
     /** 原始 Bukkit 事件 —— 只在语义字段不够用时用，用完请注释理由。 */

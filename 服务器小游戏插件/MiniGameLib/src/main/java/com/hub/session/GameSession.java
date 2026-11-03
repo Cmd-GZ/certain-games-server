@@ -363,6 +363,75 @@ public abstract class GameSession {
     protected void onPlayerRespawn(org.bukkit.event.player.PlayerRespawnEvent event) {
     }
 
+    // ---------- C 类：原始事件钩子（只派发给归属本局的事件） ----------
+
+    /**
+     * 参与者**右键/左键**（{@code PlayerInteractEvent}），只派发给所属会话。
+     *
+     * <p>为什么给**原始事件**而不是语义：交互里游戏要看的东西太多（`getAction()` /
+     * `getHand()` / `getClickedBlock()` / 物品元数据…），抽成语义反而丢信息。
+     * 这条钩子的目的很单纯 —— **把 listener 从游戏模块搬走**，函数体可以逐字搬过来。
+     * 只是"一条简单规则"（如"本局禁交互"）时用 {@link #arbiter()} 更省事。
+     */
+    protected void onPlayerInteract(org.bukkit.event.player.PlayerInteractEvent event) {
+    }
+
+    /** 参与者**破坏方块**（{@code BlockBreakEvent}），只派发给所属会话。 */
+    protected void onBlockBreak(org.bukkit.event.block.BlockBreakEvent event) {
+    }
+
+    /** 参与者**放置方块**（{@code BlockPlaceEvent}），只派发给所属会话。 */
+    protected void onBlockPlace(org.bukkit.event.block.BlockPlaceEvent event) {
+    }
+
+    /** 参与者**移动**（{@code PlayerMoveEvent}），只派发给所属会话。**每 tick 都触发，别做重活**。 */
+    protected void onPlayerMove(org.bukkit.event.player.PlayerMoveEvent event) {
+    }
+
+    /** 参与者受到**伤害**（原始事件；语义版见 {@link #arbiter()}）。 */
+    protected void onEntityDamage(org.bukkit.event.entity.EntityDamageEvent event) {
+    }
+
+    final void firePlayerInteract(org.bukkit.event.player.PlayerInteractEvent event) {
+        try {
+            onPlayerInteract(event);
+        } catch (RuntimeException ex) {
+            Failures.recordAndWarn(gameKey + ".交互/" + arenaName, ex);
+        }
+    }
+
+    final void fireBlockBreak(org.bukkit.event.block.BlockBreakEvent event) {
+        try {
+            onBlockBreak(event);
+        } catch (RuntimeException ex) {
+            Failures.recordAndWarn(gameKey + ".破坏/" + arenaName, ex);
+        }
+    }
+
+    final void fireBlockPlace(org.bukkit.event.block.BlockPlaceEvent event) {
+        try {
+            onBlockPlace(event);
+        } catch (RuntimeException ex) {
+            Failures.recordAndWarn(gameKey + ".放置/" + arenaName, ex);
+        }
+    }
+
+    final void firePlayerMove(org.bukkit.event.player.PlayerMoveEvent event) {
+        try {
+            onPlayerMove(event);
+        } catch (RuntimeException ex) {
+            Failures.recordAndWarn(gameKey + ".移动/" + arenaName, ex);
+        }
+    }
+
+    final void fireEntityDamage(org.bukkit.event.entity.EntityDamageEvent event) {
+        try {
+            onEntityDamage(event);
+        } catch (RuntimeException ex) {
+            Failures.recordAndWarn(gameKey + ".伤害/" + arenaName, ex);
+        }
+    }
+
     // 派发入口：只给同包的 SessionEvents 用，游戏侧不接触。
 
     final void firePlayerQuit(Player p) {

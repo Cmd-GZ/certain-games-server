@@ -37,14 +37,20 @@ public final class RegionEvents implements Listener {
     @EventHandler(priority = EventPriority.LOWEST)
     public void onDamage(EntityDamageEvent event) {
         GameSession owner = ownerOfDamage(event);
-        if (owner == null || !owner.arbiter().handles(EventKind.DAMAGE)) {
+        if (owner == null) {
+            return;
+        }
+        // 先给游戏自己的原始事件钩子（既有逻辑可以逐字搬过来），再套语义裁决器
+        owner.fireEntityDamage(event);
+        if (event.isCancelled() || !owner.arbiter().handles(EventKind.DAMAGE)) {
             return;
         }
         Player victim = event.getEntity() instanceof Player p ? p : null;
         Player damager = event instanceof EntityDamageByEntityEvent by
                 && by.getDamager() instanceof Player dp ? dp : null;
         EventContext ctx = new EventContext(EventKind.DAMAGE, victim, damager, null,
-                event.getEntity().getLocation(), event);
+                event.getEntity().getLocation(), victim == null ? null : victim.getInventory().getItemInMainHand(),
+                event);
         dispatch(owner, ctx, () -> event.setCancelled(true), event);
     }
 
@@ -53,25 +59,73 @@ public final class RegionEvents implements Listener {
     @EventHandler(priority = EventPriority.LOWEST)
     public void onBlockBreak(BlockBreakEvent event) {
         GameSession owner = ownerOfPlayer(event.getPlayer());
-        if (owner == null || !owner.arbiter().handles(EventKind.BLOCK_BREAK)) {
+        if (owner == null) {
             return;
+        }
+        owner.fireBlockBreak(event);
+        if (event.isCancelled()) {
+            return;   // 游戏自己的钩子已经决定了
         }
         Block block = event.getBlock();
         EventContext ctx = new EventContext(EventKind.BLOCK_BREAK, event.getPlayer(), null, block,
-                block.getLocation(), event);
+                block.getLocation(), event.getPlayer().getInventory().getItemInMainHand(), event);
         dispatch(owner, ctx, () -> event.setCancelled(true), event);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onBlockPlace(BlockPlaceEvent event) {
         GameSession owner = ownerOfPlayer(event.getPlayer());
-        if (owner == null || !owner.arbiter().handles(EventKind.BLOCK_PLACE)) {
+        if (owner == null) {
+            return;
+        }
+        owner.fireBlockPlace(event);
+        if (event.isCancelled()) {
             return;
         }
         Block block = event.getBlock();
         EventContext ctx = new EventContext(EventKind.BLOCK_PLACE, event.getPlayer(), null, block,
-                block.getLocation(), event);
+                block.getLocation(), event.getItemInHand(), event);
         dispatch(owner, ctx, () -> event.setCancelled(true), event);
+    }
+
+    // ---------- 交互 ----------
+
+    /**
+     * 交互（右键/左键，空气或方块）。
+     *
+     * <p>绝大多数是"右键自家道具 → 开菜单 / 退出 / 开始"，属于 B 类（自家 GUI），
+     * 但同样需要"只有归属本局的玩家才派发"——否则一个人在别人的场地里右键也会触发。
+     */
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onInteract(org.bukkit.event.player.PlayerInteractEvent event) {
+        GameSession owner = ownerOfPlayer(event.getPlayer());
+        if (owner == null) {
+            return;
+        }
+        owner.firePlayerInteract(event);
+        if (event.isCancelled()) {
+            return;
+        }
+        Block clicked = event.getClickedBlock();
+        EventContext ctx = new EventContext(EventKind.INTERACT, event.getPlayer(), null, clicked,
+                clicked == null ? event.getPlayer().getLocation() : clicked.getLocation(),
+                event.getItem(), event);
+        dispatch(owner, ctx, () -> event.setCancelled(true), event);
+    }
+
+    // ---------- 移动 ----------
+
+    /**
+     * 移动：**每 tick 每个玩家一条**，所以这里刻意只做"查归属 + 转发"，
+     * 区域查表等重活由游戏自己按需缓存（见 docs/区域裁决设计.md §5）。
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onMove(org.bukkit.event.player.PlayerMoveEvent event) {
+        GameSession owner = ownerOfPlayer(event.getPlayer());
+        if (owner == null) {
+            return;
+        }
+        owner.firePlayerMove(event);
     }
 
     // ---------- 归属判定 ----------

@@ -21,6 +21,13 @@ final class DigToBottomSession extends GameSession {
         // 而且那条路径没有提示，表现就是"这个游戏在房间里怎么都开不了局"。
         super("digtobottom", arenaName);
         this.manager = manager;
+        // I3 C1：场地里对局进行中禁放方块（`onBlockBreak` 是**玩法**：挖到的东西算进度，留在 listener）
+        arbiter().on(com.hub.session.EventKind.BLOCK_PLACE, ctx -> {
+            DigToBottomArena arena = manager.arenaAt(ctx.block().getLocation());
+            if (arena != null && arena.getState() == DigToBottomArena.State.RUNNING) {
+                ctx.cancel();
+            }
+        });
         enterWaiting();
     }
 

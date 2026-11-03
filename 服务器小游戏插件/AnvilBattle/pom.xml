@@ -6,7 +6,7 @@
 
     <groupId>com.anvilbattle</groupId>
     <artifactId>anvil-battle</artifactId>
-    <version>1.5.0</version>
+    <version>1.6.0</version>
     <packaging>jar</packaging>
 
     <name>AnvilBattle</name>
@@ -39,7 +39,7 @@
         <dependency>
             <groupId>com.hub</groupId>
             <artifactId>minigame-lib</artifactId>
-            <version>1.26.1</version>
+            <version>1.28.0</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

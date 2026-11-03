@@ -2,6 +2,8 @@ package com.hillking;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.event.block.Action;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
@@ -99,6 +101,28 @@ final class HillKingSession extends GameSession {
         }
         if (manager.arena().getLobby() != null) {
             event.setRespawnLocation(manager.arena().getLobby());
+        }
+    }
+
+    /** 等待室：右键床退出、右键开始纸由管理员开局。 */
+    @Override
+    protected void onPlayerInteract(org.bukkit.event.player.PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        Player player = event.getPlayer();
+        ItemStack item = event.getItem();
+        if (item == null) {
+            return;
+        }
+        if (manager.isReturnItem(item)) {
+            event.setCancelled(true);
+            manager.leave(player, false);
+            return;
+        }
+        if (manager.isStartItem(item)) {
+            event.setCancelled(true);
+            manager.handleStartPaper(player);
         }
     }
 }

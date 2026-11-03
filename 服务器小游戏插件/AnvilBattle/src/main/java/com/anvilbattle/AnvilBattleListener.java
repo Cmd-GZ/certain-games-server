@@ -22,28 +22,6 @@ public final class AnvilBattleListener implements Listener {
         this.manager = manager;
     }
 
-    /** 等待室：右键床退出、右键开始纸由管理员开局。 */
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onInteract(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
-            return;
-        }
-        Player player = event.getPlayer();
-        ItemStack item = event.getItem();
-        if (item == null) {
-            return;
-        }
-        if (manager.isReturnItem(item)) {
-            event.setCancelled(true);
-            manager.leave(player, false);
-            return;
-        }
-        if (manager.isStartItem(item)) {
-            event.setCancelled(true);
-            manager.handleStartPaper(player);
-        }
-    }
-
     /**
      * 场内的伤害全部取消；如果伤害来源是本插件生成的铁砧，直接淘汰被砸中的玩家。
      * 其它爆炸/摔落/近战等一律不掉血。

@@ -2,6 +2,8 @@ package com.snakeparty;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.event.block.Action;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
@@ -79,6 +81,28 @@ final class SnakePartySession extends GameSession {
         if (ctx.player() != null && manager.isInGame(ctx.player())
                 && manager.arena().contains(block)) {
             ctx.cancel();
+        }
+    }
+
+    
+    @Override
+    protected void onPlayerInteract(org.bukkit.event.player.PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        Player player = event.getPlayer();
+        ItemStack item = event.getItem();
+        if (item == null) {
+            return;
+        }
+        if (manager.isReturnItem(item)) {
+            event.setCancelled(true);
+            manager.leave(player, false);
+            return;
+        }
+        if (manager.isStartItem(item)) {
+            event.setCancelled(true);
+            manager.handleStartPaper(player);
         }
     }
 }

@@ -18,6 +18,28 @@ final class HotPotatoSession extends GameSession {
     HotPotatoSession(HotPotatoManager manager, String arenaName) {
         super("hotpotato", arenaName);
         this.manager = manager;
+        // I3 C1：手上拿着炸弹的人不许把 TNT 放下（原 onTntPlace 的逐字等价搬运）
+        arbiter().on(com.hub.session.EventKind.BLOCK_PLACE, ctx -> {
+            if (ctx.block() == null || ctx.block().getType() != org.bukkit.Material.TNT) {
+                return;
+            }
+            Player p = ctx.player();
+            if (p == null) {
+                return;
+            }
+            String roomArena = manager.arenaOf(p.getUniqueId());
+            if (roomArena == null) {
+                return;
+            }
+            HotPotatoArena a = manager.getArena(roomArena);
+            if (a == null || a.getState() != HotPotatoArena.State.RUNNING
+                    || !a.getPlayers().contains(p.getUniqueId())
+                    || !a.isBombHolder(p.getUniqueId())) {
+                return;
+            }
+            ctx.cancel();
+            p.sendMessage("§c烫手山芋不能放置！把它传给其他玩家吧！");
+        });
         enterWaiting();
     }
 

@@ -11,7 +11,6 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerSignOpenEvent;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -166,18 +165,6 @@ public class HotPotatoListener implements Listener {
     }
 
     /** 持有 TNT 的玩家不能放置 TNT。 */
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onTntPlace(BlockPlaceEvent event) {
-        if (event.getBlock().getType() != Material.TNT) {
-            return;
-        }
-        if (!isTntHolder(event.getPlayer())) {
-            return;
-        }
-        event.setCancelled(true);
-        event.getPlayer().sendMessage("§c烫手山芋不能放置！把它传给其他玩家吧！");
-    }
-
     /** 持有 TNT 的玩家不能丢弃 TNT。 */
     /** 玩家是否在运行中的对局里且正持有 TNT。 */
     private boolean isTntHolder(Player p) {

@@ -25,28 +25,6 @@ public final class AnimalSlaughterListener implements Listener {
         this.manager = manager;
     }
 
-    /** 等待室：右键床退出、右键开始纸由管理员开局。 */
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onInteract(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
-            return;
-        }
-        Player player = event.getPlayer();
-        ItemStack item = event.getItem();
-        if (item == null) {
-            return;
-        }
-        if (manager.isReturnItem(item)) {
-            event.setCancelled(true);
-            manager.leave(player, false);
-            return;
-        }
-        if (manager.isStartItem(item)) {
-            event.setCancelled(true);
-            manager.handleStartPaper(player);
-        }
-    }
-
     /**
      * 玩家在场内不掉血；动物只吃玩家 1 点伤害（无武器加成），不挨其它伤害。
      */
