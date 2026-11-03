@@ -21,7 +21,7 @@ public final class MemoryFlipPlugin extends JavaPlugin {
             memory.setExecutor(command);
             memory.setTabCompleter(command);
         }
-        getServer().getPluginManager().registerEvents(new MemoryFlipListener(manager), this);
+        // I3：本插件已无 Listener —— 事件由框架按归属派发到 Session 的钩子
         HubAPI.registerLobbyHandler(player -> manager.leave(player, true));
 
         getLogger().info("记忆翻牌（MemoryFlip）已启用。");

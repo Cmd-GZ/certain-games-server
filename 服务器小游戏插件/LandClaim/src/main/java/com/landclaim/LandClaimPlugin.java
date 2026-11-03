@@ -15,7 +15,7 @@ public final class LandClaimPlugin extends JavaPlugin {
         manager.load();
         manager.publishRegions();   // 声明地盘（I2）
 
-        getServer().getPluginManager().registerEvents(new LandClaimListener(manager), this);
+        // I3：本插件已无 Listener —— 事件由框架按归属派发到 Session 的钩子
         LandClaimCommand command = new LandClaimCommand(this, manager);
         PluginCommand land = getCommand("land");
         if (land != null) {

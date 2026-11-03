@@ -21,7 +21,7 @@ public final class ArrowRainPlugin extends JavaPlugin {
             arrowrain.setExecutor(command);
             arrowrain.setTabCompleter(command);
         }
-        getServer().getPluginManager().registerEvents(new ArrowRainListener(this, manager), this);
+        // I3：本插件已无 Listener —— 事件由框架按归属派发到 Session 的钩子
         HubAPI.registerLobbyHandler(player -> manager.leave(player, true));
 
         getLogger().info("万箭齐发（ArrowRain）已启用。");

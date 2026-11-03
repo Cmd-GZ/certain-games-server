@@ -2,6 +2,21 @@ package com.memoryflip;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.player.PlayerAnimationEvent;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
+import org.bukkit.entity.ItemFrame;
+import java.util.Map;
+import java.util.UUID;
+import java.util.HashMap;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.Event;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.block.Action;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.Location;
@@ -94,6 +109,58 @@ final class MemoryFlipSession extends GameSession {
         if (manager.isStartItem(item)) {
             event.setCancelled(true);
             manager.handleStartPaper(player);
+        }
+    }
+
+    // ---------- I3：由 listener 机械搬迁过来的处理器（按事件类型分派） ----------
+
+    private final Map<UUID, Integer> lastClickTick = new HashMap<>();
+
+    @Override
+    protected void onGameEvent(org.bukkit.event.Event event) {
+        if (event instanceof PlayerInteractAtEntityEvent e) {
+        if (!(e.getRightClicked() instanceof ItemFrame frame)) {
+            return;
+        }
+        e.setCancelled(true);
+        Player player = e.getPlayer();
+        if (!manager.isPlaying(player)) {
+            return;
+        }
+        int tick = player.getTicksLived();
+        Integer last = lastClickTick.put(player.getUniqueId(), tick);
+        if (last != null && last == tick) {
+            return;
+        }
+        manager.handleFrameClick(player, frame);
+                return;
+        }
+        if (event instanceof EntityDamageByEntityEvent e) {
+        if (!(e.getEntity() instanceof ItemFrame frame)) {
+            return;
+        }
+        e.setCancelled(true);
+        if (!(e.getDamager() instanceof Player player) || !manager.isPlaying(player)) {
+            return;
+        }
+        int tick = player.getTicksLived();
+        Integer last = lastClickTick.put(player.getUniqueId(), tick);
+        if (last != null && last == tick) {
+            return;
+        }
+        manager.handleFrameClick(player, frame);
+                return;
+        }
+        if (event instanceof EntityDamageEvent e) {
+        if (e.getEntity() instanceof Player player && manager.isInGame(player)) {
+            e.setCancelled(true);
+        }
+                return;
+        }
+        if (event instanceof PlayerQuitEvent e) {
+        lastClickTick.remove(e.getPlayer().getUniqueId());
+        manager.handleQuit(e.getPlayer());
+                return;
         }
     }
 }
