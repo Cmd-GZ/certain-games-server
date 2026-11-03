@@ -10,13 +10,8 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
-import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
 
 /** 高台之王事件：等待室道具、咸鱼击退、无伤、掉台回场、场地保护。 */
@@ -84,17 +79,6 @@ public final class HillKingListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void onDeath(PlayerDeathEvent event) {
-        Player player = event.getEntity();
-        if (!manager.isInGame(player)) {
-            return;
-        }
-        event.setCancelled(true);
-        player.setHealth(20.0);
-        player.setFoodLevel(20);
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
     public void onBlockBreak(BlockBreakEvent event) {
         if (manager.isInGame(event.getPlayer())) {
             event.setCancelled(true);
@@ -108,20 +92,6 @@ public final class HillKingListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onFood(FoodLevelChangeEvent event) {
-        if (event.getEntity() instanceof Player player && manager.isInGame(player)) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onDrop(PlayerDropItemEvent event) {
-        if (manager.isInGame(event.getPlayer())) {
-            event.setCancelled(true);
-        }
-    }
-
     @EventHandler
     public void onMove(PlayerMoveEvent event) {
         if (event.getTo() != null) {
@@ -129,19 +99,4 @@ public final class HillKingListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onQuit(PlayerQuitEvent event) {
-        manager.handleQuit(event.getPlayer());
-    }
-
-    @EventHandler
-    public void onRespawn(PlayerRespawnEvent event) {
-        Player player = event.getPlayer();
-        if (!manager.isInGame(player)) {
-            return;
-        }
-        if (manager.arena().getLobby() != null) {
-            event.setRespawnLocation(manager.arena().getLobby());
-        }
-    }
 }

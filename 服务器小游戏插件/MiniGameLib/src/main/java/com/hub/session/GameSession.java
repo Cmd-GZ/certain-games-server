@@ -45,6 +45,8 @@ public abstract class GameSession {
     private final List<GameSession> children = new ArrayList<>();
     private final Set<UUID> players = new LinkedHashSet<>();
     private final Set<BukkitTask> tasks = new LinkedHashSet<>();
+    /** 环境规则开关（I3 的"环境类"部分），由子类在构造里声明，见 {@link SessionRules}。 */
+    private final SessionRules rules = new SessionRules();
     private final long createdAt = System.currentTimeMillis();
 
     private SessionState state = SessionState.CREATED;
@@ -302,6 +304,69 @@ public abstract class GameSession {
 
     /** 子对局结束时回调（默认什么都不做；编排器覆盖它来推进下一轮）。 */
     protected void onChildEnded(GameSession child, EndReason reason) {
+    }
+
+    // ---------- 生命周期 / 环境钩子（I3：游戏不再自己写 @EventHandler） ----------
+
+    /**
+     * 本局的**环境规则**（不掉饥饿 / 不掉落 …）。在构造里声明，例：
+     * {@code rules().noItemDrop(true)}。
+     *
+     * <p>这些规则由框架的单一裁决入口 {@link SessionEvents} 执行，
+     * 游戏模块里**不要再**写 {@code FoodLevelChangeEvent} / {@code PlayerDropItemEvent} 处理器。
+     */
+    protected final SessionRules rules() {
+        return rules;
+    }
+
+    /**
+     * 参与者**下线**（{@code PlayerQuitEvent}）。在框架把它从归属链摘掉**之前**调用，
+     * 所以实现里看到的仍是"他还在局内"的状态。
+     *
+     * <p>框架随后会自动 {@code leave}（"忘了接 leave"那一类泄漏从结构上消失），
+     * 所以实现里<b>不需要</b>再调 {@link #leave(Player)} —— 调了也只是幂等的空操作。
+     */
+    protected void onPlayerQuit(Player p) {
+    }
+
+    /**
+     * 参与者**死亡**（{@code PlayerDeathEvent}）。只派发给"这个玩家所属的那个会话"，
+     * 所以实现里不必再判断"他在不在我的场地/世界里"。
+     */
+    protected void onPlayerDeath(org.bukkit.event.entity.PlayerDeathEvent event) {
+    }
+
+    /**
+     * 参与者**重生**（{@code PlayerRespawnEvent}）。同样只派发给所属会话，
+     * 实现里可以直接改 {@code event.setRespawnLocation(...)}。
+     */
+    protected void onPlayerRespawn(org.bukkit.event.player.PlayerRespawnEvent event) {
+    }
+
+    // 派发入口：只给同包的 SessionEvents 用，游戏侧不接触。
+
+    final void firePlayerQuit(Player p) {
+        try {
+            onPlayerQuit(p);
+        } catch (RuntimeException ex) {
+            Failures.recordAndWarn(gameKey + ".下线/" + arenaName, ex);
+        }
+    }
+
+    final void firePlayerDeath(org.bukkit.event.entity.PlayerDeathEvent event) {
+        try {
+            onPlayerDeath(event);
+        } catch (RuntimeException ex) {
+            Failures.recordAndWarn(gameKey + ".死亡/" + arenaName, ex);
+        }
+    }
+
+    final void firePlayerRespawn(org.bukkit.event.player.PlayerRespawnEvent event) {
+        try {
+            onPlayerRespawn(event);
+        } catch (RuntimeException ex) {
+            Failures.recordAndWarn(gameKey + ".重生/" + arenaName, ex);
+        }
     }
 
     // ---------- 参与者 ----------

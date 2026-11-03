@@ -39,6 +39,10 @@ public class MiniGameLibPlugin extends JavaPlugin implements Listener {
         // 房间引擎（模板 → 实例世界 → 回收），设计见 docs/房间引擎设计.md
         com.hub.room.RoomManager.init(this);
 
+        // 单一事件裁决入口（I3 第一批：下线 / 死亡 / 重生 / 饥饿 / 掉落）。
+        // 游戏侧不需要注册任何东西——这就是"事件裁决唯一"的落地点。
+        getServer().getPluginManager().registerEvents(new com.hub.session.SessionEvents(), this);
+
         // 主线程卡顿检测：回答"服务器为什么会突然卡一段"
         com.hub.diagnostics.TickWatchdog.start(this);
     }
