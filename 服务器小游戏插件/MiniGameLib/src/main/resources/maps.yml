@@ -798,3 +798,26 @@ maps:
           x2: -250
           y2: 78
           z2: 296
+  holdthefort:
+    世界树战场:
+      entry:
+        template: htf
+        x: 0.5
+        y: 64.0
+        z: 0.5
+      worlds:
+      - template: htf
+        rules:
+          pvp: true
+          difficulty: NORMAL
+          mob-spawning: false
+          keep-inventory: true
+          fixed-time: 6000
+        regions:
+        - name: 世界树战场
+          x1: -52
+          y1: 55
+          z1: -52
+          x2: 53
+          y2: 90
+          z2: 53

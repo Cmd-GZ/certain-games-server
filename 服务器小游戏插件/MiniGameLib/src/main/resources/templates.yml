@@ -25,3 +25,5 @@ templates:
     folder: tmpl_gtb
   lp:
     folder: tmpl_lp
+  htf:
+    folder: tmpl_htf
