@@ -20,7 +20,7 @@
 
 games:
   hillking:      { join-command: "hill join",        start-command: "hill start",        stop-command: "hill stop" }
-  murdermystery: { join-command: "mm join",          start-command: "mm start" }
+  murdermystery: { join-command: "mm join {arena}",          start-command: "mm start" }
   digtobottom:   { join-command: "dig join {arena}", start-command: "dig start {arena}" }
   anvilbattle:   { join-command: "anvil join",       start-command: "anvil start" }
   animalslaughter: { join-command: "animal join",    start-command: "animal start" }
