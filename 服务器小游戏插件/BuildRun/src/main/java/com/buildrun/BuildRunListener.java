@@ -17,18 +17,14 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.entity.ItemSpawnEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -49,11 +45,6 @@ public class BuildRunListener implements Listener {
         plugin.getManager().handleMove(event);
     }
 
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        plugin.getManager().handleQuit(event.getPlayer());
-    }
-
     /** 有人进来：正在"隐藏其他玩家"的跑者也要看不见他。 */
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
@@ -61,29 +52,6 @@ public class BuildRunListener implements Listener {
     }
 
     /** 重生位置：在场里就回场地等待点 / 当前旁观点。 */
-    @EventHandler
-    public void onRespawn(PlayerRespawnEvent event) {
-        Player p = event.getPlayer();
-        String arenaName = plugin.getManager().arenaOf(p.getUniqueId());
-        if (arenaName == null) {
-            return;
-        }
-        BuildRunArena a = plugin.getManager().getArena(arenaName);
-        if (a == null) {
-            return;
-        }
-        Location loc = a.getLobby() != null ? a.getLobby() : a.getSpawn();
-        if (a.getPhase() == BuildRunArena.Phase.RUN) {
-            BuildRunPlot plot = a.currentPlot();
-            if (plot != null && plot.getSpawn() != null) {
-                loc = plot.getSpawn();
-            }
-        }
-        if (loc != null) {
-            event.setRespawnLocation(loc);
-        }
-    }
-
     /** 场里的人不吃任何伤害（跑酷只靠碰到地板/跑出场地判失败，不靠打死）。 */
     @EventHandler
     public void onDamage(EntityDamageEvent event) {
@@ -93,13 +61,6 @@ public class BuildRunListener implements Listener {
     }
 
     /** 场里的人不掉饥饿（全局约定）。 */
-    @EventHandler
-    public void onFood(FoodLevelChangeEvent event) {
-        if (event.getEntity() instanceof Player p && plugin.getManager().isInSession(p.getUniqueId())) {
-            event.setCancelled(true);
-        }
-    }
-
     /**
      * 建造阶段只能动自己场地里的方块；对局中一律不许动方块。
      * <p>
@@ -289,17 +250,6 @@ public class BuildRunListener implements Listener {
     }
 
     /** 本插件发的道具不许丢（防止把菜单/起点工具丢在地上或转给别人）；对局中谁的物品都不许丢。 */
-    @EventHandler
-    public void onDrop(PlayerDropItemEvent event) {
-        if (plugin.getManager().isOurItem(event.getItemDrop().getItemStack())) {
-            event.setCancelled(true);
-            return;
-        }
-        if (plugin.getManager().forbidItemDrop(event.getPlayer())) {
-            event.setCancelled(true);
-        }
-    }
-
     /**
      * 对局中（建造 / 跑步）不许打开任何容器：箱子 / 熔炉 / 漏斗 / 潜影盒 / 末影箱……
      * <p>

@@ -11,12 +11,9 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDismountEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInputEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.inventory.ItemStack;
 
@@ -58,17 +55,6 @@ public final class GroupRaceListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onDrop(PlayerDropItemEvent event) {
-        if (!manager.isInGame(event.getPlayer())) {
-            return;
-        }
-        ItemStack item = event.getItemDrop().getItemStack();
-        if (manager.isReturnItem(item) || manager.isStartItem(item)) {
-            event.setCancelled(true);
-        }
-    }
-
     /** 记录跳跃 / 下蹲键，供飞猪每 tick 控制升降。 */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onInput(PlayerInputEvent event) {
@@ -103,13 +89,6 @@ public final class GroupRaceListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void onHunger(FoodLevelChangeEvent event) {
-        if (event.getEntity() instanceof Player player && manager.isInGame(player)) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
     public void onBreak(BlockBreakEvent event) {
         if (manager.isInGame(event.getPlayer())) {
             event.setCancelled(true);
@@ -131,8 +110,4 @@ public final class GroupRaceListener implements Listener {
         }
     }
 
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        manager.handleQuit(event.getPlayer());
-    }
 }

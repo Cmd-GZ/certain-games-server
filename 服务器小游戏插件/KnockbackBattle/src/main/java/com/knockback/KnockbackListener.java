@@ -11,13 +11,10 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 
 /** 击退大战事件入口。 */
@@ -138,25 +135,6 @@ public final class KnockbackListener implements Listener {
     }
 
     /** 禁止丢弃对局道具。 */
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onDrop(PlayerDropItemEvent event) {
-        if (!manager.isInGame(event.getPlayer())) {
-            return;
-        }
-        ItemStack item = event.getItemDrop().getItemStack();
-        if (manager.isStick(item) || manager.isWindCharge(item)
-                || manager.isReturnItem(item) || manager.isStartItem(item)) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onHunger(FoodLevelChangeEvent event) {
-        if (event.getEntity() instanceof Player player && manager.isInGame(player)) {
-            event.setCancelled(true);
-        }
-    }
-
     @EventHandler
     public void onMove(PlayerMoveEvent event) {
         if (event.getTo() == null) {
@@ -165,8 +143,4 @@ public final class KnockbackListener implements Listener {
         manager.handleMove(event);
     }
 
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        manager.handleQuit(event.getPlayer());
-    }
 }
