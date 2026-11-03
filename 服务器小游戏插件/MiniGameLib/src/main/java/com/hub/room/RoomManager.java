@@ -81,6 +81,16 @@ public final class RoomManager {
         }
 
         /** 框架建房时写入（一次）。 */
+        /** 这张房间的策略（来自地图的 `policy:` 段），只读；读不到就返回 fallback。 */
+        public String policy(String key, String fallback) {
+            return policy == null ? fallback : policy.getOrDefault(key, fallback);
+        }
+
+        /** 框架建房时写入（一次）。 */
+        void setPolicy(java.util.Map<String, String> p) {
+            this.policy = p == null ? java.util.Map.of() : java.util.Map.copyOf(p);
+        }
+
         void setArena(String arenaName) {
             this.arena = arenaName == null ? "" : arenaName;
         }
@@ -94,6 +104,8 @@ public final class RoomManager {
          */
         private String game = "";
         private String map = "";
+        /** 房间级策略（来自地图 `policy:`，例如 flow / games-per-party）。 */
+        private java.util.Map<String, String> policy = java.util.Map.of();
 
         public String game() {
             return game;
@@ -529,6 +541,7 @@ public final class RoomManager {
         // 之前这里没设 → 房间 arena 是空串 → 命令少一个参数 → 游戏只回一句用法提示、不建会话。
         // 取法：优先"属于这个游戏"的第一块区域；没有就取整张地图的第一块区域。
         room.setArena(firstArenaOf(map));
+        room.setPolicy(map.policy());
         java.util.List<File> created = new java.util.ArrayList<>();
         long t0 = System.nanoTime();
 

@@ -82,7 +82,14 @@ public final class GameMaps {
                             es.getDouble("x"), es.getDouble("y"), es.getDouble("z"),
                             (float) es.getDouble("yaw", 0.0), (float) es.getDouble("pitch", 0.0));
                 }
-                byName.put(mapName, new GameMap(game, mapName, plans, entry));
+                java.util.Map<String, String> policy = new java.util.LinkedHashMap<>();
+                var polSec = m.getConfigurationSection("policy");
+                if (polSec != null) {
+                    for (String pk : polSec.getKeys(false)) {
+                        policy.put(pk, String.valueOf(polSec.get(pk)));
+                    }
+                }
+                byName.put(mapName, new GameMap(game, mapName, plans, entry, policy));
             }
             if (!byName.isEmpty()) {
                 BY_GAME.put(game, byName);

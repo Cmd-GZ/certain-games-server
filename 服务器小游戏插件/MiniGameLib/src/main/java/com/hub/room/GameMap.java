@@ -18,7 +18,30 @@ import java.util.List;
  * @param worlds 这张地图需要的世界实例（按顺序创建）
  * @param entry  入口点（玩家进房间后先出现在这；**不是出生点**，游戏可再按玩家调整）；可为 null
  */
-public record GameMap(String game, String name, List<WorldPlan> worlds, Entry entry) {
+public record GameMap(String game, String name, List<WorldPlan> worlds, Entry entry,
+                      java.util.Map<String, String> policy) {
+
+    /** 兼容旧构造（没有策略）。 */
+    public GameMap(String game, String name, List<WorldPlan> worlds, Entry entry) {
+        this(game, name, worlds, entry, java.util.Map.of());
+    }
+
+    /**
+     * 这张地图**自己的策略**（来自 maps.yml 的 `policy:` 段），例如：
+     * <pre>policy: { flow: party, games-per-party: "2" }</pre>
+     *
+     * <p>为什么要它：以前 `flow` / `games-per-party` 只能写全局 config，
+     * 于是"同一游戏的不同房间想跑不同编排"就做不到（R5 房间级策略）。
+     * 现在房间建房时把这张地图的策略带走，游戏读房间的策略、读不到再回落全局配置。
+     */
+    public String policy(String key, String fallback) {
+        if (policy == null || key == null) {
+            return fallback;
+        }
+        String v = policy.get(key);
+        return v == null || v.isBlank() ? fallback : v;
+    }
+
 
     /**
      * 一个世界实例的计划：从哪个模板来、里面有哪些区域、默认规则是什么。

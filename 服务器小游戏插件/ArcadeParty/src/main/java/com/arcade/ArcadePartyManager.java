@@ -206,8 +206,22 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         return Math.max(minPlayers(), cfgInt("max-players", 16));
     }
 
+    /**
+     * 这一场打几个小游戏。**房间策略优先**（R5）：地图的 `policy: { games-per-party: N }`
+     * 会被建房时带进房间，读不到才回落全局 config。
+     */
     public int gamesPerParty() {
-        return Math.max(1, Math.min(16, cfgInt("games-per-party", 3)));
+        int fromRoom = 0;
+        var room = partyRoom();
+        if (room != null) {
+            try {
+                fromRoom = Integer.parseInt(room.policy("games-per-party", ""));
+            } catch (NumberFormatException ignored) {
+                fromRoom = 0;   // 没配 / 不是数字 -> 用全局
+            }
+        }
+        int value = fromRoom > 0 ? fromRoom : cfgInt("games-per-party", 3);
+        return Math.max(1, Math.min(16, value));
     }
 
     /** 实际这一场要打几个小游戏：单局包装（PARTY_OF_ONE）恒为 1。 */
@@ -223,8 +237,15 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
      * 现在把 {@code flow} 写进 {@code templates.yml} 会是一个没人读的死键；
      * 等房间能绑定派对时，只需要把这里的**数据来源**换成"绑定的房间"，执行路径不变。
      */
+    /**
+     * 编排属性（D17）。**房间策略优先**（R5）：地图可以声明
+     * `policy: { flow: single }`，建房时带进房间，只影响这个房间；读不到回落全局 config。
+     */
     public Flow flow() {
-        return Flow.of(plugin.getConfig().getString("flow", "party"));
+        String global = plugin.getConfig().getString("flow", "party");
+        var room = partyRoom();
+        String raw = room == null ? global : room.policy("flow", global);
+        return Flow.of(raw);
     }
 
     /** 单局包装（PARTY_OF_ONE）：只打一个、打完即整局结束、没有领奖台。 */
