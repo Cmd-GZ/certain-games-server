@@ -27,6 +27,18 @@ final class HillKingSession extends GameSession {
         this.manager = manager;
         // 本局禁止丢任何物品（重构前是 HillKingListener 里的一段 @EventHandler，逐字等价）
         rules().noItemDrop(true);
+
+        // C 类试点（I3 / 区域裁决）：从 HillKingListener 搬过来的三条裁决。
+        // 框架只把**归属本局**的事件派发到这里（见 docs/区域裁决设计.md）。
+        arbiter()
+                .on(com.hub.session.EventKind.DAMAGE, ctx -> {
+                    // 场内玩家不掉血（原 onDamage 逐字等价：只看**受害者**在不在局内）
+                    if (ctx.player() != null && manager.isInGame(ctx.player())) {
+                        ctx.cancel();
+                    }
+                })
+                .on(com.hub.session.EventKind.BLOCK_BREAK, ctx -> ctx.cancel())   // 本局禁挖
+                .on(com.hub.session.EventKind.BLOCK_PLACE, ctx -> ctx.cancel());  // 本局禁放
         enterWaiting();   // 一创建就进等待室（protected 只能自己调）
     }
 

@@ -2,6 +2,7 @@ package com.hub.region;
 
 import com.hub.diagnostics.Failures;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -88,6 +89,31 @@ public final class RegionRegistry {
     }
 
     /** 当前全部区域（快照）。 */
+    /**
+     * 某个位置**归谁**（I2 单射：返回包含该位置的那块区域的 gameKey）。
+     *
+     * <p>C 类事件的"位置兜底"用：爆炸、投掷物、自然伤害里没有玩家可以查归属，
+     * 只能看它发生在谁的场地里。没有任何区域包含该位置 → 返回 null（= 公共区）。
+     *
+     * <p>重叠时取**体积最小**的那块：大区域通常是"整个世界的粗粒度声明"，
+     * 小区域才是"这块地具体归谁"，见 {@link #conflicts()} 的重叠检测。
+     */
+    public static synchronized String ownerAt(Location loc) {
+        if (loc == null || loc.getWorld() == null) {
+            return null;
+        }
+        ArenaRegion best = null;
+        for (ArenaRegion r : REGIONS.values()) {
+            if (!r.contains(loc)) {
+                continue;
+            }
+            if (best == null || r.volume() < best.volume()) {
+                best = r;
+            }
+        }
+        return best == null ? null : best.gameKey();
+    }
+
     public static synchronized List<ArenaRegion> all() {
         return new ArrayList<>(REGIONS.values());
     }

@@ -42,6 +42,8 @@ public class MiniGameLibPlugin extends JavaPlugin implements Listener {
         // 单一事件裁决入口（I3 第一批：下线 / 死亡 / 重生 / 饥饿 / 掉落）。
         // 游戏侧不需要注册任何东西——这就是"事件裁决唯一"的落地点。
         getServer().getPluginManager().registerEvents(new com.hub.session.SessionEvents(), this);
+        // C 类（伤害/破坏/放置）的区域裁决分发器，设计见 docs/区域裁决设计.md
+        getServer().getPluginManager().registerEvents(new com.hub.session.RegionEvents(), this);
 
         // 主线程卡顿检测：回答"服务器为什么会突然卡一段"
         com.hub.diagnostics.TickWatchdog.start(this);

@@ -47,6 +47,8 @@ public abstract class GameSession {
     private final Set<BukkitTask> tasks = new LinkedHashSet<>();
     /** 环境规则开关（I3 的"环境类"部分），由子类在构造里声明，见 {@link SessionRules}。 */
     private final SessionRules rules = new SessionRules();
+    /** 裁决器（I3 的"区域类"部分：伤害/破坏/放置/交互/移动），见 {@link SessionArbiter}。 */
+    private final SessionArbiter arbiter = new SessionArbiter(this);
     private final long createdAt = System.currentTimeMillis();
 
     private SessionState state = SessionState.CREATED;
@@ -250,8 +252,9 @@ public abstract class GameSession {
             }
         }
 
-        // 2) 取消自己持有的任务
+        // 2) 取消自己持有的任务 + 注销裁决器（I3：会话没了就不该再有人对事件表态）
         cancelOwnedTasks();
+        arbiter.clear();
 
         // 3) 摘归属链
         for (UUID id : new ArrayList<>(players)) {
@@ -317,6 +320,18 @@ public abstract class GameSession {
      */
     protected final SessionRules rules() {
         return rules;
+    }
+
+    /**
+     * 本局的**裁决器**（I3 的 C 类：伤害 / 破坏 / 放置 / 交互 / 移动）。
+     *
+     * <p>在这里声明"这类事件在本局归我管"，框架就只把**归属本局**的那些事件派发过来，
+     * 游戏模块里不用再写 {@code @EventHandler}。会话结束时框架自动清空，不必手动注销。
+     *
+     * <p>详见 {@code docs/区域裁决设计.md}。
+     */
+    protected final SessionArbiter arbiter() {
+        return arbiter;
     }
 
     /**

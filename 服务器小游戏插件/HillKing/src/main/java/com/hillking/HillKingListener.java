@@ -6,10 +6,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.ItemStack;
@@ -46,13 +43,6 @@ public final class HillKingListener implements Listener {
     }
 
     /** 场内玩家不掉血；咸鱼按配置击退。 */
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onDamage(EntityDamageEvent event) {
-        if (event.getEntity() instanceof Player player && manager.isInGame(player)) {
-            event.setCancelled(true);
-        }
-    }
-
     @EventHandler(priority = EventPriority.LOWEST)
     public void onFishHit(EntityDamageByEntityEvent event) {
         if (!(event.getEntity() instanceof Player victim)
@@ -75,20 +65,6 @@ public final class HillKingListener implements Listener {
             Chat.actionBar(attacker, "&a拍飞！");
         } else {
             Chat.actionBar(attacker, "&c咸鱼冷却中…");
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onBlockBreak(BlockBreakEvent event) {
-        if (manager.isInGame(event.getPlayer())) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onBlockPlace(BlockPlaceEvent event) {
-        if (manager.isInGame(event.getPlayer())) {
-            event.setCancelled(true);
         }
     }
 
