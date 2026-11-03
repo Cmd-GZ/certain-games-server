@@ -253,7 +253,10 @@ public final class LandClaimArena {
         if (parts.length < 4) {
             return null;
         }
-        World world = Bukkit.getWorld(parts[0]);
+        // R2 读侧（2026-11-04 修）：配置里存的是 tpl:<模板键> 令牌，必须交给 Worlds.resolve
+        // 解析成"当前房间实例的世界"；直接 Bukkit.getWorld("tpl:xxx") 永远是 null，
+        // 表现就是"房间里这个游戏死活开不了局"（LandClaim/JumpFill 一直卡在这）。
+        World world = com.hub.world.Worlds.resolve(parts[0]);
         if (world == null) {
             return null;
         }

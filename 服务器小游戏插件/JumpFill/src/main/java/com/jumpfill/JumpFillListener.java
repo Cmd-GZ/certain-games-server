@@ -1,6 +1,5 @@
 package com.jumpfill;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -9,12 +8,8 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockFromToEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.EquipmentSlot;
 
 public final class JumpFillListener implements Listener {
@@ -46,13 +41,6 @@ public final class JumpFillListener implements Listener {
         }
     }
 
-    @EventHandler
-    public void onHunger(FoodLevelChangeEvent event) {
-        if (event.getEntity() instanceof Player player && manager.isPlaying(player)) {
-            event.setCancelled(true);
-        }
-    }
-
     /** 被填掉的格子不能被旁边的水重新灌满。 */
     @EventHandler(ignoreCancelled = true)
     public void onWaterFlow(BlockFromToEvent event) {
@@ -62,11 +50,6 @@ public final class JumpFillListener implements Listener {
         if (manager.arena().affectsWaterFlow(event.getBlock().getLocation(), event.getToBlock().getLocation())) {
             event.setCancelled(true);
         }
-    }
-
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onQuit(PlayerQuitEvent event) {
-        manager.quit(event.getPlayer());
     }
 
     @EventHandler
@@ -80,23 +63,4 @@ public final class JumpFillListener implements Listener {
         }
     }
 
-    @EventHandler
-    public void onDrop(PlayerDropItemEvent event) {
-        if (manager.isStartItem(event.getItemDrop().getItemStack())) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onRespawn(PlayerRespawnEvent event) {
-        Player player = event.getPlayer();
-        if (!manager.isPlaying(player)) {
-            return;
-        }
-        Location start = manager.startForPublic(player.getUniqueId());
-        if (start != null) {
-            event.setRespawnLocation(start);
-        }
-        Bukkit.getScheduler().runTask(plugin, () -> manager.respawn(player));
-    }
 }

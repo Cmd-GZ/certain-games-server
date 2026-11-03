@@ -7,11 +7,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 
 public final class LandClaimListener implements Listener {
@@ -56,13 +53,6 @@ public final class LandClaimListener implements Listener {
         }
     }
 
-    @EventHandler
-    public void onHunger(FoodLevelChangeEvent event) {
-        if (event.getEntity() instanceof Player player && manager.isPlaying(player)) {
-            event.setCancelled(true);
-        }
-    }
-
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onBreak(BlockBreakEvent event) {
         if (manager.isPlaying(event.getPlayer())) {
@@ -73,15 +63,6 @@ public final class LandClaimListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlace(BlockPlaceEvent event) {
         if (manager.isPlaying(event.getPlayer())) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onDrop(PlayerDropItemEvent event) {
-        if (manager.isHoe(event.getItemDrop().getItemStack())
-                || manager.isStartItem(event.getItemDrop().getItemStack())
-                || manager.isLeaveItem(event.getItemDrop().getItemStack())) {
             event.setCancelled(true);
         }
     }
@@ -100,8 +81,4 @@ public final class LandClaimListener implements Listener {
         return manager.isHoe(item) || manager.isStartItem(item) || manager.isLeaveItem(item);
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onQuit(PlayerQuitEvent event) {
-        manager.quit(event.getPlayer());
-    }
 }

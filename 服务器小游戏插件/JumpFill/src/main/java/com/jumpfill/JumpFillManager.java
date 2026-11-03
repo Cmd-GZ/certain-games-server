@@ -756,6 +756,14 @@ public final class JumpFillManager {
     }
 
     /** 给重生事件用：回到自己的高台。 */
+    /**
+     * I3 A 批：重生后下一 tick 收尾（原写在 {@code JumpFillListener.onRespawn} 里）。
+     * 由 {@link JumpFillSession#onPlayerRespawn} 调用 —— 游戏模块不再监听 {@code PlayerRespawnEvent}。
+     */
+    void respawnNextTick(Player player) {
+        Bukkit.getScheduler().runTask(plugin, () -> respawn(player));
+    }
+
     public void respawn(Player player) {
         UUID id = player.getUniqueId();
         if (!running || !states.containsKey(id)) {
