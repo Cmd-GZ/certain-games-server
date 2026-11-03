@@ -79,7 +79,7 @@ if [ -n "$CMDS" ]; then
 fi
 
 if [ -z "$SERVER" ]; then
-  SERVER="$(ls -d "$ROOT"/.server/run/small_games/* 2>/dev/null | head -1)"
+  SERVER="${SMOKE_SERVER_DIR:-$(ls -d "$ROOT"/.server/run/small_games/* 2>/dev/null | head -1)}"
 fi
 if [ -z "$SERVER" ] || [ ! -f "$SERVER/server.jar" ]; then
   echo "找不到服务器目录（需要含 server.jar）。用 --server 指定。" >&2
@@ -110,8 +110,9 @@ server_is_running() {
       return 0     # 锁不住 = 有人在用
     fi
   fi
-  # 兜底：有 java 进程的工作目录是这个服务器目录
-  if pgrep -f "server.jar nogui" >/dev/null 2>&1; then
+  # 兜底：有 java 进程在做这件事。**指定了 SMOKE_SERVER_DIR（隔离副本）时跳过** ——
+  # 否则别人在另一份副本上跑着的服务器会让这次部署被误判为"目标正在运行"。
+  if [ -z "${SMOKE_SERVER_DIR:-}" ] && pgrep -f "server.jar nogui" >/dev/null 2>&1; then
     return 0
   fi
   return 1
@@ -131,7 +132,7 @@ if [ "$DEPLOY" = 1 ]; then
   echo "== 已部署 $n 个 jar"
 fi
 
-LOG="$ROOT/.server/smoke.log"
+LOG="${SMOKE_LOG:-$ROOT/.server/smoke.log}"
 FAKE_LOG="$ROOT/.server/fakeclient.log"
 FIFO="$ROOT/.server/.smoke.fifo"
 rm -f "$LOG" "$FAKE_LOG" "$FIFO"
@@ -168,7 +169,7 @@ if [ "$done_seen" = 1 ]; then
   sleep "$FAKE_WAIT"
   if [ -n "$FAKE_NAME" ]; then
     echo "== 假玩家 $FAKE_NAME 命令: $FAKE_CMDS（就绪后 ${FAKE_DELAY}s 起算，挂 ${FAKE_STAY}s）"
-    python3 "$ROOT/tools/fakeclient.py" --port 25560 --name "$FAKE_NAME" \
+    python3 "$ROOT/tools/fakeclient.py" --port "${SMOKE_PORT:-25560}" --name "$FAKE_NAME" \
         --commands "$FAKE_CMDS" --delay "$FAKE_DELAY" --stay "$FAKE_STAY" \
         --connect-timeout "$FAKE_CONNECT_TIMEOUT" > "$FAKE_LOG" 2>&1 &
     FAKE_JOB=$!
