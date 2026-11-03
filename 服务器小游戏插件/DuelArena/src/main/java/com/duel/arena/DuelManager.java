@@ -1064,7 +1064,8 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** 真正的收场逻辑。赢家透传，玩家看到的结算不变。 */
     void doEndFight(String arenaName) {
-        destroyRoomAfterMatch();
+        // 房间销毁已**收敛到框架**（GameSession.end → RoomManager.deleteOwnedBy），
+        // 游戏不再自己删：否则同一份"房间归属"有两个写者（R2），且子游戏会误删父级房间。
         DuelArena a = arenas.get(arenaName);
         if (a == null) {
             return;

@@ -735,7 +735,8 @@ public final class HillKingManager {
      * 所以**必然只执行一次**（框架保证），这里不再需要"是否在 RUNNING"的守卫。
      */
     void doEndGame(EndReason why) {
-        destroyRoomAfterMatch();
+        // 房间销毁已**收敛到框架**（GameSession.end → RoomManager.deleteOwnedBy），
+        // 游戏不再自己删：否则同一份"房间归属"有两个写者（R2），且子游戏会误删父级房间。
         String reason = endMessage;
         cancelTasks();
         liveSidebar.hide("hillking");

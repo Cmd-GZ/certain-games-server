@@ -51,6 +51,16 @@ public abstract class GameSession {
     private EndReason endReason;
     private long endedAt;
 
+    /**
+     * 这条对局绑定的**房间**（可能为 null = 不在房间里跑）。
+     *
+     * <p>为什么由框架盖章：房间是框架造的，游戏自己不知道"我在哪个房间"。
+     * 对局结束时框架要靠它判断"该不该销毁房间"（D25：对局结束 → 房间销毁）。
+     * 只有**房间的拥有者**（{@code room.game() == gameKey()}）才能销毁，见
+     * {@link com.hub.room.RoomManager#deleteOwnedBy(String, String)}。
+     */
+    private String roomId;
+
     protected GameSession(String gameKey, String arenaName) {
         if (gameKey == null || gameKey.isBlank()) {
             throw new IllegalArgumentException("GameSession 必须有 gameKey");
@@ -58,6 +68,7 @@ public abstract class GameSession {
         this.gameKey = gameKey;
         this.arenaName = arenaName == null ? "" : arenaName;
         this.parent = null;
+        this.roomId = com.hub.room.RoomContext.roomIdOf(gameKey);
         Sessions.track(this);
     }
 
@@ -69,10 +80,23 @@ public abstract class GameSession {
         this.gameKey = gameKey;
         this.arenaName = arenaName == null ? "" : arenaName;
         this.parent = parent;
+        this.roomId = com.hub.room.RoomContext.roomIdOf(gameKey);
         Sessions.track(this);
     }
 
     // ---------- 身份 / 查询 ----------
+
+    /** 这条对局绑定的房间 id；null = 不在房间里跑。 */
+    public final String roomId() {
+        return roomId;
+    }
+
+    /** 框架盖章（游戏一般不需要调用）。 */
+    public final void bindRoom(String id) {
+        if (id != null && !id.isBlank()) {
+            this.roomId = id;
+        }
+    }
 
     public final String gameKey() {
         return gameKey;
@@ -237,7 +261,19 @@ public abstract class GameSession {
             Failures.recordAndWarn(gameKey + ".onEnd/" + arenaName, ex);
         }
 
-        // 5) 终态 + 通知父
+        // 5) **销毁对局房间**（D25）：这是"房间与对局 1:1"的唯一出口。
+        //    只销毁**自己拥有的**房间（房间的 game == 本对局 game）：
+        //    派对房间归派对所有，被委派的子游戏结束时不能把派对房间删掉。
+        //    放在这里而不是各游戏里，是因为游戏不知道房间归属（R2：单一写者）。
+        if (roomId != null) {
+            try {
+                com.hub.room.RoomManager.deleteOwnedBy(roomId, gameKey);
+            } catch (RuntimeException ex) {
+                Failures.recordAndWarn(gameKey + ".销毁房间/" + roomId, ex);
+            }
+        }
+
+        // 6) 终态 + 通知父
         state = SessionState.ENDED;
         endedAt = System.currentTimeMillis();
         if (parent != null) {

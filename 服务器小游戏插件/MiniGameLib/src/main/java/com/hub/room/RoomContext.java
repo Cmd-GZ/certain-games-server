@@ -26,6 +26,12 @@ public final class RoomContext {
         BY_GAME.put(gameKey, room);
     }
 
+    /** 该游戏当前绑定的房间 id；没有则 null（给 GameSession 盖章用）。 */
+    public static String roomIdOf(String gameKey) {
+        RoomManager.Room r = roomOf(gameKey);
+        return r == null ? null : r.roomId;
+    }
+
     /** 该游戏当前绑定的房间；没有则 null。 */
     public static RoomManager.Room roomOf(String gameKey) {
         return gameKey == null ? null : BY_GAME.get(gameKey);

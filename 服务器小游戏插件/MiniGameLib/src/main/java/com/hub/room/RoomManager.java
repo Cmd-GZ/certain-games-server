@@ -982,6 +982,32 @@ public final class RoomManager {
         }
     }
 
+    /**
+     * 对局结束时销毁房间——**只销毁自己拥有的那个**（D25）。
+     *
+     * <p>归属规则：房间的 {@code game()} 等于这条对局的 gameKey 才删。
+     * 派对房间的 game 是 {@code arcadeparty}，被它委派的子游戏结束时 gameKey 是子游戏，
+     * 于是**不会**误删父级的房间（这正是之前各游戏自己 delete 时最容易搞错的地方）。
+     *
+     * @return 是否真的删了
+     */
+    public static boolean deleteOwnedBy(String roomId, String gameKey) {
+        if (roomId == null || gameKey == null) {
+            return false;
+        }
+        Room room = ROOMS.get(roomId);
+        if (room == null) {
+            return false;   // 已经被回收 / 本来就不存在
+        }
+        if (room.game() == null || !room.game().equalsIgnoreCase(gameKey)) {
+            return false;   // 不是自己的房间（例如派对房间归父级）
+        }
+        boolean ok = delete(roomId);
+        org.bukkit.Bukkit.getLogger().info("[房间] 对局结束，销毁房间 " + roomId
+                + "（游戏 " + gameKey + "）" + (ok ? "" : "——失败"));
+        return ok;
+    }
+
     /** 这张地图的"代表场地名"（用于 `{arena}` 替换）。见 createForMap 里的说明。 */
     private static String firstArenaOf(GameMap map) {
         String fallback = "";
