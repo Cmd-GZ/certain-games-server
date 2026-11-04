@@ -79,6 +79,11 @@ public class TntRunManager {
     private final SetupMode setup;
     private final Map<String, List<Location>> joinSigns = new LinkedHashMap<>();
     private final Map<UUID, String> pendingSign = new LinkedHashMap<>();
+    /** I3：会话里的搬迁代码要用到 plugin。 */
+    public TntRunPlugin plugin() {
+        return plugin;
+    }
+
 
     public TntRunManager(TntRunPlugin plugin) {
         this.plugin = plugin;

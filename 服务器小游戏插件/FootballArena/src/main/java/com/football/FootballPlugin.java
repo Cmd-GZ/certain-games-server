@@ -21,7 +21,7 @@ public class FootballPlugin extends JavaPlugin {
             fb.setExecutor(cmd);
             fb.setTabCompleter(cmd);
         }
-        getServer().getPluginManager().registerEvents(new FootballListener(this), this);
+        // I3：本插件已无 Listener —— 事件由框架按归属派发到 Session 的钩子
         // 玩家 /hub 或右键回主城道具时，HubCore 回调这里把玩家踢出游戏（silent=true 防刷屏）
         com.hub.api.HubAPI.registerLobbyHandler(p -> manager.leave(p, true));
 

@@ -114,6 +114,11 @@ public final class OneShotManager {
 
     /** 本局临时开启过 PvP 的世界 -> 原始状态。 */
     private final Map<World, Boolean> pvpStates = new LinkedHashMap<>();
+    /** I3：会话里的搬迁代码要用到 plugin。 */
+    public OneShotPlugin plugin() {
+        return plugin;
+    }
+
 
     public OneShotManager(OneShotPlugin plugin) {
         this.plugin = plugin;

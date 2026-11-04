@@ -95,6 +95,11 @@ public class DigToBottomManager {
     private YamlConfiguration data;
     /** 诊断日志开关：/dig debug 切换；config.yml 的 debug-break-logs 决定启动时的默认值。 */
     private volatile boolean debugBreak;
+    /** I3：会话里的搬迁代码要用到 plugin。 */
+    public DigToBottomPlugin plugin() {
+        return plugin;
+    }
+
 
     public DigToBottomManager(DigToBottomPlugin plugin) {
         this.plugin = plugin;

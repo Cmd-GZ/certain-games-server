@@ -21,7 +21,7 @@ public class OneShotPlugin extends JavaPlugin {
             oneshot.setExecutor(command);
             oneshot.setTabCompleter(command);
         }
-        getServer().getPluginManager().registerEvents(new OneShotListener(this, manager), this);
+        // I3：本插件已无 Listener —— 事件由框架按归属派发到 Session 的钩子
         // /hub 或右键回主城道具时，HubCore 回调这里把玩家移出对局
         HubAPI.registerLobbyHandler(player -> manager.leave(player, true));
 

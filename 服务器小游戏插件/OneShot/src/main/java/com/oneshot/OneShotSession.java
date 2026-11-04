@@ -2,6 +2,19 @@ package com.oneshot;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.Bukkit;
+import org.bukkit.event.entity.EntityRegainHealthEvent;
+import org.bukkit.event.player.PlayerPickupArrowEvent;
+import org.bukkit.event.player.PlayerAttemptPickupItemEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Arrow;
+import org.bukkit.event.Event;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.block.Action;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.Location;
@@ -94,5 +107,107 @@ final class OneShotSession extends GameSession {
             event.setCancelled(true);
             manager.handleStartPaper(player);
         }
+    }
+
+    // ---------- I3：由 listener 机械搬迁过来的处理器（按事件类型分派） ----------
+
+
+    @Override
+    protected void onGameEvent(org.bukkit.event.Event event) {
+        if (event instanceof EntityDamageByEntityEvent e) {
+        if (!(e.getEntity() instanceof Player victim)) {
+            return;
+        }
+        Player attacker = null;
+        boolean arrow = false;
+        Entity damager = e.getDamager();
+        if (damager instanceof Player player) {
+            attacker = player;
+        } else if (damager instanceof Arrow projectile && projectile.getShooter() instanceof Player shooter) {
+            attacker = shooter;
+            arrow = true;
+        }
+        if (!manager.isInGame(victim)) {
+            // 对局内玩家不能打大厅/观战玩家
+            if (attacker != null && manager.isInGame(attacker)) {
+                e.setCancelled(true);
+            }
+            return;
+        }
+        if (!manager.isPlaying(victim) || attacker == null || !manager.isPlaying(attacker)
+                || attacker.equals(victim)) {
+            e.setCancelled(true);
+            return;
+        }
+        // 天坑（SkyPit）会在 LOWEST 无条件取消“非天坑玩家”的 PvP 伤害，
+        // 这里必须显式解除取消，否则本局玩家永远打不出伤害。
+        e.setCancelled(false);
+        manager.recordHit(victim, attacker);
+        if (arrow) {
+            // 一箭秒杀；保留击杀者信息，让死亡结算能补箭
+            e.setDamage(1000.0);
+        }
+                return;
+        }
+        if (event instanceof EntityDamageByEntityEvent e) {
+        if (!(e.getEntity() instanceof Player victim)) {
+            return;
+        }
+        Player attacker = asPlayerDamager(e);
+        if (attacker == null || attacker.equals(victim)
+                || !manager.isPlaying(victim) || !manager.isPlaying(attacker)) {
+            return;
+        }
+        if (e.isCancelled()) {
+            e.setCancelled(false);
+        }
+                return;
+        }
+        if (event instanceof EntityDamageEvent e) {
+        if (e instanceof EntityDamageByEntityEvent) {
+            return;
+        }
+        if (e.getEntity() instanceof Player player && manager.isInGame(player)) {
+            e.setCancelled(true);
+        }
+                return;
+        }
+        if (event instanceof EntityRegainHealthEvent e) {
+        if (e.getEntity() instanceof Player player && manager.isInGame(player)) {
+            e.setCancelled(true);
+        }
+                return;
+        }
+        if (event instanceof PlayerAttemptPickupItemEvent e) {
+        if (manager.isInGame(e.getPlayer())
+                && e.getItem().getItemStack().getType() == manager.arrowMaterial()) {
+            e.setCancelled(true);
+        }
+                return;
+        }
+        if (event instanceof PlayerPickupArrowEvent e) {
+        if (manager.isInGame(e.getPlayer())) {
+            e.setCancelled(true);
+        }
+                return;
+        }
+        if (event instanceof PlayerMoveEvent e) {
+        if (e.getTo() != null) {
+            manager.handleMove(e.getPlayer(), e.getTo());
+        }
+                return;
+        }
+    }
+
+    // ---- 原 Listener 的私有 helper（随处理器一起搬过来）----
+
+    private Player asPlayerDamager(EntityDamageByEntityEvent event) {
+        if (event.getDamager() instanceof Player player) {
+            return player;
+        }
+        if (event.getDamager() instanceof Arrow arrow && arrow.getShooter() instanceof Player shooter) {
+            return shooter;
+        }
+        return null;
     }
 }

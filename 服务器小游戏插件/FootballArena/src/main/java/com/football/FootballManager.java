@@ -87,6 +87,11 @@ public class FootballManager {
     private final Map<String, List<Location>> joinSigns = new LinkedHashMap<>();
     private final Map<UUID, String> pendingSign = new LinkedHashMap<>();
     private final Map<String, WaitCountdown> waits = new LinkedHashMap<>();
+    /** I3：会话里的搬迁代码要用到 plugin。 */
+    public FootballPlugin plugin() {
+        return plugin;
+    }
+
 
     public FootballManager(FootballPlugin plugin) {
         this.plugin = plugin;

@@ -22,7 +22,7 @@ public class DigToBottomPlugin extends JavaPlugin {
             dig.setExecutor(command);
             dig.setTabCompleter(command);
         }
-        getServer().getPluginManager().registerEvents(new DigToBottomListener(this), this);
+        // I3：本插件已无 Listener —— 事件由框架按归属派发到 Session 的钩子
         // /hub 或回主城道具：静默把玩家踢出本游戏（不在场中时不刷提示）
         HubAPI.registerLobbyHandler(player -> manager.leave(player, true));
 
