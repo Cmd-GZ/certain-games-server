@@ -101,7 +101,11 @@ public final class MemoryFlipManager {
     }
 
     private MemoryFlipSession ensureSession() {
-        String key = arenaKey();
+        return ensureSession(arenaKey());
+    }
+
+    /** 按**房间键**取会话（D22）：同一游戏两个房间时各自一份；没有房间时键就是场地名。 */
+    private MemoryFlipSession ensureSession(String key) {
         MemoryFlipSession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
             s = new MemoryFlipSession(this, key);
@@ -425,7 +429,8 @@ public final class MemoryFlipManager {
         waiting.add(id);
         joinTick.put(id, (long) Bukkit.getCurrentTick());
         joinSeed.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
-        ensureSession();
+        // D22：会话键按玩家所在房间算（单房间/无房间时仍是 "main"，行为不变）
+        ensureSession(games.keyOf(player, arenaKey()));
         if (session != null && !session.join(player)) {
             plugin.getLogger().warning("[MemoryFlip] " + player.getName() + " 加入归属链失败（见 [被吞异常]）");
         }
