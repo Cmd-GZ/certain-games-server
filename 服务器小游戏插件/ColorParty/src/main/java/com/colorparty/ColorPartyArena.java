@@ -71,6 +71,29 @@ public class ColorPartyArena {
         this.name = name;
     }
 
+    /** 房间键（D22）：场地名是"哪张地图"，它表示"哪个房间的那一局"。 */
+    private String roomKey;
+
+    public String roomKey() {
+        return roomKey == null ? getName() : roomKey;
+    }
+
+    public void setRoomKey(String roomKey) {
+        this.roomKey = roomKey;
+    }
+
+    /** 克隆配置部分（范围/出生点/等待点/面板），运行时状态全新。 */
+    public ColorPartyArena copyConfig() {
+        ColorPartyArena c = new ColorPartyArena(getName());
+        c.pos1 = this.pos1;
+        c.pos2 = this.pos2;
+        c.spawn = this.spawn;
+        c.lobbyPoint = this.lobbyPoint;
+        c.panelPos1 = this.panelPos1;
+        c.panelPos2 = this.panelPos2;
+        return c;
+    }
+
     public String getName() {
         return name;
     }

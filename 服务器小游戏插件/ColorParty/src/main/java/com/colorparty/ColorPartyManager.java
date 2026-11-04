@@ -81,11 +81,52 @@ public class ColorPartyManager {
     /** D22：每个场地一个会话（多图游戏）。 */
     private final Map<String, ColorPartySession> sessions = new LinkedHashMap<>();
 
-    private ColorPartySession ensureSession(String arenaName) {
-        ColorPartySession s = sessions.get(arenaName);
+    private final Map<UUID, String> playerKey = new LinkedHashMap<>();
+    private final Map<String, String> keyArena = new LinkedHashMap<>();
+    private final Map<String, ColorPartyArena> liveArenas = new LinkedHashMap<>();
+
+    public String keyOf(UUID id) {
+        String k = playerKey.get(id);
+        if (k != null) {
+            return k;
+        }
+        String name = playerArena.get(id);
+        return name == null ? null : name;
+    }
+
+    public String arenaNameOfKey(String key) {
+        return keyArena.getOrDefault(key, key);
+    }
+
+    public ColorPartyArena liveArena(String key) {
+        ColorPartyArena live = liveArenas.get(key);
+        if (live != null) {
+            return live;
+        }
+        ColorPartyArena tpl = arenas.get(arenaNameOfKey(key));
+        if (tpl == null) {
+            return null;
+        }
+        ColorPartyArena copy = tpl.copyConfig();
+        copy.setRoomKey(key);
+        liveArenas.put(key, copy);
+        return copy;
+    }
+
+    private ColorPartyArena arenaByName(String arenaName) {
+        for (ColorPartyArena live : liveArenas.values()) {
+            if (arenaName.equals(live.getName())) {
+                return live;
+            }
+        }
+        return arenas.get(arenaName);
+    }
+
+    private ColorPartySession ensureSession(String key) {
+        ColorPartySession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
-            s = new ColorPartySession(this, arenaName);
-            sessions.put(arenaName, s);
+            s = new ColorPartySession(this, arenaNameOfKey(key));
+            sessions.put(key, s);
         }
         return s;
     }
@@ -396,10 +437,18 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             msg(p, "&c人数已满（&e" + max + "&c）。");
             return false;
         }
+        // D22：键 = 房间 id（有房间时）；本局状态落在"本房间的"运行时场地实例上
+        String key = com.hub.room.RoomContext.roomKeyFor(p, GAME, arenaName);
+        keyArena.put(key, arenaName);
+        ColorPartyArena live = liveArena(key);
+        if (live != null) {
+            a = live;
+        }
         playerArena.put(id, arenaName);
+        playerKey.put(id, key);
         a.getPlayers().add(id);
         a.recordJoin(id);   // D21
-        if (!ensureSession(arenaName).join(p)) {
+        if (!ensureSession(key).join(p)) {
             plugin.getLogger().warning("[ColorParty] " + p.getName() + " 加入归属链失败（场 " + arenaName + "）");
         }
         p.getInventory().clear();
@@ -445,7 +494,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             }
             return;
         }
-        ColorPartyArena a = arenas.get(name);
+        ColorPartyArena a = liveArena(keyOf(p.getUniqueId()));
         if (a != null) {
             a.getPlayers().remove(id);
             a.getEliminated().remove(id);
@@ -470,7 +519,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        ColorPartyArena a = arenas.get(name);
+        ColorPartyArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             return;
         }
@@ -495,7 +544,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     }
 
     public boolean start(Player op, String arenaName) {
-        ColorPartyArena a = arenas.get(arenaName);
+        ColorPartyArena a = liveArena(keyOf(op.getUniqueId()));
         if (a == null) {
             msg(op, "&c场不存在。");
             return false;
@@ -808,7 +857,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (arenaName == null) {
             return;
         }
-        ColorPartyArena a = arenas.get(arenaName);
+        ColorPartyArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != ColorPartyArena.State.WAITING) {
             return;
         }
@@ -831,7 +880,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (arenaName == null) {
             return;
         }
-        ColorPartyArena a = arenas.get(arenaName);
+        ColorPartyArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != ColorPartyArena.State.RUNNING) {
             return;
         }
@@ -879,7 +928,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
             return false;
         }
-        ColorPartyArena a = arenas.get(arenaName);
+        ColorPartyArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || p == null) {
             return false;
         }
@@ -1049,7 +1098,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** OP 进入某场的配置模式：清背包并发配置工具。 */
     public boolean enterSetup(Player p, String arenaName) {
-        ColorPartyArena a = arenas.get(arenaName);
+        ColorPartyArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             msg(p, "&c场 &e" + arenaName + "&c 不存在。");
             return false;
@@ -1093,7 +1142,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         return new SetupMode.Handler() {
             @Override
             public void onTool(Player p, String arenaName, String toolId, Action action, Block clicked) {
-                ColorPartyArena a = arenas.get(arenaName);
+                ColorPartyArena a = liveArena(keyOf(p.getUniqueId()));
                 if (a == null) {
                     exitSetup(p);
                     return;
@@ -1140,7 +1189,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
             @Override
             public void onSave(Player p, String arenaName) {
-                ColorPartyArena a = arenas.get(arenaName);
+                ColorPartyArena a = liveArena(keyOf(p.getUniqueId()));
                 if (a == null) {
                     return;
                 }
