@@ -16,6 +16,34 @@ import java.util.Map;
 public final class GroupRaceArena {
 
     private final JavaPlugin plugin;
+
+    /**
+     * D22：这个赛道实例**钉死**的房间世界（每个房间一份实例）。
+     *
+     * <p>{@link com.hub.room.RoomBinding} 是"按游戏一个槽"，两房间同时跑时后一个覆盖前一个 ——
+     * 甲房的实例会读到乙房的世界（人被传错房间）。钉死之后读取只认自己的世界。
+     */
+    private org.bukkit.World roomWorld;
+
+    public void bindWorld(org.bukkit.World world) {
+        this.roomWorld = world;
+    }
+
+    public org.bukkit.World boundWorld() {
+        return roomWorld;
+    }
+
+    /** 读坐标的世界解析：钉死的房间世界优先，没钉才退回按上下文的换绑。 */
+    private Location apply(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld != null && !roomWorld.equals(loc.getWorld())) {
+            return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+        }
+        return com.hub.room.RoomBinding.apply("grouprace", loc);
+    }
+
     private Location lobby;
     private Location start;
     private Location pos1;
@@ -47,10 +75,25 @@ public final class GroupRaceArena {
         // 先重读，避免把内存里的旧配置写回去
         plugin.reloadConfig();
         FileConfiguration cfg = plugin.getConfig();
-        cfg.set("arena.lobby", lobby);
-        cfg.set("arena.start", start);
-        cfg.set("arena.pos1", pos1);
-        cfg.set("arena.pos2", pos2);
+        // **一律写字符串**（`tpl:模板,x,y,z`）：房间世界里编辑场地时，写 Location 对象会把
+        // `room_xxx_1` 这种房间名钉进配置，房间一销毁这份配置就永远"未配置"（真实事故同款）。
+        // 反查不到模板的房间世界（encode 返回 null）**什么都不写**，保留磁盘原值。
+        String lobbyToken = com.hub.world.Worlds.encode(lobby);
+        if (lobbyToken != null && !lobbyToken.isBlank() && !lobbyToken.startsWith("room_")) {
+            cfg.set("arena.lobby", lobbyToken);
+        }
+        String startToken = com.hub.world.Worlds.encode(start);
+        if (startToken != null && !startToken.isBlank() && !startToken.startsWith("room_")) {
+            cfg.set("arena.start", startToken);
+        }
+        String pos1Token = com.hub.world.Worlds.encode(pos1);
+        if (pos1Token != null && !pos1Token.isBlank() && !pos1Token.startsWith("room_")) {
+            cfg.set("arena.pos1", pos1Token);
+        }
+        String pos2Token = com.hub.world.Worlds.encode(pos2);
+        if (pos2Token != null && !pos2Token.isBlank() && !pos2Token.startsWith("room_")) {
+            cfg.set("arena.pos2", pos2Token);
+        }
         List<Map<String, Object>> list = new ArrayList<>();
         for (GroupRaceRing ring : rings) {
             list.add(ring.toMap());
@@ -163,7 +206,7 @@ public final class GroupRaceArena {
     }
 
     public Location getLobby() {
-        return  com.hub.room.RoomBinding.apply("grouprace", lobby == null ? null : lobby.clone());
+        return apply(lobby);
     }
 
     public void setLobby(Location lobby) {
@@ -171,7 +214,7 @@ public final class GroupRaceArena {
     }
 
     public Location getStart() {
-        return  com.hub.room.RoomBinding.apply("grouprace", start == null ? null : start.clone());
+        return apply(start);
     }
 
     public void setStart(Location start) {
@@ -179,7 +222,7 @@ public final class GroupRaceArena {
     }
 
     public Location getPos1() {
-        return  com.hub.room.RoomBinding.apply("grouprace", pos1 == null ? null : pos1.clone());
+        return apply(pos1);
     }
 
     public void setPos1(Location pos1) {
@@ -187,7 +230,7 @@ public final class GroupRaceArena {
     }
 
     public Location getPos2() {
-        return  com.hub.room.RoomBinding.apply("grouprace", pos2 == null ? null : pos2.clone());
+        return apply(pos2);
     }
 
     public void setPos2(Location pos2) {

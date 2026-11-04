@@ -54,7 +54,7 @@ public final class GroupRaceManager {
     private GroupRaceSession session;
 
     private GroupRaceSession ensureSession() {
-        String key = "main";
+        String key = roomKey;   // D22：每房间一个会话（否则两场派对共用同一份会话）
         GroupRaceSession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
             s = new GroupRaceSession(this, key);
@@ -82,6 +82,10 @@ public final class GroupRaceManager {
     }
 
     private final GroupRacePlugin plugin;
+    /** D22：本实例负责的房间键（有房间时 = 房间 id；没有房间时 = {@link #ARENA}）。 */
+    private final String roomKey;
+    /** 侧边栏/菜单的键：每房间一份，否则两个房间互相覆盖。 */
+    private final String sidebarKey;
     private final LiveSidebar liveSidebar;
     private final GroupRaceArena arena;
     private final WaitCountdown countdown;
@@ -137,8 +141,17 @@ public final class GroupRaceManager {
         return plugin;
     }
 
+    /** 默认实例（没有房间上下文时的老路径）。 */
+    public static final String ARENA = "主赛道";
+
     public GroupRaceManager(GroupRacePlugin plugin) {
+        this(plugin, ARENA);
+    }
+
+    public GroupRaceManager(GroupRacePlugin plugin, String roomKey) {
         this.plugin = plugin;
+        this.roomKey = roomKey == null || roomKey.isBlank() ? ARENA : roomKey;
+        this.sidebarKey = "grouprace:" + this.roomKey;
         this.liveSidebar = new LiveSidebar(plugin);
         this.data = PlayerStats.load("grouprace", new File(plugin.getDataFolder(), "data.yml"));
         this.arena = new GroupRaceArena(plugin);
@@ -427,14 +440,31 @@ public final class GroupRaceManager {
 
     /** 声明地盘（{@code docs/框架不变量.md} 的 I2）。单场游戏，场地名用空串。 */
     public void publishRegions() {
-        com.hub.region.Regions.begin("grouprace");
+        if (roomKey.equals(ARENA)) {
+            com.hub.region.Regions.begin("grouprace");   // 只有默认实例负责清掉上一轮
+        }
         if (arena != null) {
-            com.hub.region.Regions.box("grouprace", "", arena.getPos1(), arena.getPos2());
+            com.hub.region.Regions.box("grouprace", roomKey, arena.getPos1(), arena.getPos2());
         }
     }
 
     public GroupRaceArena arena() {
         return arena;
+    }
+
+    /** D22：本实例负责的房间键。 */
+    public String roomKey() {
+        return roomKey;
+    }
+
+    /** 菜单/日志里用的场地名：默认实例叫「主赛道」，房间实例用房间 id。 */
+    public String arenaLabel() {
+        return roomKey;
+    }
+
+    /** 这个实例是不是已经空着（外层据此回收房间实例）。 */
+    public boolean idle() {
+        return state == State.WAITING && waiting.isEmpty() && playing.isEmpty() && finished.isEmpty();
     }
 
     public boolean isWaiting(Player player) {
@@ -477,23 +507,24 @@ public final class GroupRaceManager {
     }
 
 
-    public void join(Player player) {
+    /** 玩家加入本房间的等待队列；返回是否真的加进去了（D22：外层按房间路由要用）。 */
+    public boolean join(Player player) {
         UUID id = player.getUniqueId();
         if (state == State.RUNNING) {
             Chat.send(player, "&c比赛正在进行中，请等这一局结束后再加入。");
-            return;
+            return false;
         }
         if (waiting.contains(id)) {
             Chat.send(player, "&e你已经在等待队列中。");
-            return;
+            return false;
         }
         if (waiting.size() >= maxPlayers()) {
             Chat.send(player, "&c等待队列已满（" + maxPlayers() + " 人）。");
-            return;
+            return false;
         }
         if (!arena.isReady()) {
             Chat.send(player, "&c赛道还没配置完整（缺 " + arena.missing() + "），请联系管理员。");
-            return;
+            return false;
         }
         waiting.add(id);
         joinTick.put(id, (long) Bukkit.getCurrentTick());
@@ -515,6 +546,7 @@ public final class GroupRaceManager {
         Chat.send(player, "&a已加入" + GAME_NAME + "等待队列 &7(" + waiting.size() + "/" + maxPlayers() + ")");
         Chat.send(player, "&7人数达到 &f" + minPlayers() + " &7后自动倒计时开始。");
         updateCountdown();
+        return true;
     }
 
     public void leave(Player player, boolean silent) {
@@ -617,7 +649,7 @@ public final class GroupRaceManager {
             }
         }
         if (!ready.isEmpty() && (ready.size() >= minPlayers() || force)) {
-            if (startCountdown().begin("main", new ArrayList<>(ready), () -> startGame(force))) {
+            if (startCountdown().begin(roomKey, new ArrayList<>(ready), () -> startGame(force))) {
                 return;
             }
         }
@@ -664,7 +696,7 @@ public final class GroupRaceManager {
             removeLobbyPig(p);
             preparePlayer(p, arena.startLocation(i, total, startSpread()), prog);
             HubAPI.setPlaying(id, GAME_NAME);
-            HubAPI.setArenaSpectator(GAME_NAME, "", arena.getStart());
+            HubAPI.setArenaSpectator(GAME_NAME, arenaLabel(), arena.getStart());
             Chat.title(p, "&e&l" + GAME_NAME, "&f视角控制方向 · 空格上升 · 下蹲下降", 2);
         }
         broadcast("&6&l========== " + GAME_NAME + "开始 ==========");
@@ -1135,7 +1167,7 @@ public final class GroupRaceManager {
             RaceProgress prog = progress.get(id);
             lines.add(new LiveSidebar.Line("§e" + nameOf(id), prog == null ? 0 : prog.score));
         }
-        liveSidebar.update("grouprace", "&6&l分组竞速 · 分数", online, lines);
+        liveSidebar.update(sidebarKey, "&6&l分组竞速 · 分数", online, lines);
     }
 
     private void updateActionBar() {
@@ -1220,7 +1252,7 @@ public final class GroupRaceManager {
             return;
         }
         cancelTasks();
-        liveSidebar.hide("grouprace");
+        liveSidebar.hide(sidebarKey);
         state = State.WAITING;
         secondsLeft = 0;
         removeAllPigs();

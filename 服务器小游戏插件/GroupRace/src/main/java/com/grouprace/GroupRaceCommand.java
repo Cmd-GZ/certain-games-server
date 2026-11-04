@@ -16,15 +16,22 @@ import java.util.Locale;
 public final class GroupRaceCommand implements CommandExecutor, TabCompleter {
 
     private final GroupRacePlugin plugin;
-    private final GroupRaceManager manager;
+    /** D22：按房间分桶的状态；每个入口按发送者/玩家路由到他自己那一份。 */
+    private final GroupRaceRooms rooms;
 
-    public GroupRaceCommand(GroupRacePlugin plugin, GroupRaceManager manager) {
+    public GroupRaceCommand(GroupRacePlugin plugin, GroupRaceRooms rooms) {
         this.plugin = plugin;
-        this.manager = manager;
+        this.rooms = rooms;
+    }
+
+    /** 这个发送者应该操作的房间状态：玩家 → 他自己那一份；控制台 → 最近有人加入的那一份。 */
+    private GroupRaceManager stateOf(CommandSender sender) {
+        return sender instanceof Player p ? rooms.forPlayer(p) : rooms.lastJoined();
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        GroupRaceManager manager = stateOf(sender);
         if (args.length == 0 || args[0].equalsIgnoreCase("help")) {
             help(sender);
             return true;
@@ -34,13 +41,13 @@ public final class GroupRaceCommand implements CommandExecutor, TabCompleter {
             case "join" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.join(player);
+                    rooms.join(player);
                 }
             }
             case "leave" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.leave(player, false);
+                    rooms.leave(player, false);
                 }
             }
             case "list" -> list(sender);
@@ -170,6 +177,7 @@ public final class GroupRaceCommand implements CommandExecutor, TabCompleter {
     }
 
     private void list(CommandSender sender) {
+        GroupRaceManager manager = stateOf(sender);
         Chat.send(sender, "&e[" + GroupRaceManager.GAME_NAME + "] &f状态："
                 + (manager.isRunning() ? "&a比赛中 &7(剩余 " + manager.secondsLeft() + "s)" : "&e等待中")
                 + " &7| 等待 &e" + manager.waitingCount() + " &7| 参赛 &e" + manager.playingCount());
@@ -179,6 +187,7 @@ public final class GroupRaceCommand implements CommandExecutor, TabCompleter {
     }
 
     private void listRings(CommandSender sender) {
+        GroupRaceManager manager = stateOf(sender);
         List<GroupRaceRing> rings = manager.arena().rings();
         if (rings.isEmpty()) {
             Chat.send(sender, "&e还没有圆环。");
@@ -192,6 +201,7 @@ public final class GroupRaceCommand implements CommandExecutor, TabCompleter {
     }
 
     private void setCorner(CommandSender sender, boolean first) {
+        GroupRaceManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
