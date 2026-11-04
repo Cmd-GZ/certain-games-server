@@ -63,6 +63,16 @@ public final class RoomContext {
     }
 
     /**
+     * 这个玩家在某个游戏里应该用的**键**：有房间就用房间 id，否则用场地名。
+     *
+     * <p>与 {@link #sessionKeyFor} 同义，只是给"手上只有 Player"的调用点用（少写一个 getUniqueId）。
+     * 游戏把 `sessions` / `waits` / 计时器 等运行时状态的键换成它，就能支持同游戏多房间（D22）。
+     */
+    public static String roomKeyFor(org.bukkit.entity.Player player, String gameKey, String arenaName) {
+        return sessionKeyFor(player == null ? null : player.getUniqueId(), gameKey, arenaName);
+    }
+
+    /**
      * **会话键**（D22 后半的唯一原语）：这个玩家在这个游戏里，会话应该用哪个键索引。
      *
      * <p>规则：玩家有"玩家→房间"记录时用**房间 id**，否则退回**场地名**（老路径 / 静态场地）。

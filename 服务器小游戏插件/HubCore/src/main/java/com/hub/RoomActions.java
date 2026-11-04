@@ -71,7 +71,12 @@ public final class RoomActions {
         String join = games().getString("games." + gameKey + ".join-command");
         if (join != null && !join.isBlank()) {
             // {arena} 用房间记住的场地名（一个模板世界多张地图时，这决定进哪块）
-            join = join.replace("{arena}", room.arena() == null ? "" : room.arena()).trim();
+            join = join.replace("{arena}", room.arena() == null ? "" : room.arena())
+                    // **房间 id 也要能传进游戏**（D22）：地图名不唯一，房间 id 才唯一。
+                    // 游戏的 join 命令可以多接一个参数；不想改命令的，用
+                    // `RoomContext.roomKeyFor(player, arenaName)` 从上下文里取即可。
+                    .replace("{room}", room.roomId)
+                    .trim();
             // **告诉游戏它在哪个房间**：派对/子游戏据此取场地与委派，不用自己去搜
             //（activeFor 在多房间时返回 null，靠搜是搜不到的）。
             com.hub.room.RoomContext.bind(gameKey, room);
