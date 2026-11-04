@@ -79,6 +79,11 @@ public class LuckyPillarManager {
 
     /** 该房间的运行时场地实例；首次使用时从配置模板克隆（只抄坐标，不带本局状态）。 */
     public LuckyPillarArena liveArena(String key) {
+ if (key == null) {
+     // **静默 null 是最难查的 bug**：join() 里 key 还没算出来就调 liveArena
+     // 会得到 null → 上层"场不存在"→ 命令返回 true、控制台无日志。
+     throw new IllegalStateException("LuckyPillar: liveArena(null) —— 调用点没有先算房间键");
+ }
         LuckyPillarArena live = liveArenas.get(key);
         if (live != null) {
             return live;

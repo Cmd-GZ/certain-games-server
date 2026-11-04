@@ -82,6 +82,11 @@ public class FootballManager {
     }
 
     public FootballArena liveArena(String key) {
+ if (key == null) {
+     // **静默 null 是最难查的 bug**：join() 里 key 还没算出来就调 liveArena
+     // 会得到 null → 上层"场不存在"→ 命令返回 true、控制台无日志。
+     throw new IllegalStateException("FootballArena: liveArena(null) —— 调用点没有先算房间键");
+ }
         FootballArena live = liveArenas.get(key);
         if (live != null) {
             return live;
