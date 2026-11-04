@@ -25,6 +25,12 @@ final class Party {
     /** 派对阶段（WAITING/TRANSITION/ROUND/PODIUM）。 */
     ArcadePartyManager.State state = ArcadePartyManager.State.WAITING;
 
+    /** 这场派对的会话（I1/I4/I5）；每个房间一个。 */
+    ArcadePartySession session;
+
+    /** 这场派对的等待倒计时（每房间一个；host 回调读的是**这个** Party 的队列）。 */
+    com.hub.util.WaitCountdown countdown;
+
     final Set<UUID> waiting = new LinkedHashSet<>();
     final Set<UUID> playing = new LinkedHashSet<>();
     final Map<UUID, Integer> stars = new HashMap<>();
