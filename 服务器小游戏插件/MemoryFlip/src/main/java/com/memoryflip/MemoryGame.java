@@ -35,8 +35,8 @@ final class MemoryGame {
 
     final Set<UUID> waiting = new LinkedHashSet<>();
     final Set<UUID> playing = new LinkedHashSet<>();
-    /** 每个玩家的翻牌进度（类型见 MemoryFlipManager.PlayState，迁移时改成公共类型）。 */
-    final Map<UUID, Object> states = new HashMap<>();
+    /** 每个玩家的翻牌进度。 */
+    final Map<UUID, PlayState> states = new HashMap<>();
     /** 加入时的 tick 与同 tick 内的随机名次（D21：同 tick 的人随机决定主持人）。 */
     final Map<UUID, Long> joinTick = new HashMap<>();
     final Map<UUID, Long> joinSeed = new HashMap<>();

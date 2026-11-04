@@ -57,21 +57,6 @@ public final class MemoryFlipManager {
         WAITING, RUNNING
     }
 
-    private static final class PlayState {
-        int boardIndex;
-        final List<ItemFrame> frames = new ArrayList<>();
-        Material[] items = new Material[0];
-        boolean[] matched = new boolean[0];
-        int pairs;
-        int firstIdx = -1;
-        boolean reviewing;
-        long finishedAt = -1L;
-
-        boolean finished() {
-            return finishedAt > 0;
-        }
-    }
-
     private final MemoryFlipPlugin plugin;
     private final MemoryFlipArena arena;
     private final WaitCountdown countdown;
@@ -100,6 +85,20 @@ public final class MemoryFlipManager {
     }
 
     private MemoryFlipSession session;
+
+    /** 每房间一份的一局状态（D22）；**行为还没切过去**，见 MemoryGame 的迁移步骤。 */
+    private final com.hub.room.RoomScoped<MemoryGame> games = new com.hub.room.RoomScoped<>("memoryflip");
+
+    /** 这个玩家所在房间的那一局状态（取或建）。 */
+    MemoryGame gameFor(org.bukkit.entity.Player p, String arenaName) {
+        return games.of(p, arenaName, key -> new MemoryGame(key, arenaName));
+    }
+
+    /** 当前房间的那一局状态（给没有玩家引用的 tick 用）；没有房间上下文时返回 null。 */
+    MemoryGame currentGame() {
+        String roomId = com.hub.room.RoomContext.currentRoomId();
+        return roomId == null ? null : games.peek(roomId);
+    }
 
     private MemoryFlipSession ensureSession() {
         String key = arenaKey();
