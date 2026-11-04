@@ -62,7 +62,7 @@ public final class TNTBattleCore {
         primary.ensureDefaults();
         for (TNTBattleManager manager : matches.values()) {
             manager.load(manager == primary);
-            plugin.getServer().getPluginManager().registerEvents(new TNTBattleListener(manager), plugin);
+            // I3：本插件已无 Listener —— 事件由框架按归属派发到 TNTBattleSession 的钩子
             plugin.getServer().getPluginManager().registerEvents(manager.music(), plugin);
         }
         Bukkit.getScheduler().runTaskLater(plugin, this::reportAll, 40L);
@@ -164,7 +164,7 @@ public final class TNTBattleCore {
         if (manager == primary) {
             manager.becomePrimary();
         }
-        plugin.getServer().getPluginManager().registerEvents(new TNTBattleListener(manager), plugin);
+        // I3：本插件已无 Listener —— 事件由框架按归属派发到 TNTBattleSession 的钩子
         plugin.getServer().getPluginManager().registerEvents(manager.music(), plugin);
         reportAll();
         return manager;

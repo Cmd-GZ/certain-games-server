@@ -24,7 +24,7 @@ public class DuelPlugin extends JavaPlugin {
             duel.setExecutor(cmd);
             duel.setTabCompleter(cmd);
         }
-        getServer().getPluginManager().registerEvents(new DuelListener(this), this);
+        // I3：本插件已无 Listener —— 事件由框架按归属派发到 Session 的钩子
         // 世界加载完成后刷新所有加入告示牌内容
         org.bukkit.Bukkit.getScheduler().runTaskLater(this, manager::refreshJoinSigns, 20L);
         // 玩家执行 /hub 或右键回主城道具时，HubCore 回调这里把玩家踢出游戏（防递归）

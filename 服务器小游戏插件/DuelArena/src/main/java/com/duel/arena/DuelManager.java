@@ -88,6 +88,11 @@ public class DuelManager {
     private final Map<String, Map<Location, BlockState>> fightPlaced = new LinkedHashMap<>(); // 场名 -> 对战中玩家放置的方块（位置 -> 放置前状态）
 
     private FileConfiguration data;
+    /** I3：会话里的搬迁代码要用到 plugin。 */
+    public DuelPlugin plugin() {
+        return plugin;
+    }
+
 
     public DuelManager(DuelPlugin plugin) {
         this.plugin = plugin;
