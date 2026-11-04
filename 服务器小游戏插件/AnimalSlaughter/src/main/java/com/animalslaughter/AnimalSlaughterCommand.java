@@ -16,15 +16,22 @@ import java.util.Locale;
 public final class AnimalSlaughterCommand implements CommandExecutor, TabCompleter {
 
     private final AnimalSlaughterPlugin plugin;
-    private final AnimalSlaughterManager manager;
+    /** D22：按房间分桶的状态；每个入口按发送者/玩家路由到他自己那一份。 */
+    private final AnimalSlaughterRooms rooms;
 
-    public AnimalSlaughterCommand(AnimalSlaughterPlugin plugin, AnimalSlaughterManager manager) {
+    public AnimalSlaughterCommand(AnimalSlaughterPlugin plugin, AnimalSlaughterRooms rooms) {
         this.plugin = plugin;
-        this.manager = manager;
+        this.rooms = rooms;
+    }
+
+    /** 这个发送者应该操作的房间状态：玩家 → 他自己那一份；控制台 → 最近有人加入的那一份。 */
+    private AnimalSlaughterManager stateOf(CommandSender sender) {
+        return sender instanceof Player p ? rooms.forPlayer(p) : rooms.lastJoined();
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        AnimalSlaughterManager manager = stateOf(sender);
         if (args.length == 0 || args[0].equalsIgnoreCase("help")) {
             help(sender);
             return true;
@@ -34,13 +41,13 @@ public final class AnimalSlaughterCommand implements CommandExecutor, TabComplet
             case "join" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.join(player);
+                    rooms.join(player);
                 }
             }
             case "leave" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.leave(player, false);
+                    rooms.leave(player, false);
                 }
             }
             case "list" -> list(sender);
@@ -162,6 +169,7 @@ public final class AnimalSlaughterCommand implements CommandExecutor, TabComplet
 
     /** 站到场地中心后执行：写入圆心+半径，铺一格厚草方块圆盘，并清空旧出生点。 */
     private void setArena(CommandSender sender, String[] args) {
+        AnimalSlaughterManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -211,6 +219,7 @@ public final class AnimalSlaughterCommand implements CommandExecutor, TabComplet
     }
 
     private void list(CommandSender sender) {
+        AnimalSlaughterManager manager = stateOf(sender);
         Chat.send(sender, "&6===== 动物屠宰 =====");
         Chat.send(sender, "&7状态：&e" + manager.state() + " &7等待 &e" + manager.waitingCount()
                 + " &7场内 &e" + manager.playingCount());
@@ -235,6 +244,7 @@ public final class AnimalSlaughterCommand implements CommandExecutor, TabComplet
     }
 
     private void stats(CommandSender sender, String[] args) {
+        AnimalSlaughterManager manager = stateOf(sender);
         if (!(sender instanceof Player player)) {
             Chat.send(sender, "&c该命令需要玩家执行。");
             return;
@@ -277,6 +287,7 @@ public final class AnimalSlaughterCommand implements CommandExecutor, TabComplet
     }
 
     private boolean admin(CommandSender sender) {
+        AnimalSlaughterManager manager = stateOf(sender);
         if (sender instanceof Player player) {
             if (!manager.isAdmin(player)) {
                 Chat.send(sender, "&c你没有权限执行该指令。");
@@ -305,7 +316,7 @@ public final class AnimalSlaughterCommand implements CommandExecutor, TabComplet
         List<String> out = new ArrayList<>();
         if (args.length == 1) {
             List<String> subs = new ArrayList<>(List.of("join", "leave", "list", "stats", "help"));
-            boolean admin = !(sender instanceof Player player) || manager.isAdmin(player);
+            boolean admin = !(sender instanceof Player player) || rooms.forPlayer(player).isAdmin(player);
             if (admin) {
                 subs.addAll(List.of("start", "stop", "setarena", "setlobby", "addspawn",
                         "clearspawns", "genspawns", "save", "reload"));

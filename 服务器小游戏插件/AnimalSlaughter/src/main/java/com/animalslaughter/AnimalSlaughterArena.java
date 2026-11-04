@@ -17,11 +17,51 @@ import java.util.Random;
 public final class AnimalSlaughterArena {
 
     private final JavaPlugin plugin;
+
+    /**
+     * D22：这个场地实例**钉死**的房间世界（每个房间一份实例）。
+     *
+     * <p>{@link com.hub.room.RoomBinding} 是"按游戏一个槽"，两房间同时跑时后一个覆盖前一个 ——
+     * 甲房的实例会读到乙房的世界（人被传错房间）。钉死之后读取只认自己的世界。
+     */
+    private World roomWorld;
+
+    public void bindWorld(World world) {
+        this.roomWorld = world;
+    }
+
+    public World boundWorld() {
+        return roomWorld;
+    }
+
+    /**
+     * 读坐标时的世界解析：**钉死了就只认自己的房间世界**，没钉才退回按上下文的换绑。
+     *
+     * <p>为什么钉死之后**不能**再回落 {@link com.hub.room.RoomBinding}：它先看"派对委派"、
+     * 再看"该游戏唯一的房间"，两者都是**按游戏一个槽**。两个房间同时跑时它会给出**另一个房间**
+     * 的世界，于是同一份代码里 {@code arena.world()}（自己的世界）和 {@code arena.center()}（别人的世界）
+     * 对不上，`World#getNearbyEntities(loc, …)` 直接抛
+     * {@code IllegalArgumentException: Location cannot be in a different world}
+     * （实测：关服时 removeDrops 就这么炸的）。
+     */
+    private Location apply(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld != null) {
+            if (roomWorld.equals(loc.getWorld())) {
+                return loc;
+            }
+            return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+        }
+        return com.hub.room.RoomBinding.apply("animalslaughter", loc);
+    }
+
     private Location center;
 
     /** 供区域声明用（{@code docs/框架不变量.md} I2）。 */
     public Location getCenter() {
-        return  com.hub.room.RoomBinding.apply("animalslaughter", center);
+        return apply(center);
     }
     private int radius = 16;
     private Location lobby;
@@ -49,17 +89,22 @@ public final class AnimalSlaughterArena {
         plugin.reloadConfig();
         FileConfiguration cfg = plugin.getConfig();
         // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
-        if (center != null) {
-            cfg.set("arena.center", encode(center));
+        String centerToken = encode(center);
+        if (centerToken != null) {
+            cfg.set("arena.center", centerToken);
         }
         cfg.set("arena.radius", radius);
         // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
-        if (lobby != null) {
-            cfg.set("arena.lobby", encode(lobby));
+        String lobbyToken = encode(lobby);
+        if (lobbyToken != null) {
+            cfg.set("arena.lobby", lobbyToken);
         }
         List<String> encoded = new ArrayList<>();
         for (Location spawn : spawns) {
-            encoded.add(encode(spawn));
+            String token = encode(spawn);
+            if (token != null) {
+                encoded.add(token);
+            }
         }
         if (!encoded.isEmpty()) {
             cfg.set("arena.spawns", encoded);
@@ -231,16 +276,16 @@ public final class AnimalSlaughterArena {
     }
 
     public Location center() {
-        return  com.hub.room.RoomBinding.apply("animalslaughter", center == null ? null : center.clone());
+        return apply(center == null ? null : center.clone());
     }
 
     /** 旁观/观战视角：圆心上方 6 格。 */
     public Location spectatorSpot() {
-        return  com.hub.room.RoomBinding.apply("animalslaughter", center == null ? null : center.clone().add(0, 6, 0));
+        return apply(center == null ? null : center.clone().add(0, 6, 0));
     }
 
     public Location getLobby() {
-        return  com.hub.room.RoomBinding.apply("animalslaughter", lobby);
+        return apply(lobby);
     }
 
     public void setLobby(Location lobby) {
@@ -273,8 +318,20 @@ public final class AnimalSlaughterArena {
         this.center = center == null ? null : center.clone();
     }
 
+    /**
+     * 场地所在世界：**必须和 {@link #center()} 走同一套解析**。
+     *
+     * <p>否则会出现"世界是 A 房、坐标是 B 房"的组合，`World#getNearbyEntities(loc, …)` 直接抛
+     * {@code IllegalArgumentException: Location cannot be in a different world}
+     * （实测：两派对同时跑、关服时 `removeDrops` 就这么炸的 —— 默认实例没有钉世界，
+     * 而 `RoomBinding` 的派对委派指向了另一个房间）。
+     */
     public World world() {
-        return center == null ? null : center.getWorld();
+        if (roomWorld != null) {
+            return roomWorld;
+        }
+        Location resolved = com.hub.room.RoomBinding.apply("animalslaughter", center);
+        return resolved == null ? null : resolved.getWorld();
     }
 
     /** 液体不算地面（水面/岩浆面不能站动物）。 */
@@ -285,12 +342,23 @@ public final class AnimalSlaughterArena {
                 || type == Material.SEAGRASS || type == Material.TALL_SEAGRASS;
     }
 
+    /**
+     * 坐标 → 存档 token；**写不了时返回 null**（调用方跳过，保留磁盘上的原值）。
+     *
+     * <p>房间世界名（{@code room_xxx_1}）一旦写进配置，房间销毁后这份配置就永远"未配置"了
+     * （真实事故同款）。反查不到模板时 {@link com.hub.world.Worlds#tokenOf} 会退回原始房间名，
+     * 那种情况一律不写。
+     */
     private static String encode(Location loc) {
         if (loc == null || loc.getWorld() == null) {
-            return "";
+            return null;
+        }
+        String token = com.hub.world.Worlds.tokenOf(loc.getWorld());
+        if (token == null || token.isBlank() || token.startsWith("room_")) {
+            return null;
         }
         return String.format(Locale.ROOT, "%s,%.2f,%.2f,%.2f,%.1f,%.1f",
-                com.hub.world.Worlds.tokenOf(loc.getWorld()), loc.getX(), loc.getY(), loc.getZ(),
+                token, loc.getX(), loc.getY(), loc.getZ(),
                 loc.getYaw(), loc.getPitch());
     }
 

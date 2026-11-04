@@ -71,6 +71,11 @@ public final class AnimalSlaughterManager {
     private static final List<String> KINDS = List.of("chicken", "pig", "cow");
 
     private final AnimalSlaughterPlugin plugin;
+    /**
+     * D22：这个实例负责的**房间键**（有房间时 = 房间 id；没有房间时 = {@link #ARENA}）。
+     * 每个房间一份实例 = 一份运行时状态，所以两场派对不会互相踩。
+     */
+    private final String roomKey;
     private final AnimalSlaughterArena arena;
     private final NamespacedKey returnKey;
     private final NamespacedKey startKey;
@@ -92,7 +97,7 @@ public final class AnimalSlaughterManager {
     private AnimalSlaughterSession session;
 
     private AnimalSlaughterSession ensureSession() {
-        String key = "main";
+        String key = roomKey;   // D22：每房间一个会话（否则两场派对共用同一份会话）
         AnimalSlaughterSession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
             s = new AnimalSlaughterSession(this, key);
@@ -153,7 +158,12 @@ public final class AnimalSlaughterManager {
     }
 
     public AnimalSlaughterManager(AnimalSlaughterPlugin plugin) {
+        this(plugin, ARENA);
+    }
+
+    public AnimalSlaughterManager(AnimalSlaughterPlugin plugin, String roomKey) {
         this.plugin = plugin;
+        this.roomKey = roomKey == null || roomKey.isBlank() ? ARENA : roomKey;
         this.arena = new AnimalSlaughterArena(plugin);
         this.returnKey = new NamespacedKey(plugin, "return_item");
         this.startKey = new NamespacedKey(plugin, "start_item");
@@ -503,9 +513,11 @@ public final class AnimalSlaughterManager {
 
     /** 声明地盘（{@code docs/框架不变量.md} 的 I2）。 */
     public void publishRegions() {
-        com.hub.region.Regions.begin("animalslaughter");
+        if (roomKey.equals(ARENA)) {
+            com.hub.region.Regions.begin("animalslaughter");   // 只有默认实例负责"清掉上一轮"
+        }
         if (arena != null) {
-            com.hub.region.Regions.disc("animalslaughter", "", arena.getCenter(), arena.getRadius(),
+            com.hub.region.Regions.disc("animalslaughter", roomKey, arena.getCenter(), arena.getRadius(),
                     com.hub.region.Regions.DEFAULT_DISC_HEIGHT);
         }
     }
@@ -517,6 +529,21 @@ public final class AnimalSlaughterManager {
 
     public AnimalSlaughterArena arena() {
         return arena;
+    }
+
+    /** D22：本实例负责的房间键。 */
+    public String roomKey() {
+        return roomKey;
+    }
+
+    /** 菜单/日志里用的场地名：默认实例仍叫「主场地」，房间实例用房间 id。 */
+    public String arenaLabel() {
+        return roomKey;
+    }
+
+    /** 这个实例是不是已经空着（外层据此回收房间实例）。 */
+    public boolean idle() {
+        return state == State.WAITING && waiting.isEmpty() && playing.isEmpty();
     }
 
     public State state() {
@@ -577,31 +604,41 @@ public final class AnimalSlaughterManager {
         return minPlayers();
     }
 
-    public void join(Player player) {
+    /**
+     * 玩家加入这一份状态。
+     *
+     * @return 真的进去了（外层据此决定要不要记"这个人在哪个房间"）
+     */
+    public boolean join(Player player) {
         UUID id = player.getUniqueId();
         if (state != State.WAITING) {
             Chat.send(player, "&c对局正在进行中，请等这一局结束后再加入。");
-            return;
+            return false;
         }
         if (waiting.contains(id)) {
             Chat.send(player, "&e你已经在等待队列中。");
-            return;
+            return false;
         }
         if (waiting.size() >= maxPlayers()) {
             Chat.send(player, "&c等待队列已满（" + maxPlayers() + " 人）。");
-            return;
+            return false;
         }
         if (!arena.isReady()) {
             Chat.send(player, "&c场地还没配置完整（缺 " + arena.missing() + "），请联系管理员。");
-            return;
+            return false;
+        }
+        // I1（D23）：**先挂会话再入队**；冲突直接拒绝，绝不留下"队列里有他、归属链上没他"的半加入状态
+        AnimalSlaughterSession sess = ensureSession();
+        if (sess != null && !sess.join(player)) {
+            if (sess.players().isEmpty()) {
+                sessions.remove(roomKey);
+            }
+            plugin.getLogger().warning("[AnimalSlaughter] " + player.getName() + " 加入归属链失败（见 [被吞异常]）");
+            return false;
         }
         waiting.add(id);
         joinTick.put(id, (long) Bukkit.getCurrentTick());
         joinSeed.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
-        ensureSession();
-        if (session != null && !session.join(player)) {
-            plugin.getLogger().warning("[AnimalSlaughter] " + player.getName() + " 加入归属链失败（见 [被吞异常]）");
-        }
         player.getInventory().clear();
         player.setGameMode(GameMode.SURVIVAL);
         resetPlayer(player);
@@ -613,6 +650,7 @@ public final class AnimalSlaughterManager {
         Chat.send(player, "&7人数达到 &f" + minPlayers() + " &7后自动倒计时开始。");
         updateCountdown();
         reportArena();
+        return true;
     }
 
     public void leave(Player player, boolean silent) {
@@ -759,7 +797,7 @@ public final class AnimalSlaughterManager {
                 p.setVelocity(new Vector(0, 0, 0));
             }
         }
-        HubAPI.setArenaSpectator(GAME, ARENA, arena.spectatorSpot());
+        HubAPI.setArenaSpectator(GAME, arenaLabel(), arena.spectatorSpot());
         // 开局就把动物刷出来（倒计时期间玩家还不能砍），计时开始后继续补
         for (int i = 0; i < 4; i++) {
             spawnCycle();
@@ -1605,9 +1643,9 @@ public final class AnimalSlaughterManager {
                 : (state == State.RUNNING
                 ? "剩余 " + secondsLeft + "s · " + playing.size() + " 人"
                 : null);
-        HubAPI.setArena(GAME, ARENA, running ? GameState.PLAYING : GameState.WAITING,
+        HubAPI.setArena(GAME, arenaLabel(), running ? GameState.PLAYING : GameState.WAITING,
                 waiting.size() + playing.size(), extra);
-        HubAPI.setArenaSpectator(GAME, ARENA, arena.spectatorSpot());
+        HubAPI.setArenaSpectator(GAME, arenaLabel(), arena.spectatorSpot());
     }
 
     private void broadcast(String message) {
