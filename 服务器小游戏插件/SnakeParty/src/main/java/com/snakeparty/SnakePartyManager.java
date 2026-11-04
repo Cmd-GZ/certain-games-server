@@ -58,6 +58,11 @@ public final class SnakePartyManager {
     }
 
     private final SnakePartyPlugin plugin;
+    /**
+     * D22：这个实例负责的**房间键**（有房间时 = 房间 id；没有房间时 = {@link #ARENA}）。
+     * 每个房间一份实例 = 一份运行时状态，所以两场派对不会互相踩。
+     */
+    private final String roomKey;
     private final SnakePartyArena arena;
     private final NamespacedKey returnKey;
     private final NamespacedKey startKey;
@@ -67,6 +72,8 @@ public final class SnakePartyManager {
     private final java.util.Map<UUID, Long> joinSeed = new java.util.HashMap<>();
     private final Random random = new Random();
     private final LiveSidebar liveSidebar;
+    /** 侧边栏/世界条目的键：每房间一份，否则两个房间会互相覆盖（D22）。 */
+    private final String sidebarKey;
 
     private State state = State.WAITING;
     /** D22：会话层统一按场地键索引（单图游戏只有一个键）。 */
@@ -76,7 +83,7 @@ public final class SnakePartyManager {
     private SnakePartySession session;
 
     private SnakePartySession ensureSession() {
-        String key = "main";
+        String key = roomKey;   // D22：每房间一个会话（否则第二场派对共用同一份会话）
         SnakePartySession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
             s = new SnakePartySession(this, key);
@@ -143,7 +150,13 @@ public final class SnakePartyManager {
     }
 
     public SnakePartyManager(SnakePartyPlugin plugin) {
+        this(plugin, ARENA);
+    }
+
+    public SnakePartyManager(SnakePartyPlugin plugin, String roomKey) {
         this.plugin = plugin;
+        this.roomKey = roomKey == null || roomKey.isBlank() ? ARENA : roomKey;
+        this.sidebarKey = "snakeparty:" + this.roomKey;
         this.liveSidebar = new LiveSidebar(plugin);
         this.arena = new SnakePartyArena(plugin);
         this.returnKey = new NamespacedKey(plugin, "return_item");
@@ -370,16 +383,18 @@ public final class SnakePartyManager {
 
     public void shutdown() {
         cancelTasks();
-        liveSidebar.hideAll();
+        liveSidebar.hide(sidebarKey);
         restorePlates();
         saveAll();
     }
 
     /** 声明地盘（{@code docs/框架不变量.md} 的 I2）。 */
     public void publishRegions() {
-        com.hub.region.Regions.begin("snakeparty");
+        if (roomKey.equals(ARENA)) {
+            com.hub.region.Regions.begin("snakeparty");   // 只有默认实例负责"清掉上一轮"
+        }
         if (arena != null) {
-            com.hub.region.Regions.disc("snakeparty", "", arena.getCenter(), arena.getRadius(),
+            com.hub.region.Regions.disc("snakeparty", roomKey, arena.getCenter(), arena.getRadius(),
                     com.hub.region.Regions.DEFAULT_DISC_HEIGHT);
         }
     }
@@ -442,6 +457,16 @@ public final class SnakePartyManager {
         return arena;
     }
 
+    /** D22：本实例负责的房间键。 */
+    public String roomKey() {
+        return roomKey;
+    }
+
+    /** 菜单/日志里用的场地名：默认实例仍叫「主场地」，房间实例用房间 id。 */
+    public String arenaLabel() {
+        return roomKey;
+    }
+
     public State state() {
         return state;
     }
@@ -456,6 +481,11 @@ public final class SnakePartyManager {
 
     public boolean isPlaying(Player player) {
         return playing.contains(player.getUniqueId());
+    }
+
+    /** 这个实例是不是已经空着（没人等、没人在打）：外层据此回收房间实例。 */
+    public boolean idle() {
+        return state == State.WAITING && waiting.isEmpty() && playing.isEmpty() && eliminated.isEmpty();
     }
 
     public boolean isInGame(Player player) {
@@ -497,30 +527,31 @@ public final class SnakePartyManager {
         return minPlayers();
     }
 
-    public void join(Player player) {
+    /** 玩家加入本房间的等待队列；返回是否真的加进去了（D22：外层按房间路由要用）。 */
+    public boolean join(Player player) {
         UUID id = player.getUniqueId();
         if (state != State.WAITING) {
             Chat.send(player, "&c对局正在进行中，请等这一局结束后再加入。");
-            return;
+            return false;
         }
         if (waiting.contains(id)) {
             Chat.send(player, "&e你已经在等待队列中。");
-            return;
+            return false;
         }
         if (waiting.size() >= maxPlayers()) {
             Chat.send(player, "&c等待队列已满（" + maxPlayers() + " 人）。");
-            return;
+            return false;
         }
         if (!arena.isReady()) {
             Chat.send(player, "&c场地还没配置完整（缺 " + arena.missing() + "），请联系管理员。");
-            return;
+            return false;
         }
         // I1（D23）：先挂会话再入队；失败就拒绝，避免"队列里有他、归属链上没他"的半加入
         ensureSession();
         if (session != null && !session.join(player)) {
             Chat.send(player, "&c你正在另一局游戏里，请先退出再加入（右键 &f回主城&c 或输入 &f/hub&c）。");
             plugin.getLogger().warning("[SnakeParty] " + player.getName() + " 已在别的对局，拒绝加入");
-            return;
+            return false;
         }
         waiting.add(id);
         joinTick.put(id, (long) Bukkit.getCurrentTick());
@@ -536,6 +567,7 @@ public final class SnakePartyManager {
         Chat.send(player, "&7人数达到 &f" + minPlayers() + " &7后自动倒计时开始。");
         updateCountdown();
         reportArena();
+        return true;
     }
 
     public void leave(Player player, boolean silent) {
@@ -685,7 +717,7 @@ public final class SnakePartyManager {
                 lastFloor.put(id, key(spawn.getBlockX(), spawn.getBlockY() - 1, spawn.getBlockZ()));
             }
         }
-        HubAPI.setArenaSpectator(GAME, ARENA, arena.spectatorSpot());
+        HubAPI.setArenaSpectator(GAME, arenaLabel(), arena.spectatorSpot());
         broadcast("&6&l========== " + GAME + " 开始 ==========");
         broadcast("&f倒计时结束后所有人会沿视线自动前进，脚下会留下自己的玻璃板。");
         broadcast("&7撞到玻璃板（自己的也算）或掉出场地就淘汰，活到最后获胜。");
@@ -750,7 +782,7 @@ public final class SnakePartyManager {
     public void stopGame() {
         if (state == State.COUNTDOWN) {
             cancelTasks();
-            liveSidebar.hide("snakeparty");
+            liveSidebar.hide(sidebarKey);
             restorePlates();
             for (UUID id : new ArrayList<>(playing)) {
                 Player p = Bukkit.getPlayer(id);
@@ -795,7 +827,7 @@ public final class SnakePartyManager {
             return;
         }
         cancelTasks();
-        liveSidebar.hide("snakeparty");
+        liveSidebar.hide(sidebarKey);
         restorePlates();
         state = State.WAITING;
         secondsLeft = 0;
@@ -1021,7 +1053,7 @@ public final class SnakePartyManager {
         for (UUID id : online) {
             lines.add(new LiveSidebar.Line("§e" + nameOf(id), 0));
         }
-        liveSidebar.update("snakeparty", "&a&l蛇行派对 · 存活", online, lines);
+        liveSidebar.update(sidebarKey, "&a&l蛇行派对 · 存活", online, lines);
     }
 
     private void updateActionBar() {
@@ -1381,9 +1413,9 @@ public final class SnakePartyManager {
         String extra = state == State.COUNTDOWN
                 ? "准备中 · " + playing.size() + " 人"
                 : (state == State.RUNNING ? "剩余 " + secondsLeft + "s · " + playing.size() + " 人" : null);
-        HubAPI.setArena(GAME, ARENA, running ? GameState.PLAYING : GameState.WAITING,
+        HubAPI.setArena(GAME, arenaLabel(), running ? GameState.PLAYING : GameState.WAITING,
                 waiting.size() + playing.size() + eliminated.size(), extra);
-        HubAPI.setArenaSpectator(GAME, ARENA, arena.spectatorSpot());
+        HubAPI.setArenaSpectator(GAME, arenaLabel(), arena.spectatorSpot());
     }
 
     private void broadcast(String message) {

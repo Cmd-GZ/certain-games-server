@@ -18,9 +18,42 @@ public final class SnakePartyArena {
     private final JavaPlugin plugin;
     private Location center;
 
+    /**
+     * D22：这个场地实例**钉死**的房间世界（每个房间一份）。
+     *
+     * <p>为什么要钉死而不是每次读都走 {@link com.hub.room.RoomBinding}：
+     * 房间换绑是"按游戏一个槽"，两个房间同时跑时后一个会覆盖前一个，
+     * 于是 A 房的实例会读到 B 房的世界（人就被传错房间了）。
+     * 每个房间的实例在创建时绑定自己的世界，之后**不再看外面的上下文**。
+     */
+    private World roomWorld;
+
+    /** 把本实例钉到某个房间世界；null = 不钉（老的单场地行为，读的时候才换绑）。 */
+    public void bindWorld(World world) {
+        this.roomWorld = world;
+    }
+
+    public World boundWorld() {
+        return roomWorld;
+    }
+
+    /**
+     * 读坐标时的世界解析：钉死的房间世界优先，没钉才退回按上下文的换绑。
+     * 存储值（配置里的坐标）永远不动 —— 见 {@code RoomBinding} 的说明。
+     */
+    private Location apply(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld != null && !roomWorld.equals(loc.getWorld())) {
+            return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+        }
+        return com.hub.room.RoomBinding.apply("snakeparty", loc);
+    }
+
     /** 供区域声明用（{@code docs/框架不变量.md} I2）。 */
     public Location getCenter() {
-        return  com.hub.room.RoomBinding.apply("snakeparty", center);
+        return apply(center);
     }
     private int radius = 16;
     private Material floorMaterial = Material.STONE;
@@ -53,19 +86,24 @@ public final class SnakePartyArena {
         plugin.reloadConfig();
         FileConfiguration cfg = plugin.getConfig();
         // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
-        if (center != null) {
-            cfg.set("arena.center", encode(center));
+        String centerToken = encode(center);
+        if (centerToken != null) {
+            cfg.set("arena.center", centerToken);
         }
         cfg.set("arena.radius", radius);
         cfg.set("arena.floor-material", floorMaterial.name());
         cfg.set("arena.floor-layers", floorLayers);
         // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
-        if (lobby != null) {
-            cfg.set("arena.lobby", encode(lobby));
+        String lobbyToken = encode(lobby);
+        if (lobbyToken != null) {
+            cfg.set("arena.lobby", lobbyToken);
         }
         List<String> encoded = new ArrayList<>();
         for (Location spawn : spawns) {
-            encoded.add(encode(spawn));
+            String token = encode(spawn);
+            if (token != null) {
+                encoded.add(token);
+            }
         }
         if (!encoded.isEmpty()) {
             cfg.set("arena.spawns", encoded);
@@ -200,7 +238,7 @@ public final class SnakePartyArena {
     }
 
     public Location center() {
-        return  com.hub.room.RoomBinding.apply("snakeparty", center == null ? null : center.clone());
+        return apply(center == null ? null : center.clone());
     }
 
     public void setCenter(Location center) {
@@ -209,7 +247,7 @@ public final class SnakePartyArena {
 
     /** 旁观/观战视角：中心上方 8 格。 */
     public Location spectatorSpot() {
-        return  com.hub.room.RoomBinding.apply("snakeparty", center == null ? null : center.clone().add(0, 8, 0));
+        return apply(center == null ? null : center.clone().add(0, 8, 0));
     }
 
     public World world() {
@@ -233,7 +271,7 @@ public final class SnakePartyArena {
     }
 
     public Location getLobby() {
-        return  com.hub.room.RoomBinding.apply("snakeparty", lobby);
+        return apply(lobby);
     }
 
     public void setLobby(Location lobby) {
@@ -287,12 +325,24 @@ public final class SnakePartyArena {
                 || type == Material.SEAGRASS || type == Material.TALL_SEAGRASS;
     }
 
+    /**
+     * 坐标 → 存档 token；**写不了时返回 null**（调用方跳过，保留磁盘上的原值）。
+     *
+     * <p>为什么要防这个：房间世界名（{@code room_xxx_1}）如果被写进配置，房间一销毁这份配置
+     * 就永远"场地未配置"了（真实事故：LuckyPillar 的 world 被写成 {@code room_lp21_1}，
+     * 看起来像代码回归）。{@link com.hub.world.Worlds#tokenOf} 只在能反查到模板时才给
+     * {@code tpl:} 令牌，反查不到时会给原始房间名 —— 那种情况一律不写。
+     */
     private static String encode(Location loc) {
         if (loc == null || loc.getWorld() == null) {
-            return "";
+            return null;
+        }
+        String token = com.hub.world.Worlds.tokenOf(loc.getWorld());
+        if (token == null || token.isBlank() || token.startsWith("room_")) {
+            return null;
         }
         return String.format(Locale.ROOT, "%s,%.2f,%.2f,%.2f,%.1f,%.1f",
-                com.hub.world.Worlds.tokenOf(loc.getWorld()), loc.getX(), loc.getY(), loc.getZ(),
+                token, loc.getX(), loc.getY(), loc.getZ(),
                 loc.getYaw(), loc.getPitch());
     }
 

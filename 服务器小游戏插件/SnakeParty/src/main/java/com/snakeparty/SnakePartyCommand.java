@@ -16,15 +16,22 @@ import java.util.Locale;
 public final class SnakePartyCommand implements CommandExecutor, TabCompleter {
 
     private final SnakePartyPlugin plugin;
-    private final SnakePartyManager manager;
+    /** D22：按房间分桶的状态；每个入口按发送者/玩家路由到他自己那一份。 */
+    private final SnakePartyRooms rooms;
 
-    public SnakePartyCommand(SnakePartyPlugin plugin, SnakePartyManager manager) {
+    public SnakePartyCommand(SnakePartyPlugin plugin, SnakePartyRooms rooms) {
         this.plugin = plugin;
-        this.manager = manager;
+        this.rooms = rooms;
+    }
+
+    /** 这个发送者应该操作的房间状态：玩家 → 他自己那一份；控制台 → 最近有人加入的那一份。 */
+    private SnakePartyManager stateOf(CommandSender sender) {
+        return sender instanceof Player p ? rooms.forPlayer(p) : rooms.lastJoined();
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        SnakePartyManager manager = stateOf(sender);
         if (args.length == 0 || args[0].equalsIgnoreCase("help")) {
             help(sender);
             return true;
@@ -34,13 +41,13 @@ public final class SnakePartyCommand implements CommandExecutor, TabCompleter {
             case "join" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.join(player);
+                    rooms.join(player);
                 }
             }
             case "leave" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.leave(player, false);
+                    rooms.leave(player, false);
                 }
             }
             case "list" -> list(sender);
@@ -163,6 +170,7 @@ public final class SnakePartyCommand implements CommandExecutor, TabCompleter {
      * setarena：以脚下为圆心写入半径并铺平台；setarea：只划范围不动方块（自己搭平台用）。
      */
     private void setArea(CommandSender sender, String[] args, boolean build) {
+        SnakePartyManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -219,6 +227,7 @@ public final class SnakePartyCommand implements CommandExecutor, TabCompleter {
     }
 
     private void list(CommandSender sender) {
+        SnakePartyManager manager = stateOf(sender);
         Chat.send(sender, "&6===== 蛇行派对 =====");
         Chat.send(sender, "&7状态：&e" + manager.state() + " &7等待 &e" + manager.waitingCount()
                 + " &7场内 &e" + manager.playingCount() + " &7淘汰 &e" + manager.eliminatedCount());
@@ -241,6 +250,7 @@ public final class SnakePartyCommand implements CommandExecutor, TabCompleter {
     }
 
     private void stats(CommandSender sender, String[] args) {
+        SnakePartyManager manager = stateOf(sender);
         if (!(sender instanceof Player player)) {
             Chat.send(sender, "&c该命令需要玩家执行。");
             return;
@@ -284,6 +294,7 @@ public final class SnakePartyCommand implements CommandExecutor, TabCompleter {
     }
 
     private boolean admin(CommandSender sender) {
+        SnakePartyManager manager = stateOf(sender);
         if (sender instanceof Player player) {
             if (!manager.isAdmin(player)) {
                 Chat.send(sender, "&c你没有权限执行该指令。");
@@ -312,6 +323,7 @@ public final class SnakePartyCommand implements CommandExecutor, TabCompleter {
         List<String> out = new ArrayList<>();
         if (args.length == 1) {
             List<String> subs = new ArrayList<>(List.of("join", "leave", "list", "stats", "help"));
+            SnakePartyManager manager = stateOf(sender);
             boolean admin = !(sender instanceof Player player) || manager.isAdmin(player);
             if (admin) {
                 subs.addAll(List.of("start", "stop", "setarena", "setarea", "setlobby", "addspawn",
