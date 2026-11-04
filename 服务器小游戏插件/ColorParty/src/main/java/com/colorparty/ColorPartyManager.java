@@ -781,7 +781,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** 真正的收场逻辑（由 session.onEnd 回调）。 */
     void doEndGame(String arenaName) {
-        ColorPartyArena a = arenas.get(arenaName);
+        ColorPartyArena a = arenaByName(arenaName);
         if (a == null) {
             return;
         }
@@ -916,7 +916,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     // ---------- 等待倒计时 ----------
 
     public int waitingCountOf(String arenaName) {
-        ColorPartyArena a = arenas.get(arenaName);
+        ColorPartyArena a = arenaByName(arenaName);
         return a == null ? 0 : a.getPlayers().size();
     }
 
@@ -932,7 +932,8 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (a == null || p == null) {
             return false;
         }
-        UUID host = waits.computeIfAbsent(a.getName(), n -> null) == null ? null : waits.get(a.getName()).currentHost();
+        WaitCountdown wc = waits.get(a.roomKey());
+        UUID host = wc == null ? null : wc.currentHost();
         return host != null && host.equals(p.getUniqueId());
     }
 
@@ -942,7 +943,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** 取（或创建）该场的等待倒计时实例：规则（OP 暂停 / 人数不足取消 / 满人 3s / 达标 30s）在库里。 */
     private WaitCountdown wait(ColorPartyArena a) {
-        return waits.computeIfAbsent(a.getName(), n -> new WaitCountdown(plugin, new WaitCountdown.Host() {
+        return waits.computeIfAbsent(a.roomKey(), n -> new WaitCountdown(plugin, new WaitCountdown.Host() {
             @Override
             public Collection<UUID> waitingPlayers() {
                 return a.getPlayers();

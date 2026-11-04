@@ -108,17 +108,34 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
      * → ③ 兜底实例。所以"只有一场派对"时行为和以前完全一样。
      */
     Party party() {
+        Party mine = partyForCurrent();
+        if (mine != null) {
+            return mine;
+        }
+        // 没有房间上下文（老路径 / 调度线程）：退回"派对房间"，再不行用兜底实例
+        var r = partyRoom();
+        if (r == null) {
+            return fallbackParty;
+        }
+        final String key = r.roomId;
+        return parties.ofKey(key, k -> new Party());
+    }
+
+    /**
+     * 只按**上下文/显式指定**取当前派对，**不回退到 partyRoom()**。
+     *
+     * <p>为什么单独拆出来：`partyRoom()` 里要用"当前派对记得的房间"来判断，
+     * 如果它回头再调 `party()`，而 `party()` 又用 `partyRoom()` 兜底 —— 就是无限递归
+     * （实测直接 `StackOverflowError` 把插件搞崩）。
+     */
+    private Party partyForCurrent() {
         Party forced = forcedParty.get();
         if (forced != null) {
             return forced;   // 调度回调显式指定的那一场
         }
         String roomId = com.hub.room.RoomContext.currentRoomId();
         if (roomId == null) {
-            var r = partyRoom();
-            roomId = (r == null) ? null : r.roomId;
-        }
-        if (roomId == null) {
-            return fallbackParty;
+            return null;
         }
         final String key = roomId;
         return parties.ofKey(key, k -> new Party());
@@ -611,6 +628,16 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
 
     /** 派对当前所在的房间（房间化之后由它提供世界与场地）；没有则 null。 */
     private com.hub.room.RoomManager.Room partyRoom() {
+        // ① **当前派对自己记着的房间**（两场派对并存时唯一正确的来源；
+        //    真实事故：两个派对房间时，委派日志两行都写着 room_pd1 —— 第二场的人被送进第一场的世界）
+        Party mine0 = partyForCurrent();
+        String own = mine0 == null ? null : mine0.roomId;
+        if (own != null && !own.isBlank()) {
+            com.hub.room.RoomManager.Room mine = com.hub.room.RoomManager.room(own);
+            if (mine != null) {
+                return mine;
+            }
+        }
         // 注意：本类的 GAME 是**显示名**（"街机派对"），而房间的 game 是**游戏 key**（arcadeparty）。
         // 两者不能混用 —— 混了的结果是"房间明明在，派对却看不见它"（池子不取交集、也不委派）。
         // ① 框架在 /hub join 时告诉我们的房间（唯一可靠来源：多房间时 activeFor 会返回 null）
@@ -747,6 +774,11 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         if (party().waiting.contains(id)) {
             Chat.send(player, "&e你已经在派对等待队列中。");
             return;
+        }
+        // 记下这一场派对在哪个房间（委派/取世界都用它，别用全局的"最后一个 join 的房间"）
+        String joinedRoom = com.hub.room.RoomContext.roomIdOfPlayer(id);
+        if (joinedRoom != null) {
+            party().roomId = joinedRoom;
         }
         if (party().waiting.size() >= maxPlayers()) {
             Chat.send(player, "&c派对等待队列已满（" + maxPlayers() + " 人）。");

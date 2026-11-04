@@ -25,6 +25,9 @@ final class Party {
     /** 派对阶段（WAITING/TRANSITION/ROUND/PODIUM）。 */
     ArcadePartyManager.State state = ArcadePartyManager.State.WAITING;
 
+    /** 这场派对所在的房间 id（D22：两场派对并存时，委派/取世界必须用**自己的**房间） */
+    String roomId;
+
     /** 这场派对的会话（I1/I4/I5）；每个房间一个。 */
     ArcadePartySession session;
 
