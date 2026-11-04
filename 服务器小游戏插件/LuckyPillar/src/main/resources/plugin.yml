@@ -1,5 +1,5 @@
 name: LuckyPillar
-version: '1.6.0'
+version: '1.7.0'
 main: com.luckypillar.LuckyPillarPlugin
 api-version: '1.21'
 description: 幸运之柱：柱阵、世界边境缩圈、随机幸运物品、箭雨/苦力怕雨/TNT 雨

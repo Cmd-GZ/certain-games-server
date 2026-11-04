@@ -119,6 +119,17 @@ public class LuckyPillarArena {
         this.name = name;
     }
 
+    /** 房间键（D22）：场地名是"哪张地图"，它是"哪个房间的那一局"。 */
+    private String roomKey;
+
+    public String roomKey() {
+        return roomKey == null ? getName() : roomKey;
+    }
+
+    public void setRoomKey(String roomKey) {
+        this.roomKey = roomKey;
+    }
+
     public String getName() {
         return name;
     }
@@ -655,9 +666,8 @@ public class LuckyPillarArena {
      */
     public void save(ConfigurationSection sec) {
         World w = getWorld();
-        if (w != null) {
-            sec.set("world", com.hub.world.Worlds.tokenOf(w));   // R2：房间实例 → tpl:模板键
-        }
+        // R2：房间实例 → `tpl:<模板>`；反查不到模板时**不写**（否则会把配置钉死在已销毁的房间世界上）
+        com.hub.world.Worlds.writeWorld(sec, "world", w);
         if (center != null) {
             savePoint(sec, "center", center);
         }
@@ -705,5 +715,16 @@ public class LuckyPillarArena {
         }
         return new Location(w, s.getDouble("x"), s.getDouble("y"), s.getDouble("z"),
                 (float) s.getDouble("yaw"), (float) s.getDouble("pitch"));
+    }
+
+    /**
+     * 克隆"配置部分"（D22 多房间）：场地名 + 世界 + center/lobby 等坐标。
+     * **不带任何本局状态**（玩家、计时、方块集合都是新的）。
+     */
+    public LuckyPillarArena copyConfig() {
+        LuckyPillarArena c = new LuckyPillarArena(getName());
+        c.center = this.center;
+        c.lobby = this.lobby;
+        return c;
     }
 }

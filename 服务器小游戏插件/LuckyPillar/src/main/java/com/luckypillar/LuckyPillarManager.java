@@ -59,11 +59,55 @@ public class LuckyPillarManager {
     private boolean pendingHasWinner;
     private boolean pendingDraw;
 
-    private LuckyPillarSession ensureSession(String arenaName) {
-        LuckyPillarSession s = sessions.get(arenaName);
+    /** 玩家 → 房间键；房间键 → 场地名；每房间一份运行时场地实例（D22）。 */
+    private final java.util.Map<UUID, String> playerKey = new java.util.LinkedHashMap<>();
+    private final java.util.Map<String, String> keyArena = new java.util.LinkedHashMap<>();
+    private final java.util.Map<String, LuckyPillarArena> liveArenas = new java.util.LinkedHashMap<>();
+
+    public String keyOf(UUID id) {
+        String k = playerKey.get(id);
+        if (k != null) {
+            return k;
+        }
+        String name = playerArena.get(id);
+        return name == null ? null : name;
+    }
+
+    public String arenaNameOfKey(String key) {
+        return keyArena.getOrDefault(key, key);
+    }
+
+    /** 该房间的运行时场地实例；首次使用时从配置模板克隆（只抄坐标，不带本局状态）。 */
+    public LuckyPillarArena liveArena(String key) {
+        LuckyPillarArena live = liveArenas.get(key);
+        if (live != null) {
+            return live;
+        }
+        LuckyPillarArena tpl = arenas.get(arenaNameOfKey(key));
+        if (tpl == null) {
+            return null;
+        }
+        LuckyPillarArena copy = tpl.copyConfig();
+        copy.setRoomKey(key);
+        liveArenas.put(key, copy);
+        return copy;
+    }
+
+    /** 只按场地名找（手上没有玩家的只读路径用；多房间时是模糊的）。 */
+    private LuckyPillarArena arenaByName(String arenaName) {
+        for (LuckyPillarArena live : liveArenas.values()) {
+            if (arenaName.equals(live.getName())) {
+                return live;
+            }
+        }
+        return arenas.get(arenaName);
+    }
+
+    private LuckyPillarSession ensureSession(String key) {
+        LuckyPillarSession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
-            s = new LuckyPillarSession(this, arenaName);
-            sessions.put(arenaName, s);
+            s = new LuckyPillarSession(this, arenaNameOfKey(key));
+            sessions.put(key, s);
         }
         return s;
     }
@@ -365,7 +409,7 @@ public class LuckyPillarManager {
     }
 
     public boolean join(Player p, String arenaName) {
-        LuckyPillarArena a = arenas.get(arenaName);
+        LuckyPillarArena a = arenas.get(arenaName);   // 模板：坐标来自配置
         if (a == null) {
             msg(p, "&c场 &e" + arenaName + "&c 不存在。");
             return false;
@@ -388,15 +432,27 @@ public class LuckyPillarManager {
             msg(p, "&c人数已满（&e" + max + "&c）。");
             return false;
         }
-        LuckyPillarSession sess = ensureSession(arenaName);
+        // D22：键 = 房间 id（有房间时），场地名只用来取坐标
+        String key = com.hub.room.RoomContext.roomKeyFor(p, "luckypillar", arenaName);
+        keyArena.put(key, arenaName);
+        playerKey.put(id, key);
+        LuckyPillarArena live = liveArena(key);
+        LuckyPillarArena stateArena = live == null ? a : live;
+        if (stateArena.getState() != LuckyPillarArena.State.WAITING) {
+            playerKey.remove(id);
+            msg(p, "&c该场正在游戏中，等下一局吧。");
+            return false;
+        }
+        LuckyPillarSession sess = ensureSession(key);
         if (!sess.join(p)) {
             if (sess.players().isEmpty()) {
-                sessions.remove(arenaName);
+                sessions.remove(key);
             }
+            playerKey.remove(id);
             return false;
         }
         playerArena.put(id, arenaName);
-        a.getPlayers().add(id);
+        stateArena.getPlayers().add(id);
         a.recordJoin(id);   // D21：记加入 tick + 随机名次
         resetPlayer(p);
         Location lobby = a.getLobby() != null ? a.getLobby() : a.getCenter();

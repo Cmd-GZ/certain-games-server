@@ -96,6 +96,27 @@ public final class Worlds {
         return templateKey == null ? world.getName() : TEMPLATE_PREFIX + templateKey;
     }
 
+    /**
+     * 把"世界"写进配置（R2）：房间实例写 {@code tpl:<模板>}，**反查不到模板时拒绝写**。
+     *
+     * <p>为什么不能退回原始世界名：房间在关服/重载时可能已经销毁，此时写 `room_xxx_1`
+     * 就等于把配置钉死在一个再也不会存在的世界上 —— 下次开服该场地永远"未就绪"，
+     * 而且看起来像代码回归（真实事故：LuckyPillar 的 `world:` 被写成 `room_lp21_1`）。
+     */
+    public static void writeWorld(org.bukkit.configuration.ConfigurationSection sec, String path, World world) {
+        if (sec == null || world == null) {
+            return;
+        }
+        String token = tokenOf(world);
+        if (token == null || token.isBlank()
+                || (token.startsWith("room_") && RoomManager.templateKeyOfRoomWorld(world.getName()) == null)) {
+            org.bukkit.Bukkit.getLogger().warning("[坐标回写] 跳过 " + path
+                    + "：世界 " + world.getName() + " 是房间实例且已找不到模板（保留原值）");
+            return;
+        }
+        sec.set(path, token);
+    }
+
     /** 把一个坐标编码成 {@code token,x,y,z,yaw,pitch}。 */
     public static String encode(Location loc) {
         if (loc == null || loc.getWorld() == null) {
