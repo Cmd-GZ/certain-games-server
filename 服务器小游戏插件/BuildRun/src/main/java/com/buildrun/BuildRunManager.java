@@ -155,11 +155,52 @@ public class BuildRunManager {
     /** D22：每个场地一个会话（多图游戏：不同场地可同时各开一局）。 */
     private final Map<String, BuildRunSession> sessions = new LinkedHashMap<>();
 
-    private BuildRunSession ensureSession(String arenaName) {
-        BuildRunSession s = sessions.get(arenaName);
+    private final Map<UUID, String> playerKey = new LinkedHashMap<>();
+    private final Map<String, String> keyArena = new LinkedHashMap<>();
+    private final Map<String, BuildRunArena> liveArenas = new LinkedHashMap<>();
+
+    public String keyOf(UUID id) {
+        String k = playerKey.get(id);
+        if (k != null) {
+            return k;
+        }
+        String name = playerArena.get(id);
+        return name == null ? null : name;
+    }
+
+    public String arenaNameOfKey(String key) {
+        return keyArena.getOrDefault(key, key);
+    }
+
+    public BuildRunArena liveArena(String key) {
+        BuildRunArena live = liveArenas.get(key);
+        if (live != null) {
+            return live;
+        }
+        BuildRunArena tpl = arenas.get(arenaNameOfKey(key));
+        if (tpl == null) {
+            return null;
+        }
+        BuildRunArena copy = tpl.copyConfig();
+        copy.setRoomKey(key);
+        liveArenas.put(key, copy);
+        return copy;
+    }
+
+    private BuildRunArena arenaByName(String arenaName) {
+        for (BuildRunArena live : liveArenas.values()) {
+            if (arenaName.equals(live.getName())) {
+                return live;
+            }
+        }
+        return arenas.get(arenaName);
+    }
+
+    private BuildRunSession ensureSession(String key) {
+        BuildRunSession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
-            s = new BuildRunSession(this, arenaName);
-            sessions.put(arenaName, s);
+            s = new BuildRunSession(this, arenaNameOfKey(key));
+            sessions.put(key, s);
         }
         return s;
     }
@@ -451,11 +492,19 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             msg(p, "&c这个场还没建好（范围、出生点、方向）。");
             return false;
         }
+        // D22：键 = 房间 id（有房间时）；本局状态落在"本房间的"运行时场地实例上
+        String key = com.hub.room.RoomContext.roomKeyFor(p, "buildrun", arenaName);
+        keyArena.put(key, arenaName);
+        BuildRunArena live = liveArena(key);
+        if (live != null) {
+            a = live;
+        }
         // 人数上限已彻底取消：这里**不读** max-players（老配置里写 8 也不生效），来几个人就复制几块场地
         playerArena.put(id, arenaName);
+        playerKey.put(id, key);
         a.getPlayers().add(id);
         a.recordJoin(id);   // D21：记加入 tick + 随机名次
-        if (!ensureSession(arenaName).join(p)) {
+        if (!ensureSession(key).join(p)) {
             plugin.getLogger().warning("[BuildRun] " + p.getName() + " 加入归属链失败（场 " + arenaName + "）");
         }
 
@@ -502,7 +551,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             }
             return;
         }
-        BuildRunArena a = arenas.get(arenaName);
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a != null) {
             onPlayerRemoved(a, id, p.getName(), p);
         }
@@ -532,7 +581,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (arenaName == null) {
             return;
         }
-        BuildRunArena a = arenas.get(arenaName);
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a != null) {
             onPlayerRemoved(a, id, p.getName(), null);
             reportArena(a);
@@ -594,7 +643,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     }
 
     public boolean start(Player op, String arenaName) {
-        BuildRunArena a = arenas.get(arenaName);
+        BuildRunArena a = liveArena(keyOf(op.getUniqueId()));
         if (a == null) {
             msg(op, "&c场不存在。");
             return false;
@@ -1700,7 +1749,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     public void backToKit(Player p) {
         p.closeInventory();
         String arenaName = playerArena.get(p.getUniqueId());
-        BuildRunArena a = arenaName == null ? null : arenas.get(arenaName);
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a != null && a.getPhase() == BuildRunArena.Phase.BUILDING) {
             openKitMenu(p);
         }
@@ -1763,7 +1812,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (arenaName == null) {
             return;
         }
-        BuildRunArena a = arenas.get(arenaName);
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             return;
         }
@@ -2029,7 +2078,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (arenaName == null) {
             return false;
         }
-        BuildRunArena a = arenas.get(arenaName);
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getPhase() != BuildRunArena.Phase.BUILDING) {
             return false;
         }
@@ -2127,7 +2176,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         boolean right = action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK;
         boolean left = action == Action.LEFT_CLICK_AIR || action == Action.LEFT_CLICK_BLOCK;
         String arenaName = playerArena.get(p.getUniqueId());
-        BuildRunArena a = arenaName == null ? null : arenas.get(arenaName);
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
 
         if ("leave".equals(id)) {
             if (right) {
@@ -2339,7 +2388,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     }
 
     public boolean enterSetup(Player p, String arenaName) {
-        BuildRunArena a = arenas.get(arenaName);
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             msg(p, "&c场 &e" + arenaName + "&c 不存在。");
             return false;
@@ -2381,7 +2430,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         return new SetupMode.Handler() {
             @Override
             public void onTool(Player p, String arenaName, String toolId, Action action, Block clicked) {
-                BuildRunArena a = arenas.get(arenaName);
+                BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
                 if (a == null) {
                     exitSetup(p);
                     return;
@@ -2428,7 +2477,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
             @Override
             public void onSave(Player p, String arenaName) {
-                BuildRunArena a = arenas.get(arenaName);
+                BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
                 if (a != null) {
                     saveArena(p, a);
                 }
@@ -2464,7 +2513,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (arenaName == null) {
             return true;
         }
-        BuildRunArena a = arenas.get(arenaName);
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             return true;
         }
@@ -2482,7 +2531,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
      * 玩家要拆自己场地里的起点/终点标志（绿色/粉红色羊毛）？是就发提示并返回 true（调用方取消事件）。
      */
     public boolean protectMarkBlock(Player p, Block block) {
-        BuildRunArena a = arenas.get(playerArena.get(p.getUniqueId()));
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getPhase() != BuildRunArena.Phase.BUILDING) {
             return false;
         }
@@ -2530,7 +2579,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (loc == null) {
             return false;
         }
-        BuildRunArena a = arenas.get(playerArena.get(p.getUniqueId()));
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getPhase() != BuildRunArena.Phase.BUILDING) {
             return false;
         }
@@ -2548,7 +2597,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (block == null) {
             return false;
         }
-        BuildRunArena a = arenas.get(playerArena.get(p.getUniqueId()));
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getPhase() != BuildRunArena.Phase.BUILDING) {
             return false;
         }
@@ -2594,7 +2643,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (type != BuildRunPlot.START_MARK && type != BuildRunPlot.END_MARK) {
             return false;
         }
-        BuildRunArena a = arenas.get(playerArena.get(p.getUniqueId()));
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getPhase() != BuildRunArena.Phase.BUILDING) {
             return false;
         }
@@ -2618,7 +2667,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (arenaName == null) {
             return false;
         }
-        BuildRunArena a = arenas.get(arenaName);
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getPhase() != BuildRunArena.Phase.BUILDING) {
             return false;
         }
@@ -2648,7 +2697,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
      * 是就发行动条提示并返回 true（调用方取消/吞掉这次交互）。
      */
     public boolean forbidInteract(Player p) {
-        BuildRunArena a = arenas.get(playerArena.get(p.getUniqueId()));
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || !isFighting(a)) {
             return false;
         }
@@ -2694,7 +2743,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
      * 开跑前会被清空，所以"存进容器 / 丢在地上"是唯一的偷带途径。
      */
     public boolean forbidContainerOpen(Player p) {
-        BuildRunArena a = arenas.get(playerArena.get(p.getUniqueId()));
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || !isFighting(a)) {
             return false;
         }
@@ -2704,7 +2753,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** 对局中不许丢东西：丢出来就成了"提前存好的物品"（场地里的掉落物还会被立刻清掉）。 */
     public boolean forbidItemDrop(Player p) {
-        BuildRunArena a = arenas.get(playerArena.get(p.getUniqueId()));
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || !isFighting(a)) {
             return false;
         }
@@ -2834,7 +2883,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** 某场地当前等待人数。 */
     public int waitingCountOf(String arenaName) {
-        BuildRunArena a = arenas.get(arenaName);
+        BuildRunArena a = arenaByName(arenaName);
         return a == null ? 0 : a.getPlayers().size();
     }
 
@@ -2848,7 +2897,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
             return false;
         }
-        BuildRunArena a = arenas.get(arenaName);
+        BuildRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || p == null) {
             return false;
         }

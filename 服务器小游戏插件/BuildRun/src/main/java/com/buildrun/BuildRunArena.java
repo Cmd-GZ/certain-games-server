@@ -90,6 +90,29 @@ public class BuildRunArena {
 
     // ---------- 配置字段 ----------
 
+    /** 房间键（D22）：场地名是"哪张地图"，它表示"哪个房间的那一局"。 */
+    private String roomKey;
+
+    public String roomKey() {
+        return roomKey == null ? getName() : roomKey;
+    }
+
+    public void setRoomKey(String roomKey) {
+        this.roomKey = roomKey;
+    }
+
+    /** 克隆配置部分（范围/出生点/方向/间隔），运行时状态全新。 */
+    public BuildRunArena copyConfig() {
+        BuildRunArena c = new BuildRunArena(getName());
+        c.pos1 = this.pos1;
+        c.pos2 = this.pos2;
+        c.direction = this.direction;
+        c.gap = this.gap;
+        c.spawn = this.spawn;
+        c.lobby = this.lobby;
+        return c;
+    }
+
     public String getName() {
         return name;
     }
