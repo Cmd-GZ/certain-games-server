@@ -275,10 +275,29 @@ public final class RegionEvents implements Listener {
         bridgePlayer(event, event.getPlayer());
     }
 
+    /**
+     * 桥接里的**重入闸**：游戏在事件里做的事可能再次触发同类事件。
+     *
+     * <p>真实事故（2026-11-04，BuildRun）：`PlayerTeleportEvent` → 游戏 `confine()` →
+     * `player.teleport(...)` → 又一条 `PlayerTeleportEvent` → 再派发 → **StackOverflowError**
+     * （服务器刷了 370 条 `Could not pass event`）。闸门只挡住"派发过程中再派发"，
+     * 游戏自己的第二次传送照常执行 —— 那是它想要的结果。
+     */
+    private static final ThreadLocal<Boolean> DISPATCHING = ThreadLocal.withInitial(() -> Boolean.FALSE);
+
     private static void bridgePlayer(org.bukkit.event.Event event, Player player) {
+        if (Boolean.TRUE.equals(DISPATCHING.get())) {
+            return;   // 派发过程中再触发的事件不再派发（防重入）
+        }
         GameSession s = ownerOfPlayer(player);
-        if (s != null) {
+        if (s == null) {
+            return;
+        }
+        DISPATCHING.set(Boolean.TRUE);
+        try {
             s.fireGameEvent(event);
+        } finally {
+            DISPATCHING.set(Boolean.FALSE);
         }
     }
 

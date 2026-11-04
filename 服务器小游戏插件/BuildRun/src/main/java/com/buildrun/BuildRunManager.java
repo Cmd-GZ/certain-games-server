@@ -201,6 +201,11 @@ public class BuildRunManager {
     /** 死亡方块（默认红色羊毛）：跑的时候踩到立刻淘汰；第一次用到时从 config.yml 读一次。 */
     private final Set<Material> deathBlocks = new LinkedHashSet<>();
     private boolean deathBlocksLoaded;
+    /** I3：会话里的搬迁代码要用到 plugin。 */
+    public BuildRunPlugin plugin() {
+        return plugin;
+    }
+
 
     public BuildRunManager(BuildRunPlugin plugin) {
         this.plugin = plugin;

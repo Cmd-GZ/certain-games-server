@@ -243,6 +243,11 @@ public class MurderMysteryManager {
     private final NamespacedKey compassKey;
     /** 职业装备标记（不可丢弃）。 */
     private final NamespacedKey roleItemKey;
+    /** I3：会话里的搬迁代码要用到 plugin。 */
+    public MurderMysteryPlugin plugin() {
+        return plugin;
+    }
+
 
     public MurderMysteryManager(MurderMysteryPlugin plugin) {
         this.plugin = plugin;
