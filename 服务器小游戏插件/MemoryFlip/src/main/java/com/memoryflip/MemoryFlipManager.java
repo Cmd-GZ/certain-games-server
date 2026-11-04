@@ -59,12 +59,10 @@ public final class MemoryFlipManager {
 
     private final MemoryFlipPlugin plugin;
     private final MemoryFlipArena arena;
-    private final WaitCountdown countdown;
     private final LiveSidebar liveSidebar;
     private final Random random = new Random();
     private StartCountdown startCountdown;
 
-    private State state = State.WAITING;
     /**
      * 对局会话（I1/I4/I5）：**按场地名索引**。
      *
@@ -72,26 +70,50 @@ public final class MemoryFlipManager {
      * "一个字段"的写法就要重写成"一张表"。这里先从会话层统一成多场地形状，
      * 将来加图时**不用改这一层的形状**（D22）。
      *
-     * <p>注意仍然存在的限制：这个游戏的**内部状态**（state / waiting / playing）
+     * <p>注意仍然存在的限制：这个游戏的**内部状态**（game().state / game().waiting / game().playing）
      * 目前还是全局单份，真正支持两场同跑需要把那部分也按场地拆开 —— 见改动记录。
      */
     private final java.util.Map<String, MemoryFlipSession> sessions = new java.util.LinkedHashMap<>();
-    /** endGame 传下来的收场文案，交给 doEndGame 使用（保证玩家看到的文字不变）。 */
-    private String pendingEndMessage;
 
     /** 当前场地键（单图时期固定；加图后由配置/场地对象提供）。 */
     private String arenaKey() {
         return "main";
     }
 
-    private MemoryFlipSession session;
-
     /** 每房间一份的一局状态（D22）；**行为还没切过去**，见 MemoryGame 的迁移步骤。 */
     private final com.hub.room.RoomScoped<MemoryGame> games = new com.hub.room.RoomScoped<>("memoryflip");
 
+    /** 当前正在处理的那一局（没有绑定时用当前房间 / 场地名兜底）。 */
+    private MemoryGame bound;
+
+    MemoryGame game() {
+        if (bound == null) {
+            bound = use(arenaKey());
+        }
+        return bound;
+    }
+
+    /** 切到某个房间的那一局（取或建）。 */
+    MemoryGame use(String key) {
+        MemoryGame g = games.ofKey(key, k -> newGame(k));
+        bound = g;
+        return g;
+    }
+
+    MemoryGame use(Player p) {
+        return use(games.keyOf(p, arenaKey()));
+    }
+
+    /** 新建一局：连同它自己的等待倒计时一起建（D22：每房间一个倒计时）。 */
+    private MemoryGame newGame(String key) {
+        MemoryGame g = new MemoryGame(key, arenaKey());
+        g.countdown = new WaitCountdown(plugin, new GameHost(g));
+        return g;
+    }
+
     /** 这个玩家所在房间的那一局状态（取或建）。 */
     MemoryGame gameFor(org.bukkit.entity.Player p, String arenaName) {
-        return games.of(p, arenaName, key -> new MemoryGame(key, arenaName));
+        return games.of(p, arenaName, key -> newGame(key));
     }
 
     /** 当前房间的那一局状态（给没有玩家引用的 tick 用）；没有房间上下文时返回 null。 */
@@ -101,32 +123,20 @@ public final class MemoryFlipManager {
     }
 
     private MemoryFlipSession ensureSession() {
-        return ensureSession(arenaKey());
+        return ensureSession(game());
     }
 
     /** 按**房间键**取会话（D22）：同一游戏两个房间时各自一份；没有房间时键就是场地名。 */
-    private MemoryFlipSession ensureSession(String key) {
-        MemoryFlipSession s = sessions.get(key);
+    private MemoryFlipSession ensureSession(MemoryGame g) {
+        MemoryFlipSession s = g.session;
         if (s == null || s.state().isFinal()) {
-            s = new MemoryFlipSession(this, key);
-            sessions.put(key, s);
+            s = new MemoryFlipSession(this, g.key);
+            g.session = s;
         }
-        session = s;
         return s;
     }
 
-    private final Set<UUID> waiting = new LinkedHashSet<>();
-    /** 加入时的 tick 与同 tick 内的随机名次（D21：同 tick 的人随机决定主持人）。 */
-    private final java.util.Map<UUID, Long> joinTick = new java.util.HashMap<>();
-    private final java.util.Map<UUID, Long> joinSeed = new java.util.HashMap<>();
-    private final Set<UUID> playing = new LinkedHashSet<>();
-    private final Map<UUID, PlayState> states = new HashMap<>();
-
-    private BukkitTask gameTask;
-    private int secondsLeft;
-    private long startedAt;
-    private ItemStack questionItem;
-    private ItemStack checkItem;
+    // ---- 局内状态全部在 MemoryGame 里（每房间一份，D22）；下面是"当前房间"的入口 ----
 
     private YamlConfiguration data;
 
@@ -134,98 +144,7 @@ public final class MemoryFlipManager {
         this.plugin = plugin;
         this.arena = new MemoryFlipArena(plugin);
         this.liveSidebar = new LiveSidebar(plugin);
-        this.countdown = new WaitCountdown(plugin, new WaitCountdown.Host() {
-            @Override
-            public Collection<UUID> waitingPlayers() {
-                return new ArrayList<>(waiting);
-            }
-
-            @Override
-            public int minPlayers() {
-                return MemoryFlipManager.this.minPlayers();
-            }
-
-            @Override
-            public int maxPlayers() {
-                return MemoryFlipManager.this.maxPlayers();
-            }
-
-            @Override
-            public boolean hasOpQueued() {
-                for (UUID id : waiting) {
-                    Player p = Bukkit.getPlayer(id);
-                    if (p != null && p.isOp()) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-
-            @Override
-            public void onTick(long secondsLeft) {
-                for (UUID id : waiting) {
-                    Player p = Bukkit.getPlayer(id);
-                    if (p != null) {
-                        Chat.actionBar(p, "&7等待中 &7| &f开始倒计时 &e" + secondsLeft + "s");
-                    }
-                }
-            }
-
-            @Override
-            public void onMessage(String message) {
-                for (UUID id : waiting) {
-                    Player p = Bukkit.getPlayer(id);
-                    if (p != null) {
-                        Chat.send(p, message);
-                    }
-                }
-            }
-
-            @Override
-            public void onStart() {
-                startGame(false);
-            }
-
-            // ---------- D21 主持人流程（配置 flow: host 才启用，默认走上游） ----------
-            @Override
-            public boolean hostFlow() {
-                return "host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"));
-            }
-
-            @Override
-            public int waitSeconds() {
-                return Math.max(5, plugin.getConfig().getInt("wait-seconds", 300));
-            }
-
-            @Override
-            public java.util.List<UUID> waitingOrder() {
-                // 顺序 = (加入 tick, 该 tick 内的随机名次)：同 tick 进来的人随机决定谁是主持人
-                java.util.List<UUID> order = new ArrayList<>(waiting);
-                order.sort(java.util.Comparator
-                        .comparingLong((UUID id) -> joinTick.getOrDefault(id, 0L))
-                        .thenComparingLong(id -> joinSeed.getOrDefault(id, 0L)));
-                return order;
-            }
-
-            @Override
-            public void onHostTimeout(UUID host) {
-                Player p = Bukkit.getPlayer(host);
-                String name = p == null ? host.toString() : p.getName();
-                waiting.remove(host);
-                // I1：会话归属也要摘掉，否则 doctor 的人数不降、且他再也进不了别的游戏
-                if (session != null && p != null) {
-                    session.leave(p);
-                }
-                if (p != null && p.isOnline()) {
-                    Chat.send(p, "&c倒计时结束还没开始，你被移出本局（主持人超时）。");
-                    HubAPI.teleportToLobby(p);
-                }
-                plugin.getLogger().info("[MemoryFlip] 主持人 " + name + " 超时未开始，已移出本局（剩余 "
-                        + waiting.size() + " 人）");
-                broadcast("&e主持人 &f" + name + " &e超时未开始，已移出本局。");
-                updateCountdown();
-            }
-        });
+        // D22：每房间一个 WaitCountdown（在 newGame() 里创建），见 GameHost
     }
 
     // ---------- 配置 ----------
@@ -292,13 +211,13 @@ public final class MemoryFlipManager {
         if (world == null && !arena.getBoards().isEmpty()) {
             world = arena.getBoards().get(0).stand.getWorld();
         }
-        questionItem = null;
-        checkItem = null;
+        game().questionItem = null;
+        game().checkItem = null;
         if (world != null) {
             MapView question = MapArt.create(world, false);
             MapView check = MapArt.create(world, true);
-            questionItem = MapArt.item(question);
-            checkItem = MapArt.item(check);
+            game().questionItem = MapArt.item(question);
+            game().checkItem = MapArt.item(check);
         }
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             HubAPI.registerGame(GAME, GAME, "FILLED_MAP", "b");
@@ -308,7 +227,7 @@ public final class MemoryFlipManager {
     }
 
     public void reload() {
-        if (state != State.WAITING) {
+        if (game().state != State.WAITING) {
             return;
         }
         load();
@@ -318,7 +237,7 @@ public final class MemoryFlipManager {
         cancelTasks();
         liveSidebar.hideAll();
         restoreFrames();
-        for (UUID id : playing) {
+        for (UUID id : game().playing) {
             showNameTag(Bukkit.getPlayer(id));
         }
         saveData();
@@ -359,19 +278,19 @@ public final class MemoryFlipManager {
     }
 
     public State state() {
-        return state;
+        return game().state;
     }
 
     public boolean isRunning() {
-        return state == State.RUNNING;
+        return game().state == State.RUNNING;
     }
 
     public boolean isWaiting(Player player) {
-        return waiting.contains(player.getUniqueId());
+        return game().waiting.contains(player.getUniqueId());
     }
 
     public boolean isPlaying(Player player) {
-        return playing.contains(player.getUniqueId());
+        return game().playing.contains(player.getUniqueId());
     }
 
     public boolean isInGame(Player player) {
@@ -383,11 +302,11 @@ public final class MemoryFlipManager {
     }
 
     public int waitingCount() {
-        return waiting.size();
+        return game().waiting.size();
     }
 
     public int playingCount() {
-        return playing.size();
+        return game().playing.size();
     }
 
     public void saveAll() {
@@ -404,21 +323,21 @@ public final class MemoryFlipManager {
         if (!(sender instanceof Player p)) {
             return false;
         }
-        UUID host = countdown.currentHost();
+        UUID host = game().countdown.currentHost();
         return host != null && host.equals(p.getUniqueId());
     }
 
     public void join(Player player) {
         UUID id = player.getUniqueId();
-        if (state != State.WAITING) {
+        if (game().state != State.WAITING) {
             Chat.send(player, "&c对局正在进行中，请等这一局结束后再加入。");
             return;
         }
-        if (waiting.contains(id)) {
+        if (game().waiting.contains(id)) {
             Chat.send(player, "&e你已经在等待队列中。");
             return;
         }
-        if (waiting.size() >= effectiveMaxPlayers()) {
+        if (game().waiting.size() >= effectiveMaxPlayers()) {
             Chat.send(player, "&c等待队列已满（" + effectiveMaxPlayers() + " 人）。");
             return;
         }
@@ -426,12 +345,12 @@ public final class MemoryFlipManager {
             Chat.send(player, "&c场地还没配置完整（缺 " + arena.missing() + "）。");
             return;
         }
-        waiting.add(id);
-        joinTick.put(id, (long) Bukkit.getCurrentTick());
-        joinSeed.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
+        game().waiting.add(id);
+        game().joinTick.put(id, (long) Bukkit.getCurrentTick());
+        game().joinSeed.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
         // D22：会话键按玩家所在房间算（单房间/无房间时仍是 "main"，行为不变）
-        ensureSession(games.keyOf(player, arenaKey()));
-        if (session != null && !session.join(player)) {
+        ensureSession(game());
+        if (game().session != null && !game().session.join(player)) {
             plugin.getLogger().warning("[MemoryFlip] " + player.getName() + " 加入归属链失败（见 [被吞异常]）");
         }
         player.getInventory().clear();
@@ -441,7 +360,7 @@ public final class MemoryFlipManager {
         giveWaitItems(player);
         HubAPI.setGame(id, GAME);
         HubAPI.announceJoin(plugin.getName(), player.getName());
-        Chat.send(player, "&a已加入" + GAME + " &7(" + waiting.size() + "/" + effectiveMaxPlayers() + ")");
+        Chat.send(player, "&a已加入" + GAME + " &7(" + game().waiting.size() + "/" + effectiveMaxPlayers() + ")");
         updateCountdown();
         reportArena();
     }
@@ -449,19 +368,19 @@ public final class MemoryFlipManager {
     public void leave(Player player, boolean silent) {
         // I1：从归属链上摘掉自己 —— 漏了这行，玩家会卡在"已在等待中"，
         // 之后点任何别的游戏都会被拒绝（只剩重启服务器能救）。
-        if (session != null && !session.state().isFinal()) {
-            session.leave(player);
+        if (game().session != null && !game().session.state().isFinal()) {
+            game().session.leave(player);
         }
         UUID id = player.getUniqueId();
-        boolean wasWaiting = waiting.remove(id);
-        boolean wasPlaying = playing.remove(id);
+        boolean wasWaiting = game().waiting.remove(id);
+        boolean wasPlaying = game().playing.remove(id);
         if (!wasWaiting && !wasPlaying) {
             if (!silent) {
                 Chat.send(player, "&e你不在等待队列或对局中。");
             }
             return;
         }
-        PlayState st = states.remove(id);
+        PlayState st = game().states.remove(id);
         if (st != null) {
             resetBoard(st);
         }
@@ -473,13 +392,13 @@ public final class MemoryFlipManager {
             HubAPI.teleportToLobby(player);
             Chat.send(player, "&e你已离开" + GAME + "。");
         }
-        if (state == State.RUNNING && wasPlaying) {
-            if (playing.isEmpty() || allFinished()) {
+        if (game().state == State.RUNNING && wasPlaying) {
+            if (game().playing.isEmpty() || allFinished()) {
                 endGame("&7对局结束。");
                 return;
             }
             updateLiveBoard();
-        } else if (state == State.WAITING) {
+        } else if (game().state == State.WAITING) {
             updateCountdown();
         }
         reportArena();
@@ -487,43 +406,44 @@ public final class MemoryFlipManager {
 
     public void handleQuit(Player player) {
         UUID id = player.getUniqueId();
-        boolean wasWaiting = waiting.remove(id);
-        boolean wasPlaying = playing.remove(id);
+        boolean wasWaiting = game().waiting.remove(id);
+        boolean wasPlaying = game().playing.remove(id);
         if (!wasWaiting && !wasPlaying) {
             return;
         }
-        PlayState st = states.remove(id);
+        PlayState st = game().states.remove(id);
         if (st != null) {
             resetBoard(st);
         }
         showNameTag(player);
         HubAPI.clearGame(id);
-        if (state == State.RUNNING && wasPlaying && (playing.isEmpty() || allFinished())) {
+        if (game().state == State.RUNNING && wasPlaying && (game().playing.isEmpty() || allFinished())) {
             endGame("&7对局结束。");
             return;
         }
-        if (state == State.WAITING) {
+        if (game().state == State.WAITING) {
             updateCountdown();
         }
         reportArena();
     }
 
     private void updateCountdown() {
-        if (state != State.WAITING) {
-            countdown.cancel();
+        MemoryGame g = game();
+        if (g.state != State.WAITING) {
+            g.countdown.cancel();
             return;
         }
-        countdown.update();
+        g.countdown.update();
     }
 
     // ---------- 开局 ----------
 
     public void startGame(boolean force) {
-        if (state != State.WAITING) {
+        if (game().state != State.WAITING) {
             return;
         }
         if (!arena.isReady()) {
-            for (UUID id : waiting) {
+            for (UUID id : game().waiting) {
                 Player p = Bukkit.getPlayer(id);
                 if (p != null) {
                     Chat.send(p, "&c场地未配置完整（缺 " + arena.missing() + "），无法开始。");
@@ -532,7 +452,7 @@ public final class MemoryFlipManager {
             return;
         }
         List<UUID> ready = new ArrayList<>();
-        for (UUID id : waiting) {
+        for (UUID id : game().waiting) {
             Player p = Bukkit.getPlayer(id);
             if (p != null && p.isOnline()) {
                 ready.add(id);
@@ -557,24 +477,24 @@ public final class MemoryFlipManager {
         if (startCountdown().begin("memoryflip", ready, () -> startGame(force))) {
             return;
         }
-        countdown.cancel();
-        state = State.RUNNING;
-        if (session != null) {
-            session.start();
+        game().countdown.cancel();
+        game().state = State.RUNNING;
+        if (game().session != null) {
+            game().session.start();
         }
-        waiting.clear();
-        playing.clear();
-        playing.addAll(ready);
-        states.clear();
-        secondsLeft = gameSeconds();
-        startedAt = System.currentTimeMillis();
+        game().waiting.clear();
+        game().playing.clear();
+        game().playing.addAll(ready);
+        game().states.clear();
+        game().secondsLeft = gameSeconds();
+        game().startedAt = System.currentTimeMillis();
         cancelTasks();
 
         // 每局重新播种，保证每局的物品组合与牌面位置都不一样
         Random gameRandom = new Random(System.nanoTime());
         List<MemoryFlipArena.Board> boards = new ArrayList<>(arena.getBoards());
         Collections.shuffle(boards, gameRandom);
-        List<UUID> order = new ArrayList<>(playing);
+        List<UUID> order = new ArrayList<>(game().playing);
         Collections.shuffle(order, gameRandom);
         int index = 0;
         for (UUID id : order) {
@@ -587,7 +507,7 @@ public final class MemoryFlipManager {
             if (st == null) {
                 continue;
             }
-            states.put(id, st);
+            game().states.put(id, st);
             clearGameState(p);
             p.setGameMode(GameMode.SURVIVAL);
             p.setHealth(20);
@@ -597,13 +517,13 @@ public final class MemoryFlipManager {
             HubAPI.setPlaying(id, GAME);
             Chat.title(p, "&b&l" + GAME, "&f翻开两张相同的物品！", 2);
         }
-        playing.retainAll(states.keySet());
+        game().playing.retainAll(game().states.keySet());
         broadcast("&6&l========== " + GAME + " 开始 ==========");
         broadcast("&f左键/右键翻开物品展示框，两张相同就得分；先翻完 " + totalPairs() + " 对的人获胜。");
         updateActionBar();
         updateLiveBoard();
         reportArena();
-        gameTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickGame, 20L, 20L);
+        game().gameTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickGame, 20L, 20L);
     }
 
     private PlayState prepareBoard(UUID id, MemoryFlipArena.Board board, int boardIndex, Random gameRandom) {
@@ -674,13 +594,13 @@ public final class MemoryFlipManager {
         for (int i = 0; i < total; i++) {
             st.items[i] = pairs.get(i);
         }
-        if (questionItem == null) {
+        if (game().questionItem == null) {
             World world = st.frames.get(0).getWorld();
-            questionItem = MapArt.item(MapArt.create(world, false));
-            checkItem = MapArt.item(MapArt.create(world, true));
+            game().questionItem = MapArt.item(MapArt.create(world, false));
+            game().checkItem = MapArt.item(MapArt.create(world, true));
         }
         for (ItemFrame frame : st.frames) {
-            frame.setItem(questionItem);
+            frame.setItem(game().questionItem);
         }
         return st;
     }
@@ -717,17 +637,17 @@ public final class MemoryFlipManager {
     }
 
     private void tickGame() {
-        if (state != State.RUNNING) {
+        if (game().state != State.RUNNING) {
             cancelGameTask();
             return;
         }
-        secondsLeft--;
-        if (secondsLeft <= 0) {
+        game().secondsLeft--;
+        if (game().secondsLeft <= 0) {
             endGame("&6&l时间到！");
             return;
         }
-        if (secondsLeft == 30 || secondsLeft == 10) {
-            broadcast("&e剩余 &f" + secondsLeft + " &e秒！");
+        if (game().secondsLeft == 30 || game().secondsLeft == 10) {
+            broadcast("&e剩余 &f" + game().secondsLeft + " &e秒！");
         }
         updateActionBar();
         updateLiveBoard();
@@ -735,11 +655,11 @@ public final class MemoryFlipManager {
     }
 
     private void updateActionBar() {
-        for (UUID id : playing) {
+        for (UUID id : game().playing) {
             Player p = Bukkit.getPlayer(id);
-            PlayState st = states.get(id);
+            PlayState st = game().states.get(id);
             if (p != null && st != null) {
-                Chat.actionBar(p, "&b" + GAME + " &8| &f剩余 &b" + secondsLeft + "s"
+                Chat.actionBar(p, "&b" + GAME + " &8| &f剩余 &b" + game().secondsLeft + "s"
                         + " &8| &f已配对 &e" + st.pairs + "&7/&e" + totalPairs()
                         + (st.finished() ? " &a✔ 完成" : ""));
             }
@@ -750,11 +670,11 @@ public final class MemoryFlipManager {
 
     /** 展示框被点击（左键或右键）。 */
     public void handleFrameClick(Player player, ItemFrame frame) {
-        if (state != State.RUNNING) {
+        if (game().state != State.RUNNING) {
             return;
         }
         UUID id = player.getUniqueId();
-        PlayState st = states.get(id);
+        PlayState st = game().states.get(id);
         if (st == null || st.reviewing || st.finished()) {
             return;
         }
@@ -775,22 +695,22 @@ public final class MemoryFlipManager {
         st.reviewing = true;
         boolean same = st.items[first] == st.items[idx];
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (!playing.contains(id) || states.get(id) != st) {
+            if (!game().playing.contains(id) || game().states.get(id) != st) {
                 return;
             }
             if (same && first != idx) {
                 st.matched[first] = true;
                 st.matched[idx] = true;
                 st.pairs++;
-                st.frames.get(first).setItem(checkItem);
-                st.frames.get(idx).setItem(checkItem);
+                st.frames.get(first).setItem(game().checkItem);
+                st.frames.get(idx).setItem(game().checkItem);
                 Player p = Bukkit.getPlayer(id);
                 if (p != null) {
                     player.playSound(player.getLocation(), org.bukkit.Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1.4f);
                     Chat.actionBar(p, "&a配对成功！&f已配对 &e" + st.pairs + "&7/&e" + totalPairs());
                 }
                 if (st.pairs >= totalPairs()) {
-                    st.finishedAt = System.currentTimeMillis() - startedAt;
+                    st.finishedAt = System.currentTimeMillis() - game().startedAt;
                     broadcast("&a" + player.getName() + " &f已完成全部翻牌！&7用时 &e"
                             + formatSeconds(st.finishedAt));
                     if (allFinished()) {
@@ -799,8 +719,8 @@ public final class MemoryFlipManager {
                     }
                 }
             } else {
-                st.frames.get(first).setItem(questionItem);
-                st.frames.get(idx).setItem(questionItem);
+                st.frames.get(first).setItem(game().questionItem);
+                st.frames.get(idx).setItem(game().questionItem);
                 Player p = Bukkit.getPlayer(id);
                 if (p != null) {
                     player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_BASS, 1f, 0.8f);
@@ -812,19 +732,19 @@ public final class MemoryFlipManager {
     }
 
     private boolean allFinished() {
-        for (UUID id : playing) {
-            PlayState st = states.get(id);
+        for (UUID id : game().playing) {
+            PlayState st = game().states.get(id);
             if (st != null && !st.finished()) {
                 return false;
             }
         }
-        return !playing.isEmpty();
+        return !game().playing.isEmpty();
     }
 
     // ---------- 结束 ----------
 
     public void stopGame() {
-        if (state != State.RUNNING) {
+        if (game().state != State.RUNNING) {
             return;
         }
         endGame("&e管理员结束了本局。");
@@ -837,32 +757,32 @@ public final class MemoryFlipManager {
      * 这样"谁结束了这一局、为什么结束"有了统一记录，且**只会执行一次**（框架保证幂等）。
      */
     private void endGame(String reason) {
-        if (state != State.RUNNING) {
+        if (game().state != State.RUNNING) {
             return;
         }
-        pendingEndMessage = reason;          // 把玩家原本看到的文案带过去，别丢
-        if (session == null) {
+        game().pendingEndMessage = reason;          // 把玩家原本看到的文案带过去，别丢
+        if (game().session == null) {
             doEndGame(EndReason.ROUND_END);
             return;
         }
-        session.end(EndReason.ROUND_END);
+        game().session.end(EndReason.ROUND_END);
     }
 
-    /** 真正的收场逻辑（由 session.onEnd 回调，也可在无会话时直接调用）。 */
+    /** 真正的收场逻辑（由 game().session.onEnd 回调，也可在无会话时直接调用）。 */
     void doEndGame(EndReason endReason) {
-        if (state != State.RUNNING) {
+        if (game().state != State.RUNNING) {
             return;
         }
         // 收场文案沿用原来的（endGame 传下来的那句），没有就用默认
-        String reason = pendingEndMessage != null ? pendingEndMessage : "&7对局结束。";
-        pendingEndMessage = null;
+        String reason = game().pendingEndMessage != null ? game().pendingEndMessage : "&7对局结束。";
+        game().pendingEndMessage = null;
         cancelTasks();
-        state = State.WAITING;
+        game().state = State.WAITING;
 
-        List<UUID> ranked = new ArrayList<>(playing);
+        List<UUID> ranked = new ArrayList<>(game().playing);
         ranked.sort((a, b) -> {
-            PlayState sa = states.get(a);
-            PlayState sb = states.get(b);
+            PlayState sa = game().states.get(a);
+            PlayState sb = game().states.get(b);
             boolean fa = sa != null && sa.finished();
             boolean fb = sb != null && sb.finished();
             if (fa != fb) {
@@ -888,7 +808,7 @@ public final class MemoryFlipManager {
         if (ranked.size() >= 2) seconds.add(ranked.get(1));
         if (ranked.size() >= 3) thirds.add(ranked.get(2));
         Top3.broadcast(msg -> broadcast(msg), id -> {
-            PlayState st = states.get(id);
+            PlayState st = game().states.get(id);
             return nameOf(id) + " &7(" + (st == null ? 0 : st.pairs) + " 对"
                     + (st != null && st.finished() ? "，用时 " + formatSeconds(st.finishedAt) : "") + ")";
         }, firsts, seconds, thirds);
@@ -898,8 +818,8 @@ public final class MemoryFlipManager {
         broadcast("&6===============================");
 
         liveSidebar.hide("memoryflip");
-        for (UUID id : new ArrayList<>(playing)) {
-            PlayState st = states.get(id);
+        for (UUID id : new ArrayList<>(game().playing)) {
+            PlayState st = game().states.get(id);
             if (st != null) {
                 resetBoard(st);
             }
@@ -913,8 +833,8 @@ public final class MemoryFlipManager {
             }
             HubAPI.clearGame(id);
         }
-        playing.clear();
-        states.clear();
+        game().playing.clear();
+        game().states.clear();
         updateCountdown();
         reportArena();
     }
@@ -923,33 +843,33 @@ public final class MemoryFlipManager {
         for (int i = 0; i < st.frames.size(); i++) {
             ItemFrame frame = st.frames.get(i);
             if (frame != null && !frame.isDead()) {
-                frame.setItem(questionItem == null ? new ItemStack(Material.AIR) : questionItem);
+                frame.setItem(game().questionItem == null ? new ItemStack(Material.AIR) : game().questionItem);
             }
         }
     }
 
     private void restoreFrames() {
-        for (PlayState st : states.values()) {
+        for (PlayState st : game().states.values()) {
             resetBoard(st);
         }
-        states.clear();
+        game().states.clear();
     }
 
     // ---------- 计分板 ----------
 
     private void updateLiveBoard() {
-        if (state != State.RUNNING) {
+        if (game().state != State.RUNNING) {
             return;
         }
         List<UUID> online = new ArrayList<>();
-        for (UUID id : playing) {
+        for (UUID id : game().playing) {
             Player p = Bukkit.getPlayer(id);
             if (p != null && p.isOnline()) {
                 online.add(id);
             }
         }
         online.sort(Comparator.comparingInt((UUID id) -> {
-            PlayState st = states.get(id);
+            PlayState st = game().states.get(id);
             if (st == null) {
                 return 0;
             }
@@ -957,7 +877,7 @@ public final class MemoryFlipManager {
         }).reversed().thenComparing(this::nameOf, String.CASE_INSENSITIVE_ORDER));
         List<LiveSidebar.Line> lines = new ArrayList<>();
         for (UUID id : online) {
-            PlayState st = states.get(id);
+            PlayState st = game().states.get(id);
             int pairs = st == null ? 0 : st.pairs;
             boolean done = st != null && st.finished();
             lines.add(new LiveSidebar.Line("§e" + nameOf(id) + (done ? " §a✓" : ""), pairs));
@@ -1003,7 +923,7 @@ public final class MemoryFlipManager {
             Chat.send(player, "&e你不在等待队列中。");
             return;
         }
-        if (state != State.WAITING) {
+        if (game().state != State.WAITING) {
             Chat.send(player, "&e对局已经在进行中。");
             return;
         }
@@ -1040,16 +960,16 @@ public final class MemoryFlipManager {
     // ---------- 任务 ----------
 
     private void cancelTasks() {
-        if (gameTask != null) {
-            gameTask.cancel();
-            gameTask = null;
+        if (game().gameTask != null) {
+            game().gameTask.cancel();
+            game().gameTask = null;
         }
     }
 
     private void cancelGameTask() {
-        if (gameTask != null) {
-            gameTask.cancel();
-            gameTask = null;
+        if (game().gameTask != null) {
+            game().gameTask.cancel();
+            game().gameTask = null;
         }
     }
 
@@ -1080,23 +1000,23 @@ public final class MemoryFlipManager {
     }
 
     private void reportArena() {
-        String extra = state == State.RUNNING
-                ? "剩余 " + secondsLeft + "s · " + playing.size() + " 人" : null;
-        HubAPI.setArena(GAME, ARENA, state == State.RUNNING ? GameState.PLAYING : GameState.WAITING,
-                waiting.size() + playing.size(), extra);
+        String extra = game().state == State.RUNNING
+                ? "剩余 " + game().secondsLeft + "s · " + game().playing.size() + " 人" : null;
+        HubAPI.setArena(GAME, ARENA, game().state == State.RUNNING ? GameState.PLAYING : GameState.WAITING,
+                game().waiting.size() + game().playing.size(), extra);
         if (arena.getLobby() != null) {
             HubAPI.setArenaSpectator(GAME, ARENA, arena.getLobby().clone().add(0, 6, 0));
         }
     }
 
     private void broadcast(String message) {
-        for (UUID id : waiting) {
+        for (UUID id : game().waiting) {
             Player p = Bukkit.getPlayer(id);
             if (p != null) {
                 Chat.send(p, message);
             }
         }
-        for (UUID id : playing) {
+        for (UUID id : game().playing) {
             Player p = Bukkit.getPlayer(id);
             if (p != null) {
                 Chat.send(p, message);
@@ -1147,6 +1067,115 @@ public final class MemoryFlipManager {
             PlayerStats.save("memoryflip", data);
         } catch (IOException ex) {
             plugin.getLogger().warning("保存玩家记录失败：" + ex.getMessage());
+        }
+    }
+
+    /**
+     * 每房间一份的等待倒计时回调（D22）。
+     *
+     * <p>为什么必须每房间一个：`WaitCountdown` 自己维护"倒计时/主持人"，两个房间共用一个实例时
+     * 会互相取消（真实限制在 `docs/改动记录.md` 里写过）。这里把它绑到具体的 {@link MemoryGame}，
+     * 回调里读的永远是**这个房间**的等待队列。
+     */
+    private final class GameHost implements WaitCountdown.Host {
+
+        private final MemoryGame h;
+
+        GameHost(MemoryGame h) {
+            this.h = h;
+        }
+
+        @Override
+        public Collection<UUID> waitingPlayers() {
+            return new ArrayList<>(h.waiting);
+        }
+
+        @Override
+        public int minPlayers() {
+            return MemoryFlipManager.this.minPlayers();
+        }
+
+        @Override
+        public int maxPlayers() {
+            return MemoryFlipManager.this.maxPlayers();
+        }
+
+        @Override
+        public boolean hasOpQueued() {
+            for (UUID id : h.waiting) {
+                Player p = Bukkit.getPlayer(id);
+                if (p != null && p.isOp()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        @Override
+        public void onTick(long seconds) {
+            for (UUID id : h.waiting) {
+                Player p = Bukkit.getPlayer(id);
+                if (p != null) {
+                    Chat.actionBar(p, "&7等待中 &7| &f开始倒计时 &e" + seconds + "s");
+                }
+            }
+        }
+
+        @Override
+        public void onMessage(String message) {
+            for (UUID id : h.waiting) {
+                Player p = Bukkit.getPlayer(id);
+                if (p != null) {
+                    Chat.send(p, message);
+                }
+            }
+        }
+
+        @Override
+        public void onStart() {
+            use(h.key);
+            startGame(false);
+        }
+
+        // ---------- D21 主持人流程（配置 flow: host 才启用，默认走上游） ----------
+        @Override
+        public boolean hostFlow() {
+            return "host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"));
+        }
+
+        @Override
+        public int waitSeconds() {
+            return Math.max(5, plugin.getConfig().getInt("wait-seconds", 300));
+        }
+
+        @Override
+        public java.util.List<UUID> waitingOrder() {
+            // 顺序 = (加入 tick, 该 tick 内的随机名次)：同 tick 进来的人随机决定谁是主持人
+            java.util.List<UUID> order = new ArrayList<>(h.waiting);
+            order.sort(java.util.Comparator
+                    .comparingLong((UUID id) -> h.joinTick.getOrDefault(id, 0L))
+                    .thenComparingLong(id -> h.joinSeed.getOrDefault(id, 0L)));
+            return order;
+        }
+
+        @Override
+        public void onHostTimeout(UUID host) {
+            use(h.key);
+            Player p = Bukkit.getPlayer(host);
+            String name = p == null ? host.toString() : p.getName();
+            h.waiting.remove(host);
+            // I1：会话归属也要摘掉，否则 doctor 的人数不降、且他再也进不了别的游戏
+            if (h.session != null && p != null) {
+                h.session.leave(p);
+            }
+            if (p != null && p.isOnline()) {
+                Chat.send(p, "&c倒计时结束还没开始，你被移出本局（主持人超时）。");
+                HubAPI.teleportToLobby(p);
+            }
+            plugin.getLogger().info("[MemoryFlip] 主持人 " + name + " 超时未开始，已移出本局（剩余 "
+                    + h.waiting.size() + " 人）");
+            broadcast("&e主持人 &f" + name + " &e超时未开始，已移出本局。");
+            updateCountdown();
         }
     }
 }

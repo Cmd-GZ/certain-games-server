@@ -19,12 +19,8 @@ import java.util.UUID;
  * <p>现在每房间一份 {@code MemoryGame}，由 {@link MemoryFlipManager} 用
  * {@code RoomScoped<MemoryGame>} 分桶；**配置**（场地坐标）仍按场地名查，两者不混。
  *
- * <p>迁移步骤（本轮只建类，不动 manager 的行为）：
- * <ol>
- *   <li>manager 里加 {@code RoomScoped<MemoryGame> games = new RoomScoped<>("memoryflip")}</li>
- *   <li>每个方法开头取 {@code MemoryGame g = game(...)}，把 {@code waiting} 等改成 {@code g.waiting}</li>
- *   <li>删掉 manager 上的同名字段</li>
- * </ol>
+ * <p>迁移已经完成：manager 里**不再有这些字段**，所有引用都走"当前房间那一份"（见
+ * {@code MemoryFlipManager#game()}）。
  */
 final class MemoryGame {
 
@@ -40,6 +36,15 @@ final class MemoryGame {
     /** 加入时的 tick 与同 tick 内的随机名次（D21：同 tick 的人随机决定主持人）。 */
     final Map<UUID, Long> joinTick = new HashMap<>();
     final Map<UUID, Long> joinSeed = new HashMap<>();
+
+    /** 本房间的等待倒计时（D22：每房间一个实例，否则两个房间的倒计时会互相取消）。 */
+    com.hub.util.WaitCountdown countdown;
+    /** 本房间的阶段（WAITING / RUNNING）。 */
+    MemoryFlipManager.State state = MemoryFlipManager.State.WAITING;
+    /** 本房间的对局会话。 */
+    MemoryFlipSession session;
+    /** endGame 传下来的收场文案（每房间一份，避免两个房间互相覆盖）。 */
+    String pendingEndMessage;
 
     BukkitTask gameTask;
     int secondsLeft;
