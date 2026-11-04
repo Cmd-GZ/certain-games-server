@@ -480,7 +480,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     // ---------- 会话 ----------
 
     public boolean join(Player p, String arenaName) {
-        TntRunArena a = liveArena(keyOf(p.getUniqueId()));
+        TntRunArena a = arenas.get(arenaName);   // 模板：坐标来自配置（别用 liveArena(keyOf(p))，那时还没有键）
         if (a == null) {
             msg(p, "&c场 &e" + arenaName + "&c 不存在。");
             return false;
@@ -739,7 +739,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     }
 
     private WaitCountdown wait(TntRunArena a) {
-        return waits.computeIfAbsent(a.getName(), n -> new WaitCountdown(plugin, new WaitCountdown.Host() {
+        return waits.computeIfAbsent(a.roomKey(), n -> new WaitCountdown(plugin, new WaitCountdown.Host() {
             @Override
             public Collection<UUID> waitingPlayers() {
                 return a.getPlayers();
@@ -1008,7 +1008,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** 真正的收场逻辑（由 session.onEnd 回调，也可在没有会话时直接调用）。 */
     void doEndGame(String arenaName) {
-        TntRunArena a = arenas.get(arenaName);
+        TntRunArena a = arenaByName(arenaName);
         if (a == null) {
             return;
         }
