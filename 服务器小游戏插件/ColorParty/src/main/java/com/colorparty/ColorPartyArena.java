@@ -401,6 +401,12 @@ public class ColorPartyArena {
         if (snapshot.isEmpty() || b == null || pos1.getWorld() == null) {
             return -1;
         }
+        // 世界已经卸载（房间在对局结束时被销毁）时不能碰方块：chunk system 已关，
+        // 读方块会抛 IllegalStateException（真实事故：关服时 1 条 ERROR 把冒烟断言搅浑，
+        // 这条在 TntRun 上修过一次，ColorParty 是同一个坑）。
+        if (org.bukkit.Bukkit.getWorld(pos1.getWorld().getName()) == null) {
+            return 0;
+        }
         BlockData air = Material.AIR.createBlockData();
         int changed = restoreRegion(b, pos1.getWorld(), air);
         if (hasPanel()) {
