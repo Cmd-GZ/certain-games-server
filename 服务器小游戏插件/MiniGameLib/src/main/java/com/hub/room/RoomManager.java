@@ -513,6 +513,31 @@ public final class RoomManager {
      * @param desiredId 期望的房间名；为空则自动生成
      * @return 成功返回 Room；失败返回 null（原因写进日志/Failures）
      */
+    /**
+     * **场地别名**：同一游戏 + 同一张地图的第 2、3… 个房间，场地名取 `<原场名>-2`、`<原场名>-3`。
+     *
+     * <p>为什么：游戏的 `Map<场地名, Arena>` / `Map<场地名, Session>` 都按**场地名**索引
+     * （D22 后半尚未改成房间 id）。两个房间用同一张地图 → 场地名相同 → 共用一份状态（串台）。
+     * 给房间一个唯一场地名后，现有代码天然分开：游戏配置里为每张地图预备 `<场名>-2 … -8`
+     * 这几份别名条目即可（坐标/快照和原条目完全一样）。
+     *
+     * <p>第一个房间仍用原名（`/hill join 高台之王` 这类老习惯不变）。
+     */
+    public static String arenaAliasFor(GameMap map) {
+        String base = firstArenaOf(map);
+        if (base.isBlank()) {
+            return base;
+        }
+        int used = 0;
+        for (Room r : ROOMS.values()) {
+            String a = r.arena();
+            if (a != null && (a.equals(base) || a.startsWith(base + "-"))) {
+                used++;
+            }
+        }
+        return used <= 0 ? base : base + "-" + (used + 1);
+    }
+
     public static synchronized Room createForMap(GameMap map, String desiredId) {
         if (!ready) {
             return fail("房间引擎未就绪");
@@ -540,7 +565,7 @@ public final class RoomManager {
         // **场地名**：`{arena}` 要替换成它（很多游戏的 join 命令是 `<cmd> join <场名>`）。
         // 之前这里没设 → 房间 arena 是空串 → 命令少一个参数 → 游戏只回一句用法提示、不建会话。
         // 取法：优先"属于这个游戏"的第一块区域；没有就取整张地图的第一块区域。
-        room.setArena(firstArenaOf(map));
+        room.setArena(arenaAliasFor(map));
         room.setPolicy(map.policy());
         java.util.List<File> created = new java.util.ArrayList<>();
         long t0 = System.nanoTime();
