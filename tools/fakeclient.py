@@ -645,38 +645,56 @@ def main():
     ap.add_argument("--trace", action="store_true", help="打印每一个收到的包（排查登录问题用）")
     args = ap.parse_args()
 
-    # 支持 "3:hill join;7:arcade join" 这种逐条延迟；不带前缀的用 --gap
-    commands = []
-    for item in args.commands.split(";"):
-        item = item.strip()
-        if not item:
-            continue
-        delay = args.gap
-        head, sep, tail = item.partition(":")
-        if sep and head.strip().isdigit():
-            delay = float(head.strip())
-            item = tail.strip()
-        if item:
-            commands.append((delay, item))
+    def parse_actions(text):
+        """支持 "3:hill join;7:arcade join" 这种逐条延迟；不带前缀的用 --gap。"""
+        commands = []
+        for item in text.split(";"):
+            item = item.strip()
+            if not item:
+                continue
+            delay = args.gap
+            head, sep, tail = item.partition(":")
+            if sep and head.strip().isdigit():
+                delay = float(head.strip())
+                item = tail.strip()
+            if item:
+                commands.append((delay, item))
+        out = []
+        offset = args.delay
+        for delay, cmd in commands:
+            offset += delay
+            out.append((offset, cmd))
+        return out
 
-    # 统一换算成"相对就绪时刻 t0 的偏移"，所有 bot 用同一份
-    actions = []
-    offset = args.delay
-    for delay, cmd in commands:
-        offset += delay
-        actions.append((offset, cmd))
+    # **按 bot 分配命令表**：用 `;;` 分隔，第 i 段给第 i 个 bot（不够就重复最后一段）。
+    # 用途：多房间 —— 让 A 进 room1、B 进 room2，才能验证"两个房间各跑一局"。
+    shared = parse_actions(args.commands)
+    split = [seg for seg in args.commands.split(";;")] if ";;" in args.commands else None
+    per_bot = [parse_actions(seg) for seg in split] if split else None
 
     names = [n.strip() for n in args.name.split(",") if n.strip()] or ["TestBot"]
     names = names[:4]                      # 最多 4 个，防止手滑起一堆
     gate = Gate(names) if (len(names) > 1 and args.sync_timeout > 0) else None
-    log(f"假玩家 {', '.join(names)}；命令表 "
-        + ("; ".join(f"+{off:.0f}s /{cmd}" for off, cmd in actions) if actions else "（无）")
-        + f"；就绪闸门 {'开' if gate else '关'}")
+    def actions_for(idx):
+        if per_bot:
+            return per_bot[min(idx, len(per_bot) - 1)]
+        return shared
+
+    if per_bot:
+        log(f"假玩家 {', '.join(names)}；**按人分配命令表**（;; 分隔，共 {len(per_bot)} 段）")
+        for idx, nm in enumerate(names):
+            acts = actions_for(idx)
+            log(f"  {nm}: " + ("; ".join(f"+{off:.0f}s /{cmd}" for off, cmd in acts) if acts else "（无）"))
+    else:
+        log(f"假玩家 {', '.join(names)}；命令表 "
+            + ("; ".join(f"+{off:.0f}s /{cmd}" for off, cmd in shared) if shared else "（无）"))
+    log(f"就绪闸门 {'开' if gate else '关'}")
 
     results = []
     threads = []
     for idx, nm in enumerate(names):
-        t = threading.Thread(target=lambda nm=nm: results.append(run_one(args, nm, actions, gate)),
+        t = threading.Thread(target=lambda nm=nm, i=idx: results.append(
+            run_one(args, nm, actions_for(i), gate)),
                              name=nm, daemon=True)
         t.start()
         threads.append(t)
