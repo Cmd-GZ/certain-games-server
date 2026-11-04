@@ -1136,6 +1136,24 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
                 }
                 out.add("  &7- &f" + r.describe());
             }
+            // ---- 7b. 多房间（D22 后半）：同一游戏是否同时开了多个房间 --
+            java.util.Map<String, Integer> perGame = new java.util.LinkedHashMap<>();
+            for (var r : rooms) {
+                String g = r.game() == null || r.game().isBlank() ? r.template.key() : r.game();
+                perGame.merge(g, 1, Integer::sum);
+            }
+            StringBuilder multi = new StringBuilder();
+            for (var e : perGame.entrySet()) {
+                if (e.getValue() > 1) {
+                    multi.append("&f").append(e.getKey()).append("&7=").append(e.getValue()).append(" &7/ ");
+                }
+            }
+            if (multi.length() == 0) {
+                out.add("&b[多房间] &7无（同一游戏最多 1 个房间）");
+            } else {
+                out.add("&b[多房间] &c有游戏同时开了多个房间：" + multi
+                        + "&7（**会话/场地仍按场地名索引，会串台** —— D22 后半未完成）");
+            }
             if (rooms.isEmpty() && !tpls.isEmpty()) {
                 out.add("  &7提示：/hub room create <模板> 建一个试试");
             }
