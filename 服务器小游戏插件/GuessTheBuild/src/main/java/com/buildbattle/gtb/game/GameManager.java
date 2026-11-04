@@ -173,6 +173,11 @@ public class GameManager {
     private boolean hintSent = false;
     private int shortenStage = 0; // 0=未缩短 1=已缩至30秒 2=已缩至10秒
     private final Random random = new Random();
+    /** I3：会话里的搬迁代码要用到 plugin。 */
+    public GuessBuildPlugin plugin() {
+        return plugin;
+    }
+
 
     public GameManager(GuessBuildPlugin plugin) {
         this.plugin = plugin;

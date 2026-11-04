@@ -5,7 +5,6 @@ import com.buildbattle.gtb.arena.ArenaManager;
 import com.buildbattle.gtb.arena.WandSession;
 import com.buildbattle.gtb.command.GTBCommand;
 import com.buildbattle.gtb.game.GameManager;
-import com.buildbattle.gtb.listener.GameListener;
 import com.buildbattle.gtb.util.Chat;
 import com.buildbattle.gtb.words.WordManager;
 import com.hub.util.SetupMode;
@@ -113,7 +112,7 @@ public final class GuessBuildPlugin extends JavaPlugin {
             });
         }
 
-        getServer().getPluginManager().registerEvents(new GameListener(this), this);
+        // I3：本插件已无 Listener —— 事件由框架按归属派发到 Session 的钩子
 
         // 世界加载完成后处理"地板商店"NPC（默认只在场地角落生成，可用 game.floor-npc 关闭）与主城加入告示牌
         Bukkit.getScheduler().runTaskLater(this, this::initFloorNpc, 20L);

@@ -87,13 +87,22 @@ def main():
         print('没有需要搬的 Listener')
         return 1
 
+    # 只认"真的 extends GameSession"的那个文件 —— 别被 XxxSession 这种同名工具类骗了
+    # （踩过：GuessTheBuild 的 WandSession 只是建场工具的会话，不是对局会话）
     sessions = []
     for root, _dirs, files in os.walk(os.path.join(mod, 'src', 'main', 'java')):
         for f in files:
-            if f.endswith('Session.java'):
-                sessions.append(os.path.join(root, f))
+            if not f.endswith('.java'):
+                continue
+            p = os.path.join(root, f)
+            body = open(p, encoding='utf-8').read()
+            if 'extends GameSession' in body:
+                sessions.append(p)
     if not sessions:
-        print('该模块没有 Session 类，先手动建一个')
+        print('该模块没有 extends GameSession 的类，先手动建一个')
+        return 1
+    if len(sessions) > 1:
+        print('有多个 GameSession 子类，请手动指定：', sessions)
         return 1
     session = sessions[0]
 
