@@ -57,11 +57,55 @@ public class TntRunManager {
      */
     private final Map<String, TntRunSession> sessions = new LinkedHashMap<>();
 
-    private TntRunSession ensureSession(String arenaName) {
-        TntRunSession s = sessions.get(arenaName);
+    /** 玩家 → 房间键；房间键 → 场地名；每房间一份运行时场地实例（D22）。 */
+    private final java.util.Map<UUID, String> playerKey = new LinkedHashMap<>();
+    private final java.util.Map<String, String> keyArena = new LinkedHashMap<>();
+    private final Map<String, TntRunArena> liveArenas = new LinkedHashMap<>();
+
+    public String keyOf(UUID id) {
+        String k = playerKey.get(id);
+        if (k != null) {
+            return k;
+        }
+        String name = playerArena.get(id);
+        return name == null ? null : name;
+    }
+
+    public String arenaNameOfKey(String key) {
+        return keyArena.getOrDefault(key, key);
+    }
+
+    /** 该房间的运行时场地实例；首次使用时从配置模板克隆（坐标 + 共享快照，本局状态全新）。 */
+    public TntRunArena liveArena(String key) {
+        TntRunArena live = liveArenas.get(key);
+        if (live != null) {
+            return live;
+        }
+        TntRunArena tpl = arenas.get(arenaNameOfKey(key));
+        if (tpl == null) {
+            return null;
+        }
+        TntRunArena copy = tpl.copyConfig();
+        copy.setRoomKey(key);
+        liveArenas.put(key, copy);
+        return copy;
+    }
+
+    /** 只按场地名找（无玩家上下文的只读路径；多房间时是模糊的）。 */
+    private TntRunArena arenaByName(String arenaName) {
+        for (TntRunArena live : liveArenas.values()) {
+            if (arenaName.equals(live.getName())) {
+                return live;
+            }
+        }
+        return arenas.get(arenaName);
+    }
+
+    private TntRunSession ensureSession(String key) {
+        TntRunSession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
-            s = new TntRunSession(this, arenaName);
-            sessions.put(arenaName, s);
+            s = new TntRunSession(this, arenaNameOfKey(key));
+            sessions.put(key, s);
         }
         return s;
     }
@@ -436,7 +480,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     // ---------- 会话 ----------
 
     public boolean join(Player p, String arenaName) {
-        TntRunArena a = arenas.get(arenaName);
+        TntRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             msg(p, "&c场 &e" + arenaName + "&c 不存在。");
             return false;
@@ -445,6 +489,13 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (playerArena.containsKey(id)) {
             msg(p, "&c你已在其他场。");
             return false;
+        }
+        // D22：键 = 房间 id（有房间时）；本局状态落在"本房间的"运行时场地实例上
+        String key = com.hub.room.RoomContext.roomKeyFor(p, GAME, arenaName);
+        keyArena.put(key, arenaName);
+        TntRunArena live = liveArena(key);
+        if (live != null) {
+            a = live;
         }
         if (a.getState() == TntRunArena.State.RUNNING) {
             msg(p, "&c该场正在游戏中。");
@@ -460,9 +511,10 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             return false;
         }
         playerArena.put(id, arenaName);
+        playerKey.put(id, key);
         a.getPlayers().add(id);
         a.recordJoin(id);   // D21：记下加入 tick + 随机名次（同 tick 随机选主持人）
-        TntRunSession sess = ensureSession(arenaName);
+        TntRunSession sess = ensureSession(key);
         if (!sess.join(p)) {
             plugin.getLogger().warning("[TntRun] " + p.getName() + " 加入归属链失败（场 " + arenaName + "）");
         }
@@ -503,7 +555,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             }
             return;
         }
-        TntRunArena a = arenas.get(name);
+        TntRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a != null) {
             a.getPlayers().remove(id);
             a.getEliminated().remove(id);
@@ -540,7 +592,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     }
 
     public boolean start(Player op, String arenaName) {
-        TntRunArena a = arenas.get(arenaName);
+        TntRunArena a = liveArena(keyOf(op.getUniqueId()));
         if (a == null) {
             msg(op, "&c场不存在。");
             return false;
@@ -645,7 +697,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (arenaName == null) {
             return;
         }
-        TntRunArena a = arenas.get(arenaName);
+        TntRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != TntRunArena.State.WAITING) {
             return;
         }
@@ -664,7 +716,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     /** 取（或创建）该场的等待倒计时实例：每个场一个，规则（OP 暂停 / 人数不足取消 / 满人 3s / 达标 30s）在库里。 */
     /** 某场地当前等待人数。 */
     public int waitingCountOf(String arenaName) {
-        TntRunArena a = arenas.get(arenaName);
+        TntRunArena a = arenaByName(arenaName);
         return a == null ? 0 : a.getPlayers().size();
     }
 
@@ -678,7 +730,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
             return false;
         }
-        TntRunArena a = arenas.get(arenaName);
+        TntRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || p == null) {
             return false;
         }
@@ -788,7 +840,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (arenaName == null) {
             return;
         }
-        TntRunArena a = arenas.get(arenaName);
+        TntRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != TntRunArena.State.RUNNING) {
             return;
         }
@@ -804,7 +856,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (arenaName == null) {
             return false;
         }
-        TntRunArena a = arenas.get(arenaName);
+        TntRunArena a = liveArena(keyOf(p.getUniqueId()));
         return a != null && a.getState() == TntRunArena.State.RUNNING
                 && a.getPlayers().contains(p.getUniqueId())
                 && loc != null && a.contains(loc);
@@ -817,7 +869,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     public void breakSnow(Player p, Block block) {
         String key = TntRunArena.blockKey(block.getX(), block.getY(), block.getZ());
         block.setType(Material.AIR, false);
-        TntRunArena a = arenas.get(playerArena.get(p.getUniqueId()));
+        TntRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a != null) {
             a.getBroken().put(key, Material.SNOW_BLOCK);
         }
@@ -1019,7 +1071,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        TntRunArena a = arenas.get(name);
+        TntRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             return;
         }
@@ -1071,7 +1123,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** OP 进入某场的配置模式：清背包并发配置工具（备份/发放/识别都在公共库 SetupMode 里）。 */
     public boolean enterSetup(Player p, String arenaName) {
-        TntRunArena a = arenas.get(arenaName);
+        TntRunArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             msg(p, "&c场 &e" + arenaName + "&c 不存在。");
             return false;
@@ -1116,7 +1168,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         return new SetupMode.Handler() {
             @Override
             public void onTool(Player p, String arenaName, String toolId, Action action, Block clicked) {
-                TntRunArena a = arenas.get(arenaName);
+                TntRunArena a = liveArena(keyOf(p.getUniqueId()));
                 if (a == null) {
                     exitSetup(p);
                     return;
@@ -1163,7 +1215,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
             @Override
             public void onSave(Player p, String arenaName) {
-                TntRunArena a = arenas.get(arenaName);
+                TntRunArena a = liveArena(keyOf(p.getUniqueId()));
                 if (a == null) {
                     return;
                 }
@@ -1232,7 +1284,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (locs == null) {
             return;
         }
-        TntRunArena a = arenas.get(arenaName);
+        TntRunArena a = arenaByName(arenaName);
         int waiting = a == null ? 0 : a.getPlayers().size();
         boolean running = a != null && a.getState() == TntRunArena.State.RUNNING;
         for (Location loc : locs) {

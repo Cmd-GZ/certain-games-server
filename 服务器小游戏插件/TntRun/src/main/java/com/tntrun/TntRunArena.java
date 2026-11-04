@@ -67,6 +67,33 @@ public class TntRunArena {
     /** 已调度即将消失的方块 key（踩塌的雪柱 + 雪球砸出的洞共用），避免重复调度。 */
     private final java.util.Set<String> pendingFade = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
 
+    /** 房间键（D22）：场地名是"哪张地图"，它表示"哪个房间的那一局"。 */
+    private String roomKey;
+
+    public String roomKey() {
+        return roomKey == null ? getName() : roomKey;
+    }
+
+    public void setRoomKey(String roomKey) {
+        this.roomKey = roomKey;
+    }
+
+    /**
+     * 克隆"配置部分"（D22 多房间）：键 + 坐标 + 剪断层 + **共享同一份地图快照**（只读）。
+     * 本局状态（玩家/淘汰/踩掉的方块）全部是新的。
+     */
+    public TntRunArena copyConfig() {
+        TntRunArena c = new TntRunArena(getName());
+        c.pos1 = this.pos1;
+        c.pos2 = this.pos2;
+        c.spawn = this.spawn;
+        c.lobbyPoint = this.lobbyPoint;
+        c.center = this.center;
+        c.cutoffY = this.cutoffY;
+        c.snapshot.putAll(this.snapshot);   // 快照只读，共享内容即可
+        return c;
+    }
+
     public TntRunArena(String name) {
         this.name = name;
     }
@@ -405,6 +432,11 @@ public class TntRunArena {
             return -1;
         }
         World w = pos1.getWorld();
+        // 世界已经卸载（房间在对局结束时被销毁）时不能碰方块：chunk system 已关，
+        // 读方块会抛 IllegalStateException（真实事故：关服时 1 条 ERROR 把回归断言搅浑）。
+        if (w == null || org.bukkit.Bukkit.getWorld(w.getName()) == null) {
+            return 0;
+        }
         BlockData air = Material.AIR.createBlockData();
         int changed = 0;
         for (int x = b[0]; x <= b[3]; x++) {
