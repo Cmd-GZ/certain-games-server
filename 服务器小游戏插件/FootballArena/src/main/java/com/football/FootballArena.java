@@ -69,6 +69,33 @@ public class FootballArena {
         this.name = name;
     }
 
+    /** 房间键（D22）：场地名是"哪张地图"，它表示"哪个房间的那一局"。 */
+    private String roomKey;
+
+    public String roomKey() {
+        return roomKey == null ? getName() : roomKey;
+    }
+
+    public void setRoomKey(String roomKey) {
+        this.roomKey = roomKey;
+    }
+
+    /** 克隆配置部分（范围/中心/等待点/双方出生点/球门），运行时状态全新。 */
+    public FootballArena copyConfig() {
+        FootballArena c = new FootballArena(getName());
+        c.pos1 = this.pos1;
+        c.pos2 = this.pos2;
+        c.center = this.center;
+        c.lobbyPoint = this.lobbyPoint;
+        c.spawnRed = this.spawnRed;
+        c.spawnBlue = this.spawnBlue;
+        c.goalRedPos1 = this.goalRedPos1;
+        c.goalRedPos2 = this.goalRedPos2;
+        c.goalBluePos1 = this.goalBluePos1;
+        c.goalBluePos2 = this.goalBluePos2;
+        return c;
+    }
+
     public String getName() {
         return name;
     }

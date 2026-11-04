@@ -64,11 +64,52 @@ public class FootballManager {
     private FootballArena.Team pendingWinner;
     private boolean pendingHasWinner;
 
-    private FootballSession ensureSession(String arenaName) {
-        FootballSession s = sessions.get(arenaName);
+    private final Map<UUID, String> playerKey = new LinkedHashMap<>();
+    private final Map<String, String> keyArena = new LinkedHashMap<>();
+    private final Map<String, FootballArena> liveArenas = new LinkedHashMap<>();
+
+    public String keyOf(UUID id) {
+        String k = playerKey.get(id);
+        if (k != null) {
+            return k;
+        }
+        String name = playerArena.get(id);
+        return name == null ? null : name;
+    }
+
+    public String arenaNameOfKey(String key) {
+        return keyArena.getOrDefault(key, key);
+    }
+
+    public FootballArena liveArena(String key) {
+        FootballArena live = liveArenas.get(key);
+        if (live != null) {
+            return live;
+        }
+        FootballArena tpl = arenas.get(arenaNameOfKey(key));
+        if (tpl == null) {
+            return null;
+        }
+        FootballArena copy = tpl.copyConfig();
+        copy.setRoomKey(key);
+        liveArenas.put(key, copy);
+        return copy;
+    }
+
+    private FootballArena arenaByName(String arenaName) {
+        for (FootballArena live : liveArenas.values()) {
+            if (arenaName.equals(live.getName())) {
+                return live;
+            }
+        }
+        return arenas.get(arenaName);
+    }
+
+    private FootballSession ensureSession(String key) {
+        FootballSession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
-            s = new FootballSession(this, arenaName);
-            sessions.put(arenaName, s);
+            s = new FootballSession(this, arenaNameOfKey(key));
+            sessions.put(key, s);
         }
         return s;
     }
@@ -335,11 +376,19 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             msg(p, "&c人数已满（&e" + max + "&c）。");
             return false;
         }
+        // D22：键 = 房间 id（有房间时）；本局状态落在"本房间的"运行时场地实例上
+        String key = com.hub.room.RoomContext.roomKeyFor(p, "football", arenaName);
+        keyArena.put(key, arenaName);
+        FootballArena live = liveArena(key);
+        if (live != null) {
+            a = live;
+        }
         playerArena.put(id, arenaName);
-        FootballSession sess = ensureSession(arenaName);
+        playerKey.put(id, key);
+        FootballSession sess = ensureSession(key);
         if (!sess.join(p)) {
             if (sess.players().isEmpty()) {
-                sessions.remove(arenaName);
+                sessions.remove(key);
             }
             return false;
         }
@@ -384,7 +433,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             }
             return;
         }
-        FootballArena a = arenas.get(name);
+        FootballArena a = liveArena(keyOf(p.getUniqueId()));
         if (a != null) {
             a.getPlayers().remove(id);
             a.removeFromTeams(id);
@@ -419,7 +468,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        FootballArena a = arenas.get(name);
+        FootballArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != FootballArena.State.WAITING) {
             return;
         }
@@ -432,7 +481,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     // ---------- 开赛 ----------
 
     public boolean start(Player op, String arenaName) {
-        FootballArena a = arenas.get(arenaName);
+        FootballArena a = liveArena(keyOf(op.getUniqueId()));
         if (a == null) {
             msg(op, "&c场不存在。");
             return false;
@@ -700,7 +749,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        FootballArena a = arenas.get(name);
+        FootballArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != FootballArena.State.RUNNING) {
             return;
         }
@@ -793,7 +842,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        FootballArena a = arenas.get(name);
+        FootballArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != FootballArena.State.RUNNING) {
             return;
         }
@@ -817,7 +866,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        FootballArena a = arenas.get(name);
+        FootballArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != FootballArena.State.RUNNING) {
             return;
         }
@@ -1186,7 +1235,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        FootballArena a = arenas.get(name);
+        FootballArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             return;
         }
@@ -1233,7 +1282,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     // ---------- 等待倒计时 ----------
 
     public int waitingCountOf(String arenaName) {
-        FootballArena a = arenas.get(arenaName);
+        FootballArena a = arenaByName(arenaName);
         return a == null ? 0 : a.getPlayers().size();
     }
 
@@ -1245,7 +1294,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
             return false;
         }
-        FootballArena a = arenas.get(arenaName);
+        FootballArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || p == null) {
             return false;
         }
@@ -1575,7 +1624,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     }
 
     public boolean enterSetup(Player p, String arenaName) {
-        FootballArena a = arenas.get(arenaName);
+        FootballArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             msg(p, "&c场 &e" + arenaName + "&c 不存在。");
             return false;
@@ -1656,7 +1705,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (locs == null) {
             return;
         }
-        FootballArena a = arenas.get(arenaName);
+        FootballArena a = arenaByName(arenaName);
         int waiting = a == null ? 0 : a.getPlayers().size();
         boolean running = a != null && a.getState() == FootballArena.State.RUNNING;
         for (Location loc : locs) {
