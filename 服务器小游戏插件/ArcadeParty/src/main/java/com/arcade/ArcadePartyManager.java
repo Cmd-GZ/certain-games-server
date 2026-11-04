@@ -95,12 +95,23 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
     private final Party fallbackParty = new Party();
 
     /**
+     * **强制当前派对**：倒计时到期这类**调度回调**里没有 `/hub join` 的房间上下文，
+     * 靠 `party()` 猜会拿到"最后一个 join 的房间"——于是两个派对的倒计时会去启动同一场
+     * （实测：两个派对房间、4 个玩家，只有一场开局）。所以回调里用这个显式指定。
+     */
+    private final ThreadLocal<Party> forcedParty = new ThreadLocal<>();
+
+    /**
      * 当前这一场派对（D22 第 2 阶段：**按房间取**）。
      *
      * <p>顺序：① 房间上下文（`/hub join` 时框架压栈）→ ② 派对房间（`partyRoom()` 的 roomId）
      * → ③ 兜底实例。所以"只有一场派对"时行为和以前完全一样。
      */
     Party party() {
+        Party forced = forcedParty.get();
+        if (forced != null) {
+            return forced;   // 调度回调显式指定的那一场
+        }
         String roomId = com.hub.room.RoomContext.currentRoomId();
         if (roomId == null) {
             var r = partyRoom();
@@ -172,7 +183,18 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
 
         @Override
         public void onStart() {
-            m.startParty(false);
+            // **必须显式指定这一场**：调度线程里没有房间上下文，猜会启动错的那一场
+            Party prev = m.forcedParty.get();
+            m.forcedParty.set(p);
+            try {
+                m.startParty(false);
+            } finally {
+                if (prev == null) {
+                    m.forcedParty.remove();
+                } else {
+                    m.forcedParty.set(prev);
+                }
+            }
         }
     }
 
