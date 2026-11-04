@@ -16,6 +16,45 @@ import java.util.concurrent.ThreadLocalRandom;
 public final class AnvilBattleArena {
 
     private final JavaPlugin plugin;
+
+    /**
+     * D22：这个场地实例**钉死**的房间世界（每个房间一份实例）。
+     *
+     * <p>{@link com.hub.room.RoomBinding} 是"按游戏一个槽"，两房间同时跑时后一个覆盖前一个 ——
+     * 甲房的实例会读到乙房的世界（人被传错房间）。钉死之后读取只认自己的世界。
+     */
+    private World roomWorld;
+
+    public void bindWorld(World world) {
+        this.roomWorld = world;
+    }
+
+    public World boundWorld() {
+        return roomWorld;
+    }
+
+    /**
+     * 读坐标时的世界解析：**钉死了就只认自己的房间世界**，没钉才退回按上下文的换绑。
+     *
+     * <p>钉死之后**不能**再回落 {@link com.hub.room.RoomBinding}：它先看"派对委派"、再看
+     * "该游戏唯一的房间"，两者都是**按游戏一个槽**；两房间同时跑时它会给出另一个房间的世界，
+     * 于是同一份代码里"世界"和"坐标"对不上，`World#getNearbyEntities(loc, …)` 抛
+     * {@code IllegalArgumentException: Location cannot be in a different world}
+     * （AnimalSlaughter 1.5.0 两派对实测就是这么炸的）。
+     */
+    private Location apply(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld != null) {
+            if (roomWorld.equals(loc.getWorld())) {
+                return loc;
+            }
+            return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+        }
+        return com.hub.room.RoomBinding.apply("anvilbattle", loc);
+    }
+
     private Location pos1;
     private Location pos2;
     private Location lobby;
@@ -30,12 +69,12 @@ public final class AnvilBattleArena {
 
     public void load() {
         FileConfiguration cfg = plugin.getConfig();
-        pos1 = parse(cfg.getString("arena.pos1"));
-        pos2 = parse(cfg.getString("arena.pos2"));
-        lobby = parse(cfg.getString("arena.lobby"));
+        pos1 = pin(parse(cfg.getString("arena.pos1")));
+        pos2 = pin(parse(cfg.getString("arena.pos2")));
+        lobby = pin(parse(cfg.getString("arena.lobby")));
         spawns.clear();
         for (String raw : cfg.getStringList("arena.spawns")) {
-            Location loc = parse(raw);
+            Location loc = pin(parse(raw));
             if (loc != null) {
                 spawns.add(loc);
             }
@@ -48,20 +87,26 @@ public final class AnvilBattleArena {
         plugin.reloadConfig();
         FileConfiguration cfg = plugin.getConfig();
         // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
-        if (pos1 != null) {
-            cfg.set("arena.pos1", encode(pos1));
+        String pos1Token = encode(pos1);
+        if (pos1Token != null) {
+            cfg.set("arena.pos1", pos1Token);
         }
         // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
-        if (pos2 != null) {
-            cfg.set("arena.pos2", encode(pos2));
+        String pos2Token = encode(pos2);
+        if (pos2Token != null) {
+            cfg.set("arena.pos2", pos2Token);
         }
         // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
-        if (lobby != null) {
-            cfg.set("arena.lobby", encode(lobby));
+        String lobbyToken = encode(lobby);
+        if (lobbyToken != null) {
+            cfg.set("arena.lobby", lobbyToken);
         }
         List<String> encoded = new ArrayList<>();
         for (Location spawn : spawns) {
-            encoded.add(encode(spawn));
+            String token = encode(spawn);
+            if (token != null) {
+                encoded.add(token);
+            }
         }
         if (!encoded.isEmpty()) {
             cfg.set("arena.spawns", encoded);
@@ -69,6 +114,24 @@ public final class AnvilBattleArena {
         cfg.set("arena.void-y", voidY);
         cfg.set("arena.anvil-y", anvilY);
         plugin.saveConfig();
+    }
+
+    /**
+     * **把解析出来的坐标重新钉回自己的房间世界**。
+     *
+     * <p>为什么需要：`tpl:` 的解析看的是"当前房间上下文"。`/hub join` 会让 HubCore 给所有
+     * 子游戏发一次 `reload`，如果那次上下文指向**别的**房间（实测两派对同时加入时就是这样），
+     * 于是 `arena.load()` 会把坐标解析进另一个房间的世界。钉回去之后，
+     * 房间实例无论如何重载都只认自己的世界。
+     */
+    private Location pin(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld == null || roomWorld.equals(loc.getWorld())) {
+            return loc;
+        }
+        return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
     }
 
     /** 两个角已设置且在同一个已加载的世界。 */
@@ -109,10 +172,12 @@ public final class AnvilBattleArena {
 
     /** 旁观者用的场地中心：区域中心，取较高角上方 8 格。 */
     public Location center() {
-        if (pos1 == null || pos2 == null || pos1.getWorld() == null) {
-            return lobby == null ? null : lobby.clone();
+        World world = world();
+        if (pos1 == null || pos2 == null || world == null) {
+            Location fallback = getLobby();
+            return fallback == null ? null : fallback.clone();
         }
-        return new Location(pos1.getWorld(),
+        return new Location(world,
                 (pos1.getX() + pos2.getX()) / 2.0,
                 Math.max(pos1.getY(), pos2.getY()) + 8.0,
                 (pos1.getZ() + pos2.getZ()) / 2.0);
@@ -185,12 +250,22 @@ public final class AnvilBattleArena {
         return Math.max(pos1.getBlockZ(), pos2.getBlockZ());
     }
 
+    /**
+     * 场地所在世界：**必须和 {@link #getPos1()} / {@link #getPos2()} 走同一套解析**。
+     *
+     * <p>否则会出现"世界是 A 房、坐标是 B 房"的组合，`World#getNearbyEntities(loc, …)` 会抛
+     * {@code IllegalArgumentException: Location cannot be in a different world}。
+     */
     public World world() {
-        return pos1 == null ? null : pos1.getWorld();
+        if (roomWorld != null) {
+            return roomWorld;
+        }
+        Location resolved = com.hub.room.RoomBinding.apply("anvilbattle", pos1);
+        return resolved == null ? null : resolved.getWorld();
     }
 
     public Location getPos1() {
-        return  com.hub.room.RoomBinding.apply("anvilbattle", pos1);
+        return apply(pos1);
     }
 
     public void setPos1(Location pos1) {
@@ -198,7 +273,7 @@ public final class AnvilBattleArena {
     }
 
     public Location getPos2() {
-        return  com.hub.room.RoomBinding.apply("anvilbattle", pos2);
+        return apply(pos2);
     }
 
     public void setPos2(Location pos2) {
@@ -206,7 +281,7 @@ public final class AnvilBattleArena {
     }
 
     public Location getLobby() {
-        return  com.hub.room.RoomBinding.apply("anvilbattle", lobby);
+        return apply(lobby);
     }
 
     public void setLobby(Location lobby) {
@@ -251,11 +326,23 @@ public final class AnvilBattleArena {
                 || type == Material.SEAGRASS || type == Material.TALL_SEAGRASS;
     }
 
-    private static String encode(Location loc) {        if (loc == null || loc.getWorld() == null) {
-            return "";
+    /**
+     * 坐标 → 存档 token；**写不了时返回 null**（调用方跳过，保留磁盘上的原值）。
+     *
+     * <p>房间世界名（{@code room_xxx_1}）一旦写进配置，房间销毁后这份配置就永远"未配置"了
+     * （真实事故同款）。反查不到模板时 {@link com.hub.world.Worlds#tokenOf} 会退回原始房间名，
+     * 那种情况一律不写。
+     */
+    private static String encode(Location loc) {
+        if (loc == null || loc.getWorld() == null) {
+            return null;
+        }
+        String token = com.hub.world.Worlds.tokenOf(loc.getWorld());
+        if (token == null || token.isBlank() || token.startsWith("room_")) {
+            return null;
         }
         return String.format(Locale.ROOT, "%s,%.2f,%.2f,%.2f,%.1f,%.1f",
-                com.hub.world.Worlds.tokenOf(loc.getWorld()), loc.getX(), loc.getY(), loc.getZ(),
+                token, loc.getX(), loc.getY(), loc.getZ(),
                 loc.getYaw(), loc.getPitch());
     }
 

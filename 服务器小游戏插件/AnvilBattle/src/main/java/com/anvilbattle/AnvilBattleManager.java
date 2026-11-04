@@ -64,6 +64,13 @@ public final class AnvilBattleManager {
     }
 
     private final AnvilBattlePlugin plugin;
+    /**
+     * D22：这个实例负责的**房间键**（有房间时 = 房间 id；没有房间时 = {@link #ARENA}）。
+     * 每个房间一份实例 = 一份运行时状态，所以两场派对不会互相踩。
+     */
+    private final String roomKey;
+    /** 侧边栏的键：每房间一份，否则两个房间互相覆盖。 */
+    private final String sidebarKey;
     private final AnvilBattleArena arena;
     private final NamespacedKey returnKey;
     private final NamespacedKey startKey;
@@ -85,7 +92,7 @@ public final class AnvilBattleManager {
     private AnvilBattleSession session;
 
     private AnvilBattleSession ensureSession() {
-        String key = "main";
+        String key = roomKey;   // D22：每房间一个会话（否则两场派对共用同一份会话）
         AnvilBattleSession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
             s = new AnvilBattleSession(this, key);
@@ -115,7 +122,13 @@ public final class AnvilBattleManager {
     private YamlConfiguration stats;
 
     public AnvilBattleManager(AnvilBattlePlugin plugin) {
+        this(plugin, ARENA);
+    }
+
+    public AnvilBattleManager(AnvilBattlePlugin plugin, String roomKey) {
         this.plugin = plugin;
+        this.roomKey = roomKey == null || roomKey.isBlank() ? ARENA : roomKey;
+        this.sidebarKey = "anvilbattle:" + this.roomKey;
         this.liveSidebar = new LiveSidebar(plugin);
         this.arena = new AnvilBattleArena(plugin);
         this.returnKey = new NamespacedKey(plugin, "return_item");
@@ -366,7 +379,7 @@ public final class AnvilBattleManager {
     }
 
     public void shutdown() {
-        liveSidebar.hideAll();
+        liveSidebar.hide(sidebarKey);
         cancelTasks();
         removeAnvils();
         restoreBlocks();
@@ -424,10 +437,27 @@ public final class AnvilBattleManager {
 
     /** 声明地盘（{@code docs/框架不变量.md} 的 I2）。单场游戏，场地名用空串。 */
     public void publishRegions() {
-        com.hub.region.Regions.begin("anvilbattle");
-        if (arena != null) {
-            com.hub.region.Regions.box("anvilbattle", "", arena.getPos1(), arena.getPos2());
+        if (roomKey.equals(ARENA)) {
+            com.hub.region.Regions.begin("anvilbattle");   // 只有默认实例负责"清掉上一轮"
         }
+        if (arena != null) {
+            com.hub.region.Regions.box("anvilbattle", roomKey, arena.getPos1(), arena.getPos2());
+        }
+    }
+
+    /** D22：本实例负责的房间键。 */
+    public String roomKey() {
+        return roomKey;
+    }
+
+    /** 菜单/日志里用的场地名：默认实例仍叫「主场地」，房间实例用房间 id。 */
+    public String arenaLabel() {
+        return roomKey;
+    }
+
+    /** 这个实例是不是已经空着（外层据此回收房间实例）。 */
+    public boolean idle() {
+        return state == State.WAITING && waiting.isEmpty() && playing.isEmpty() && eliminated.isEmpty();
     }
 
     public void saveAll() {
@@ -559,31 +589,41 @@ public final class AnvilBattleManager {
         return minPlayers();
     }
 
-    public void join(Player player) {
+    /**
+     * 玩家加入这一份状态。
+     *
+     * @return 真的进去了（外层据此决定要不要记"这个人在哪个房间"）
+     */
+    public boolean join(Player player) {
         UUID id = player.getUniqueId();
         if (state == State.RUNNING) {
             Chat.send(player, "&c对局正在进行中，请等这一局结束后再加入。");
-            return;
+            return false;
         }
         if (waiting.contains(id)) {
             Chat.send(player, "&e你已经在等待队列中。");
-            return;
+            return false;
         }
         if (waiting.size() >= maxPlayers()) {
             Chat.send(player, "&c等待队列已满（" + maxPlayers() + " 人）。");
-            return;
+            return false;
         }
         if (!arena.isReady()) {
             Chat.send(player, "&c场地还没配置完整（缺 " + arena.missing() + "），请联系管理员。");
-            return;
+            return false;
+        }
+        // I1（D23）：**先挂会话再入队**；冲突直接拒绝，绝不留下"队列里有他、归属链上没他"的半加入状态
+        AnvilBattleSession sess = ensureSession();
+        if (sess != null && !sess.join(player)) {
+            if (sess.players().isEmpty()) {
+                sessions.remove(roomKey);
+            }
+            plugin.getLogger().warning("[AnvilBattle] " + player.getName() + " 加入归属链失败（见 [被吞异常]）");
+            return false;
         }
         waiting.add(id);
         joinTick.put(id, (long) Bukkit.getCurrentTick());
         joinSeed.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
-        ensureSession();
-        if (session != null && !session.join(player)) {
-            plugin.getLogger().warning("[AnvilBattle] " + player.getName() + " 加入归属链失败（见 [被吞异常]）");
-        }
         player.getInventory().clear();
         player.setGameMode(GameMode.SURVIVAL);
         resetPlayer(player);
@@ -595,6 +635,7 @@ public final class AnvilBattleManager {
         Chat.send(player, "&7人数达到 &f" + minPlayers() + " &7后自动倒计时开始。");
         updateCountdown();
         reportArena();
+        return true;
     }
 
     public void leave(Player player, boolean silent) {
@@ -685,7 +726,8 @@ public final class AnvilBattleManager {
             }
         }
         if (!ready.isEmpty() && (ready.size() >= minPlayers() || force)) {
-            if (startCountdown().begin("main", new ArrayList<>(ready), () -> startGame(force))) {
+            // D22：键用房间 id，否则两个房间的"开局 3-2-1"互相顶掉
+            if (startCountdown().begin(roomKey, new ArrayList<>(ready), () -> startGame(force))) {
                 return;
             }
         }
@@ -742,7 +784,7 @@ public final class AnvilBattleManager {
                 p.setVelocity(new Vector(0, 0, 0));
             }
         }
-        HubAPI.setArenaSpectator(GAME, ARENA, arena.center());
+        HubAPI.setArenaSpectator(GAME, arenaLabel(), arena.center());
         broadcast("&6&l========== " + GAME + " 开始 ==========");
         broadcast("&f天上会随机掉铁砧；被砸中或掉到 &eY=" + format(arena.getVoidY()) + " &f以下就淘汰。");
         String rampInfo = rampEnabled()
@@ -789,7 +831,7 @@ public final class AnvilBattleManager {
             return;
         }
         cancelTasks();
-        liveSidebar.hide("anvilbattle");
+        liveSidebar.hide(sidebarKey);
         removeAnvils();
         state = State.WAITING;
         secondsLeft = 0;
@@ -1250,7 +1292,7 @@ public final class AnvilBattleManager {
         for (UUID id : online) {
             lines.add(new LiveSidebar.Line("§e" + nameOf(id), 0));
         }
-        liveSidebar.update("anvilbattle", "&7&l铁砧掘战 · 存活", online, lines);
+        liveSidebar.update(sidebarKey, "&7&l铁砧掘战 · 存活", online, lines);
     }
 
     private void updateActionBar() {
@@ -1424,9 +1466,9 @@ public final class AnvilBattleManager {
         String extra = running
                 ? ("剩余 " + secondsLeft + "s · 存活 " + playing.size() + " · 每波 " + currentAnvilAmount())
                 : null;
-        HubAPI.setArena(GAME, ARENA, running ? GameState.PLAYING : GameState.WAITING,
+        HubAPI.setArena(GAME, arenaLabel(), running ? GameState.PLAYING : GameState.WAITING,
                 waiting.size() + playing.size() + eliminated.size(), extra);
-        HubAPI.setArenaSpectator(GAME, ARENA, arena.center());
+        HubAPI.setArenaSpectator(GAME, arenaLabel(), arena.center());
     }
 
     private void broadcast(String message) {
