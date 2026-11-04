@@ -87,6 +87,7 @@ public final class SessionEvents implements Listener {
         }
         try {
             PlayerSessions.quitToLobby(p);
+            com.hub.room.RoomContext.clearPlayer(p.getUniqueId());
             Bukkit.getLogger().info("[会话] " + p.getName() + " 下线 → 归属链已摘除（" + depth + " 层）");
         } catch (RuntimeException ex) {
             Failures.recordAndWarn("SessionEvents.下线摘链", ex);

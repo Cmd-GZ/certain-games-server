@@ -75,6 +75,8 @@ public final class RoomActions {
             // **告诉游戏它在哪个房间**：派对/子游戏据此取场地与委派，不用自己去搜
             //（activeFor 在多房间时返回 null，靠搜是搜不到的）。
             com.hub.room.RoomContext.bind(gameKey, room);
+            // 同时按**玩家**记一份（同一游戏多房间时，这份不会互相覆盖 —— D22 后半的入口）
+            com.hub.room.RoomContext.bindPlayer(p.getUniqueId(), room);
 
             // **场地懒加载**：游戏在插件启用时解析 `tpl:<模板键>` 会失败（那时还没有房间），
             // 之后就一直报"场地未配置完整"。框架在这里让游戏**重载一次配置**——
