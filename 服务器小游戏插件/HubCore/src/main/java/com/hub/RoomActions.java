@@ -123,6 +123,25 @@ public final class RoomActions {
             // 所以这里以"玩家实际进的那个房间"为准，把房间 id 记到他的会话上——
             // 对局结束时框架靠它决定销毁哪个房间（同游戏多房间时不会删错）。
             stampRoomLater(p, room.roomId, 0);
+
+            // **入房后自检**（R3 失败可见）：2 秒后若这个玩家还没挂上任何会话，
+            // 说明游戏侧的 join 被静默拒绝了 —— 这是最难查的一类问题
+            //（真实事故：`liveArena(keyOf(player))` 被误改到 join 第一行 → 永远"场不存在"，
+            //  控制台一行日志都没有）。这里统一留一条可查的警告。
+            final String joinCmd = join;
+            org.bukkit.Bukkit.getScheduler().runTaskLater(
+                    org.bukkit.Bukkit.getPluginManager().getPlugin("HubCore"),
+                    () -> {
+                        Player online = org.bukkit.Bukkit.getPlayer(p.getUniqueId());
+                        if (online == null || !online.isOnline()) {
+                            return;
+                        }
+                        if (com.hub.session.PlayerSessions.sessionOf(online.getUniqueId()) == null) {
+                            log(plugin, "[/hub join] ⚠ " + online.getName() + " 进房后**没有会话**："
+                                    + "房间 " + roomId + "，执行的命令 /" + joinCmd
+                                    + " —— 游戏侧的 join 很可能被静默拒绝了（查该游戏的控制台输出）");
+                        }
+                    }, 40L);
             p.sendMessage(LEGACY.deserialize("&a已进入房间 &f" + roomId
                     + " &7并加入 &f/" + join + "&7（模板 &f" + room.template.key() + "&7）"));
         } else {
