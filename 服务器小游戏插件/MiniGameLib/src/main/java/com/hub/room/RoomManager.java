@@ -437,6 +437,19 @@ public final class RoomManager {
     }
 
     /**
+     * **指定房间**的世界（D22：多房间时唯一正确的解析）。没有这个房间返回 null。
+     *
+     * <p>由 {@code Worlds.resolve("tpl:...")} 在"有房间上下文"时调用（见 `RoomContext.pushRoom`）。
+     */
+    public static World worldOfRoom(String roomId) {
+        if (roomId == null) {
+            return null;
+        }
+        Room room = ROOMS.get(roomId);
+        return room == null ? null : room.world;
+    }
+
+    /**
      * 某个游戏**当前唯一活跃的房间**（房间化 R1.5 用）。
      *
      * <p>为什么是"唯一"：现在的游戏都还是**单局结构**（一份等待队列、一块场地），

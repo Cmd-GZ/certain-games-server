@@ -25,6 +25,30 @@ public final class RoomContext {
     private static final java.util.Map<java.util.UUID, RoomManager.Room> BY_PLAYER =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    /**
+     * **当前房间**（线程内上下文）：框架在执行"某个房间的"操作时压栈，
+     * 让 `tpl:<模板>` 这种令牌解析到**这个房间**的世界，而不是靠"该游戏恰好只有一个房间"。
+     *
+     * <p>为什么必须有：{@link RoomManager#activeFor(String)} 在两个房间时返回 null，
+     * 于是所有 `tpl:` 坐标都解析不出来（真实事故：两个密室房间 → 场地全"未就绪"）。
+     * 房间是**操作发起者已知**的信息，不该事后去猜。
+     */
+    private static final ThreadLocal<String> CURRENT_ROOM = new ThreadLocal<>();
+
+    /** 压入"当前正在操作哪个房间"，务必在 finally 里 {@link #popRoom()}。 */
+    public static void pushRoom(String roomId) {
+        CURRENT_ROOM.set(roomId);
+    }
+
+    public static void popRoom() {
+        CURRENT_ROOM.remove();
+    }
+
+    /** 当前房间 id；没有上下文时返回 null。 */
+    public static String currentRoomId() {
+        return CURRENT_ROOM.get();
+    }
+
     private RoomContext() {
     }
 

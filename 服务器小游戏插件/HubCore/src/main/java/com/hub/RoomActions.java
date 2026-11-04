@@ -94,19 +94,30 @@ public final class RoomActions {
             // **每个房间只重载一次**：重载会触发游戏的 load()，很多游戏的 load() 会清空等待队列
             // （真实事故：第二个玩家进房时又重载了一次，把第一个玩家从派对队列里挤掉，
             //   于是 waiting 永远是 1，30 秒倒计时永远不满足 min-players）。
-            if (RELOADED_ROOMS.add(room.roomId)) {
-                reloadIfIdle(gameKey);
-                for (String sub : room.subGames()) {
-                    if (!sub.equalsIgnoreCase(gameKey)) {
-                        reloadIfIdle(sub);
+            // **压入"当前房间"**：让 `tpl:<模板>` 解析到**这个房间**的世界（多房间时不能靠"该游戏唯一房间"去猜）
+            com.hub.room.RoomContext.pushRoom(room.roomId);
+            try {
+                if (RELOADED_ROOMS.add(room.roomId)) {
+                    reloadIfIdle(gameKey);
+                    for (String sub : room.subGames()) {
+                        if (!sub.equalsIgnoreCase(gameKey)) {
+                            reloadIfIdle(sub);
+                        }
                     }
                 }
+            } finally {
+                com.hub.room.RoomContext.popRoom();
             }
             if (plugin != null) {
                 plugin.getLogger().info("[/hub join] " + p.getName() + " 执行 " + join
                         + "（房间上下文已绑定 " + gameKey + " -> " + room.roomId + "）");
             }
-            p.performCommand(join);
+            com.hub.room.RoomContext.pushRoom(room.roomId);
+            try {
+                p.performCommand(join);
+            } finally {
+                com.hub.room.RoomContext.popRoom();
+            }
 
             // **精确盖章**：房间上下文是"按游戏"存的一个槽，同一游戏开两个房间时会互相覆盖。
             // 所以这里以"玩家实际进的那个房间"为准，把房间 id 记到他的会话上——

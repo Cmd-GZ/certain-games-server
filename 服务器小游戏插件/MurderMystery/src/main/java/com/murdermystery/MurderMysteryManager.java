@@ -74,11 +74,58 @@ public class MurderMysteryManager {
     private boolean pendingInnocentsWin;
     private String pendingOutcome;
 
-    private MurderMysterySession ensureSession(String arenaName) {
-        MurderMysterySession s = sessions.get(arenaName);
+    /** 玩家 → 房间键；房间键 → 场地名。D22：键用房间 id，没有房间时退回场地名。 */
+    private final java.util.Map<UUID, String> playerKey = new java.util.LinkedHashMap<>();
+    private final java.util.Map<String, String> keyArena = new java.util.LinkedHashMap<>();
+    /** 每房间一份运行时场地实例（配置字段抄自模板，本局状态独立）。 */
+    private final java.util.Map<String, MurderMysteryArena> liveArenas = new java.util.LinkedHashMap<>();
+
+    public String keyOf(UUID id) {
+        String k = playerKey.get(id);
+        if (k != null) {
+            return k;
+        }
+        String name = playerArena.get(id);
+        return name == null ? null : name;
+    }
+
+    public String arenaNameOfKey(String key) {
+        return keyArena.getOrDefault(key, key);
+    }
+
+    public MurderMysteryArena liveArena(String key) {
+        MurderMysteryArena live = liveArenas.get(key);
+        if (live != null) {
+            return live;
+        }
+        MurderMysteryArena tpl = arenas.get(arenaNameOfKey(key));
+        if (tpl == null) {
+            return null;
+        }
+        MurderMysteryArena copy = new MurderMysteryArena(tpl.getName());
+        copy.setPos1(tpl.getPos1());
+        copy.setPos2(tpl.getPos2());
+        copy.setCenter(tpl.getCenter());
+        copy.setLobbyPoint(tpl.getLobbyPoint());
+        copy.setRoomKey(key);
+        liveArenas.put(key, copy);
+        return copy;
+    }
+
+    private MurderMysteryArena arenaByName(String arenaName) {
+        for (MurderMysteryArena live : liveArenas.values()) {
+            if (arenaName.equals(live.getName())) {
+                return live;
+            }
+        }
+        return arenas.get(arenaName);
+    }
+
+    private MurderMysterySession ensureSession(String key) {
+        MurderMysterySession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
-            s = new MurderMysterySession(this, arenaName);
-            sessions.put(arenaName, s);
+            s = new MurderMysterySession(this, arenaNameOfKey(key));
+            sessions.put(key, s);
         }
         return s;
     }
@@ -647,12 +694,13 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** 玩家加入。 */
     public boolean join(Player p, String arenaName) {
-        MurderMysteryArena a = arenas.get(arenaName);
+        MurderMysteryArena a = arenas.get(arenaName);   // 模板：坐标来自配置
         if (a == null) {
             msg(p, "&c场 &e" + arenaName + "&c 不存在。");
             return false;
         }
         UUID id = p.getUniqueId();
+        String key = com.hub.room.RoomContext.roomKeyFor(p, "murdermystery", arenaName);
         if (playerArena.containsKey(id)) {
             msg(p, "&c你已在其他场。");
             return false;
@@ -670,11 +718,21 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             msg(p, "&c人数已满（&e" + max + "&c）。");
             return false;
         }
-        MurderMysterySession sess = ensureSession(arenaName);
+        keyArena.put(key, arenaName);
+        playerKey.put(id, key);
+        MurderMysteryArena live = liveArena(key);
+        MurderMysteryArena stateArena = live == null ? a : live;
+        if (stateArena.getState() == MurderMysteryArena.State.RUNNING) {
+            playerKey.remove(id);
+            msg(p, "&c该场正在游戏中。");
+            return false;
+        }
+        MurderMysterySession sess = ensureSession(key);
         if (!sess.join(p)) {
             if (sess.players().isEmpty()) {
-                sessions.remove(arenaName);
+                sessions.remove(key);
             }
+            playerKey.remove(id);
             return false;
         }
         playerArena.put(id, arenaName);
@@ -729,7 +787,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             }
             return;
         }
-        MurderMysteryArena a = arenas.get(name);
+        MurderMysteryArena a = liveArena(keyOf(p.getUniqueId()));
         if (a != null) {
             // 必须在移除之前记录身份：isMurderer 就是查 murderers 集合
             boolean wasMurderer = a.isMurderer(id);
@@ -786,7 +844,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        MurderMysteryArena a = arenas.get(name);
+        MurderMysteryArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             return;
         }
@@ -878,7 +936,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (arenaName == null) {
             return;
         }
-        MurderMysteryArena a = arenas.get(arenaName);
+        MurderMysteryArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != MurderMysteryArena.State.WAITING) {
             return;
         }
@@ -891,7 +949,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** 取（或创建）某场地的等待倒计时；公共库负责人数/OP 规则与计时。 */
     public int waitingCountOf(String arenaName) {
-        MurderMysteryArena a = arenas.get(arenaName);
+        MurderMysteryArena a = arenaByName(arenaName);
         return a == null ? 0 : a.getPlayers().size();
     }
 
@@ -903,7 +961,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
             return false;
         }
-        MurderMysteryArena a = arenas.get(arenaName);
+        MurderMysteryArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || p == null) {
             return false;
         }
@@ -1067,7 +1125,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     }
 
     public boolean start(Player op, String arenaName) {
-        MurderMysteryArena a = arenas.get(arenaName);
+        MurderMysteryArena a = liveArena(keyOf(op.getUniqueId()));
         if (a == null) {
             msg(op, "&c场不存在。");
             return false;
@@ -1101,7 +1159,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         a.getDetectiveStoneAt().clear();
         a.getCompassTargets().clear();
         cancelGameTask(a); // 清掉上一局可能残留的计时/指南针任务
-        lastGoldSpawn.remove(a.getName());
+        lastGoldSpawn.remove(a.roomKey());
         goldCursor.remove(a.getName()); // 新一局从第一个金块重新开始
         assignRoles(a);
         startGoldScan(a); // 顺便开始后台扫金块（分帧，不影响 TPS），扫完就能稳稳刷在金块上
@@ -1203,7 +1261,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (old != null) {
             old.cancel();
         }
-        gameTasks.put(a.getName(), Bukkit.getScheduler().runTaskTimer(plugin, new Runnable() {
+        gameTasks.put(a.roomKey(), Bukkit.getScheduler().runTaskTimer(plugin, new Runnable() {
             /** 1 = 开局倒数（还没公布身份）；2 = 公布身份后的发道具倒数。 */
             private int phase = 1;
             private int left = seconds;
@@ -1744,7 +1802,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (old != null) {
             old.cancel();
         }
-        gameTasks.put(a.getName(), Bukkit.getScheduler().runTaskTimer(plugin, () -> tickGame(a), 20L, 20L));
+        gameTasks.put(a.roomKey(), Bukkit.getScheduler().runTaskTimer(plugin, () -> tickGame(a), 20L, 20L));
         // 指南针每 0.25 秒追一次目标位置；目标死亡/离开后自动换下一个存活无辜者
         BukkitTask oldCompass = compassTasks.remove(a.getName());
         if (oldCompass != null) {
@@ -2122,7 +2180,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** 真正的收场逻辑（由 session.onEnd 回调）。结算参数透传，玩家看到的结果不变。 */
     void doEndGame(String arenaName) {
-        MurderMysteryArena a = arenas.get(arenaName);
+        MurderMysteryArena a = arenaByName(arenaName);
         if (a == null) {
             return;
         }
@@ -2213,7 +2271,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         a.getKnifeCooldown().clear();
         a.getDetectiveStoneAt().clear();
         a.getCompassTargets().clear();
-        lastGoldSpawn.remove(a.getName());
+        lastGoldSpawn.remove(a.roomKey());
         goldCursor.remove(a.getName()); // 下一局重新从第一个金块开始按顺序刷
         roleCountdown.remove(a.getName());
         clearFlyingSwords(); // 场上还在飞的飞剑（雪球 + 铁剑展示实体）一起清掉
@@ -2252,7 +2310,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        MurderMysteryArena a = arenas.get(name);
+        MurderMysteryArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != MurderMysteryArena.State.RUNNING) {
             return;
         }
@@ -2315,7 +2373,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        MurderMysteryArena a = arenas.get(name);
+        MurderMysteryArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != MurderMysteryArena.State.RUNNING) {
             return;
         }
@@ -2371,7 +2429,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             msg(p, "&c你现在不在对局中。");
             return;
         }
-        MurderMysteryArena a = arenas.get(name);
+        MurderMysteryArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != MurderMysteryArena.State.RUNNING) {
             msg(p, "&c对局还没开始或已经结束了。");
             return;
@@ -2436,7 +2494,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             return;
         }
         String name = playerArena.get(p.getUniqueId());
-        MurderMysteryArena a = name == null ? null : arenas.get(name);
+        MurderMysteryArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != MurderMysteryArena.State.RUNNING || !a.getEliminated().contains(p.getUniqueId())) {
             p.closeInventory();
             msg(p, "&c只能在对局中、且你已经被淘汰之后使用这个菜单。");
@@ -2461,7 +2519,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        MurderMysteryArena a = arenas.get(name);
+        MurderMysteryArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != MurderMysteryArena.State.RUNNING || !a.getPlayers().contains(p.getUniqueId())) {
             return;
         }
@@ -2508,7 +2566,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
      */
     public void useDeathNote(Player p) {
         String name = playerArena.get(p.getUniqueId());
-        MurderMysteryArena a = name == null ? null : arenas.get(name);
+        MurderMysteryArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != MurderMysteryArena.State.RUNNING) {
             msg(p, "&c你现在不在对局中。");
             return;
@@ -2805,7 +2863,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
      */
     public void openTruthMenu(Player p) {
         String name = playerArena.get(p.getUniqueId());
-        MurderMysteryArena a = name == null ? null : arenas.get(name);
+        MurderMysteryArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != MurderMysteryArena.State.RUNNING
                 || !a.getPlayers().contains(p.getUniqueId()) || a.getEliminated().contains(p.getUniqueId())) {
             msg(p, "&c对局中才能使用真理之石。");
@@ -2874,7 +2932,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             return;
         }
         String name = playerArena.get(p.getUniqueId());
-        MurderMysteryArena a = name == null ? null : arenas.get(name);
+        MurderMysteryArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != MurderMysteryArena.State.RUNNING
                 || !a.getPlayers().contains(p.getUniqueId()) || a.getEliminated().contains(p.getUniqueId())) {
             p.closeInventory();
@@ -2962,7 +3020,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
      */
     public void handleTrackCompass(Player p) {
         String name = playerArena.get(p.getUniqueId());
-        MurderMysteryArena a = name == null ? null : arenas.get(name);
+        MurderMysteryArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != MurderMysteryArena.State.RUNNING) {
             msg(p, "&7指南针只在密室杀手对局中有效。");
             return;
@@ -3178,7 +3236,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             m.setCustomNameVisible(false);
             m.getPersistentDataContainer().set(corpseOwnerKey, PersistentDataType.STRING, victim.getName());
         });
-        corpses.computeIfAbsent(arenaName, k -> new ArrayList<>()).add(corpse);
+        corpses.computeIfAbsent(keyOf(victim.getUniqueId()), k -> new ArrayList<>()).add(corpse);
     }
 
     /** 该实体是不是本插件生成的尸体；是则返回死者名字，否则 null。 */
@@ -3188,7 +3246,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     }
 
     private void clearCorpses(MurderMysteryArena a) {
-        List<Mannequin> list = corpses.remove(a.getName());
+        List<Mannequin> list = corpses.remove(a.roomKey());
         if (list == null) {
             return;
         }
@@ -3219,7 +3277,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        MurderMysteryArena a = arenas.get(name);
+        MurderMysteryArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != MurderMysteryArena.State.RUNNING) {
             return;
         }
@@ -3980,7 +4038,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** 公共库回调：按 toolId 写入本插件场地字段（save 由 onSave 处理）。 */
     private void applySetupTool(Player p, String arenaName, String toolId, Action action, Block clicked) {
-        MurderMysteryArena a = arenas.get(arenaName);
+        MurderMysteryArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             return;
         }
@@ -4069,7 +4127,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (locs == null) {
             return;
         }
-        MurderMysteryArena a = arenas.get(arenaName);
+        MurderMysteryArena a = arenaByName(arenaName);
         int waiting = a == null ? 0 : a.getPlayers().size();
         boolean running = a != null && a.getState() == MurderMysteryArena.State.RUNNING;
         for (Location loc : locs) {

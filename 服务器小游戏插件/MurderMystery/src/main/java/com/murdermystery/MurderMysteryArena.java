@@ -49,6 +49,17 @@ public class MurderMysteryArena {
         this.name = name;
     }
 
+    /** 房间键（D22）：场地名表示"哪张地图"，它表示"哪个房间的那一局"。 */
+    private String roomKey;
+
+    public String roomKey() {
+        return roomKey == null ? name : roomKey;
+    }
+
+    public void setRoomKey(String roomKey) {
+        this.roomKey = roomKey;
+    }
+
     public String getName() {
         return name;
     }

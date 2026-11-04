@@ -64,7 +64,20 @@ public final class Worlds {
         String t = token.trim();
         if (t.startsWith(TEMPLATE_PREFIX)) {
             String key = templateKey(t);
-            return key == null ? null : RoomManager.worldOfTemplate(key);
+            if (key == null) {
+                return null;
+            }
+            // ① **当前房间优先**：框架在"为某个房间做事"时压了栈（/hub join、房间初始化），
+            //    这时令牌就该解析到那个房间的世界 —— 同一游戏开两个房间也不会串。
+            String roomId = com.hub.room.RoomContext.currentRoomId();
+            if (roomId != null) {
+                World scoped = RoomManager.worldOfRoom(roomId);
+                if (scoped != null) {
+                    return scoped;
+                }
+            }
+            // ② 没有房间上下文 → 老路径：该模板名下**恰好一个**房间时用它
+            return RoomManager.worldOfTemplate(key);
         }
         return Bukkit.getWorld(t);
     }
@@ -211,7 +224,20 @@ public final class Worlds {
         //    把冒烟的 ERROR 断言彻底搅浑，还掩盖真错误）。
         // ② 房间里写的是 `tpl:` 令牌，两种形态混在一份配置里，读的人容易只处理一种。
         // ③ `readLocation` 本来就优先认字符串形态，所以写侧统一之后读写对称。
-        sec.set(key, encode(loc));
+        String token = encode(loc);
+        // **绝不把"房间实例世界名"写进磁盘**（R2）：
+        // encode() 只有在能反查到模板时才给 `tpl:<模板>`；如果它退回了原始世界名，
+        // 而这个名字是房间实例（`room_*`），说明房间已经销毁、反查不到模板了 ——
+        // 此时**宁可不写**（保留磁盘上原来的 token），也不能写 `room_xxx,y,z`。
+        // 真实事故：密室杀手的 4 个场地全被写成 `room_q1_1,...`，下次开服全部"场地未就绪"，
+        // 而且看起来像"代码回归"，实际是上次关服时把运行时解析值写盘了。
+        if (token != null && token.startsWith("room_")) {
+            org.bukkit.Bukkit.getLogger().warning("[坐标回写] 跳过 " + key
+                    + "：世界 " + loc.getWorld().getName()
+                    + " 是房间实例且已找不到对应模板，写回去会毁掉配置（保留原值）");
+            return;
+        }
+        sec.set(key, token);
     }
 
     // ---------- 配置段安全写入（R2 单一写者） ----------
