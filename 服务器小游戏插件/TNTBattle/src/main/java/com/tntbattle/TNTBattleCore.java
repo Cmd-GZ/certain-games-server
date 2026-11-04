@@ -63,7 +63,7 @@ public final class TNTBattleCore {
         for (TNTBattleManager manager : matches.values()) {
             manager.load(manager == primary);
             // I3：本插件已无 Listener —— 事件由框架按归属派发到 TNTBattleSession 的钩子
-            plugin.getServer().getPluginManager().registerEvents(manager.music(), plugin);
+            // I3：音乐**不再常驻监听**——录制期间由框架的 NoteRecorder 注册监听器
         }
         Bukkit.getScheduler().runTaskLater(plugin, this::reportAll, 40L);
         plugin.getLogger().info("TNT 场地 " + matches.size() + " 个："
@@ -165,7 +165,7 @@ public final class TNTBattleCore {
             manager.becomePrimary();
         }
         // I3：本插件已无 Listener —— 事件由框架按归属派发到 TNTBattleSession 的钩子
-        plugin.getServer().getPluginManager().registerEvents(manager.music(), plugin);
+        // I3：音乐**不再常驻监听**——录制期间由框架的 NoteRecorder 注册监听器
         reportAll();
         return manager;
     }

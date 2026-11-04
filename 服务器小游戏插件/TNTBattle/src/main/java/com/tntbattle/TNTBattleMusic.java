@@ -10,9 +10,6 @@ import org.bukkit.block.Block;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
 import org.bukkit.event.block.NotePlayEvent;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -41,7 +38,7 @@ import java.util.UUID;
  * <p>触发：对局中任一方存活人数 <= {@code music.trigger-team-alive}（默认 1）时开始循环，
  * 对局结束停止；听众是本局所有玩家（含已淘汰的旁观者）。
  */
-public final class TNTBattleMusic implements Listener {
+public final class TNTBattleMusic {
 
     /** 单次录制最多保存的音符数，防止忘停把内存/文件撑爆。 */
     private static final int MAX_NOTES = 20000;
@@ -210,6 +207,8 @@ public final class TNTBattleMusic implements Listener {
         lengthTicks = 0;
         recording = true;
         recordFirstTick = -1;
+        // 只在录制期间注册监听器（框架的录制通道）
+        com.hub.event.NoteRecorder.start(plugin, this::onNote);
         int seconds = Math.max(10, plugin.getConfig().getInt("music.max-record-seconds", 600));
         recordGuard = Bukkit.getScheduler().runTaskLater(plugin,
                 () -> finishRecording(Bukkit.getConsoleSender(), true), seconds * 20L);
@@ -225,6 +224,7 @@ public final class TNTBattleMusic implements Listener {
             return;
         }
         recording = false;
+        com.hub.event.NoteRecorder.stop();
         if (recordGuard != null) {
             recordGuard.cancel();
             recordGuard = null;
@@ -245,8 +245,13 @@ public final class TNTBattleMusic implements Listener {
         Chat.send(sender, "&7记得停掉红石机，否则它会和插件播放重叠。");
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onNotePlay(NotePlayEvent event) {
+    /**
+     * 录到一个音符（**由框架的 {@link com.hub.event.NoteRecorder} 在录制期间回调**）。
+     *
+     * <p>以前这里是常驻的 `@EventHandler`，但它的唯一作用是录制 —— 与"这一局归谁"无关，
+     * 所以搬进框架的录制通道：**只有 `music record` 期间才会注册监听器**。
+     */
+    private void onNote(NotePlayEvent event) {
         if (!recording) {
             return;
         }
@@ -266,7 +271,7 @@ public final class TNTBattleMusic implements Listener {
         if (notes.size() >= MAX_NOTES) {
             finishRecording(Bukkit.getConsoleSender(), true);
         }
-    }
+        }
 
     private boolean regionReady() {
         return pos1 != null && pos2 != null && pos1.getWorld() != null && pos2.getWorld() != null
