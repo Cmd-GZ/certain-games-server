@@ -15,6 +15,34 @@ import java.util.concurrent.ThreadLocalRandom;
 public final class KnockbackArena {
 
     private final JavaPlugin plugin;
+
+    /**
+     * D22：这个场地实例**钉死**的房间世界（每个房间一份实例）。
+     *
+     * <p>{@link com.hub.room.RoomBinding} 是"按游戏一个槽"，两房间同时跑时后一个覆盖前一个 ——
+     * 甲房的实例会读到乙房的世界（人被传错房间）。钉死之后读取只认自己的世界。
+     */
+    private org.bukkit.World roomWorld;
+
+    public void bindWorld(org.bukkit.World world) {
+        this.roomWorld = world;
+    }
+
+    public org.bukkit.World boundWorld() {
+        return roomWorld;
+    }
+
+    /** 读坐标的世界解析：钉死的房间世界优先，没钉才退回按上下文的换绑。 */
+    private Location apply(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld != null && !roomWorld.equals(loc.getWorld())) {
+            return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+        }
+        return com.hub.room.RoomBinding.apply("knockback", loc);
+    }
+
     private Location pos1;
     private Location pos2;
     private Location lobby;
@@ -45,20 +73,26 @@ public final class KnockbackArena {
         plugin.reloadConfig();
         FileConfiguration cfg = plugin.getConfig();
         // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
-        if (pos1 != null) {
-            cfg.set("arena.pos1", encode(pos1));
+        String pos1Token = encode(pos1);
+        if (pos1Token != null) {
+            cfg.set("arena.pos1", pos1Token);
         }
         // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
-        if (pos2 != null) {
-            cfg.set("arena.pos2", encode(pos2));
+        String pos2Token = encode(pos2);
+        if (pos2Token != null) {
+            cfg.set("arena.pos2", pos2Token);
         }
         // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
-        if (lobby != null) {
-            cfg.set("arena.lobby", encode(lobby));
+        String lobbyToken = encode(lobby);
+        if (lobbyToken != null) {
+            cfg.set("arena.lobby", lobbyToken);
         }
         List<String> encoded = new ArrayList<>();
         for (Location spawn : spawns) {
-            encoded.add(encode(spawn));
+            String token = encode(spawn);
+            if (token != null) {
+                encoded.add(token);
+            }
         }
         if (!encoded.isEmpty()) {
             cfg.set("arena.spawns", encoded);
@@ -107,7 +141,7 @@ public final class KnockbackArena {
     }
 
     public Location getPos1() {
-        return  com.hub.room.RoomBinding.apply("knockback", pos1);
+        return apply(pos1);
     }
 
     public void setPos1(Location pos1) {
@@ -115,7 +149,7 @@ public final class KnockbackArena {
     }
 
     public Location getPos2() {
-        return  com.hub.room.RoomBinding.apply("knockback", pos2);
+        return apply(pos2);
     }
 
     public void setPos2(Location pos2) {
@@ -123,7 +157,7 @@ public final class KnockbackArena {
     }
 
     public Location getLobby() {
-        return  com.hub.room.RoomBinding.apply("knockback", lobby);
+        return apply(lobby);
     }
 
     public void setLobby(Location lobby) {
@@ -152,12 +186,23 @@ public final class KnockbackArena {
         this.voidY = voidY;
     }
 
+    /**
+     * 坐标 → 存档 token；**写不了时返回 null**（调用方跳过，保留磁盘上的原值）。
+     *
+     * <p>房间世界名（{@code room_xxx_1}）一旦写进配置，房间销毁后这份配置就永远"未配置"了
+     * （真实事故同款）。反查不到模板时 {@link com.hub.world.Worlds#tokenOf} 会退回原始房间名，
+     * 那种情况一律不写。
+     */
     private static String encode(Location loc) {
         if (loc == null || loc.getWorld() == null) {
-            return "";
+            return null;
+        }
+        String token = com.hub.world.Worlds.tokenOf(loc.getWorld());
+        if (token == null || token.isBlank() || token.startsWith("room_")) {
+            return null;
         }
         return String.format(Locale.ROOT, "%s,%.2f,%.2f,%.2f,%.1f,%.1f",
-                com.hub.world.Worlds.tokenOf(loc.getWorld()), loc.getX(), loc.getY(), loc.getZ(),
+                token, loc.getX(), loc.getY(), loc.getZ(),
                 loc.getYaw(), loc.getPitch());
     }
 

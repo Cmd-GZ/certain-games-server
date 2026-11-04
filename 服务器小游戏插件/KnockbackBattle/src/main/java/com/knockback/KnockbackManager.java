@@ -53,6 +53,10 @@ public final class KnockbackManager {
     }
 
     private final KnockbackPlugin plugin;
+    /** D22：本实例负责的房间键（有房间时 = 房间 id；没有房间时 = {@link #ARENA}）。 */
+    private final String roomKey;
+    /** 侧边栏/菜单的键：每房间一份，否则两个房间互相覆盖。 */
+    private final String sidebarKey;
     private final KnockbackArena arena;
     private final NamespacedKey stickKey;
     private final NamespacedKey windKey;
@@ -71,7 +75,7 @@ public final class KnockbackManager {
     private KnockbackSession session;
 
     private KnockbackSession ensureSession() {
-        String key = "main";
+        String key = roomKey;   // D22：每房间一个会话（否则两场派对共用同一份会话）
         KnockbackSession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
             s = new KnockbackSession(this, key);
@@ -102,8 +106,17 @@ public final class KnockbackManager {
         return plugin;
     }
 
+    /** 默认实例（没有房间上下文时的老路径）。 */
+    public static final String ARENA = "主场地";
+
     public KnockbackManager(KnockbackPlugin plugin) {
+        this(plugin, ARENA);
+    }
+
+    public KnockbackManager(KnockbackPlugin plugin, String roomKey) {
         this.plugin = plugin;
+        this.roomKey = roomKey == null || roomKey.isBlank() ? ARENA : roomKey;
+        this.sidebarKey = "knockback:" + this.roomKey;
         this.liveSidebar = new LiveSidebar(plugin);
         this.data = PlayerStats.load("knockback", new File(plugin.getDataFolder(), "data.yml"));
         this.arena = new KnockbackArena(plugin);
@@ -376,14 +389,31 @@ public final class KnockbackManager {
 
     /** 声明地盘（{@code docs/框架不变量.md} 的 I2）。单场游戏，场地名用空串。 */
     public void publishRegions() {
-        com.hub.region.Regions.begin("knockback");
+        if (roomKey.equals(ARENA)) {
+            com.hub.region.Regions.begin("knockback");   // 只有默认实例负责清掉上一轮
+        }
         if (arena != null) {
-            com.hub.region.Regions.box("knockback", "", arena.getPos1(), arena.getPos2());
+            com.hub.region.Regions.box("knockback", roomKey, arena.getPos1(), arena.getPos2());
         }
     }
 
     public KnockbackArena arena() {
         return arena;
+    }
+
+    /** D22：本实例负责的房间键。 */
+    public String roomKey() {
+        return roomKey;
+    }
+
+    /** 菜单/日志里用的场地名：默认实例仍叫「主场地」，房间实例用房间 id。 */
+    public String arenaLabel() {
+        return roomKey;
+    }
+
+    /** 这个实例是不是已经空着（外层据此回收房间实例）。 */
+    public boolean idle() {
+        return state == State.WAITING && waiting.isEmpty() && playing.isEmpty() && eliminated.isEmpty();
     }
 
     public boolean isWaiting(Player player) {
@@ -425,31 +455,32 @@ public final class KnockbackManager {
         return minPlayers();
     }
 
-    public void join(Player player) {
+    /** 玩家加入本房间的等待队列；返回是否真的加进去了（D22：外层按房间路由要用）。 */
+    public boolean join(Player player) {
         UUID id = player.getUniqueId();
         if (state == State.RUNNING) {
             Chat.send(player, "&c对局正在进行中，请等这一局结束后再加入。");
-            return;
+            return false;
         }
         if (waiting.contains(id)) {
             Chat.send(player, "&e你已经在等待队列中。");
-            return;
+            return false;
         }
         if (waiting.size() >= maxPlayers()) {
             Chat.send(player, "&c等待队列已满（" + maxPlayers() + " 人）。");
-            return;
+            return false;
         }
         if (!arena.isReady()) {
             Chat.send(player, "&c场地还没配置完整（缺 " + arena.missing() + "），请联系管理员。");
-            return;
+            return false;
         }
         // I1（D23）：先挂会话再入队；冲突直接拒绝
         KnockbackSession sess = ensureSession();
         if (!sess.join(player)) {
             if (sess.players().isEmpty()) {
-                sessions.remove("main");
+                sessions.remove(roomKey);
             }
-            return;
+            return false;
         }
         waiting.add(id);
         joinTick.put(id, (long) Bukkit.getCurrentTick());
@@ -464,6 +495,7 @@ public final class KnockbackManager {
         Chat.send(player, "&a已加入" + GAME_NAME + "等待队列 &7(" + waiting.size() + "/" + maxPlayers() + ")");
         Chat.send(player, "&7人数达到 &f" + minPlayers() + " &7后自动倒计时开始。");
         updateCountdown();
+        return true;
     }
 
     public void leave(Player player, boolean silent) {
@@ -548,7 +580,7 @@ public final class KnockbackManager {
             }
         }
         if (!ready.isEmpty() && (ready.size() >= minPlayers() || force)) {
-            if (startCountdown().begin("main", new ArrayList<>(ready), () -> startGame(force))) {
+            if (startCountdown().begin(roomKey, new ArrayList<>(ready), () -> startGame(force))) {
                 return;
             }
         }
@@ -580,7 +612,7 @@ public final class KnockbackManager {
             }
             preparePlayer(p);
             HubAPI.setPlaying(id, GAME_NAME);
-            HubAPI.setArenaSpectator(GAME_NAME, "", arena().center());
+            HubAPI.setArenaSpectator(GAME_NAME, arenaLabel(), arena().center());
             Chat.title(p, "&b&l" + GAME_NAME, "&f把别人打下去，活到最后！", 2);
         }
         broadcast("&6&l========== " + GAME_NAME + "开始 ==========");
@@ -617,7 +649,7 @@ public final class KnockbackManager {
             return;
         }
         cancelGameTask();
-        liveSidebar.hide("knockback");
+        liveSidebar.hide(sidebarKey);
         clearWindCharges();
         restoreWorldPvp();
         state = State.WAITING;
@@ -736,7 +768,7 @@ public final class KnockbackManager {
         for (UUID id : online) {
             lines.add(new LiveSidebar.Line("§e" + nameOf(id), 0));
         }
-        liveSidebar.update("knockback", "&b&l击退大乱斗 · 存活", online, lines);
+        liveSidebar.update(sidebarKey, "&b&l击退大乱斗 · 存活", online, lines);
     }
 
     private void updateActionBar() {

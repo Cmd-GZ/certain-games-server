@@ -16,15 +16,22 @@ import java.util.Locale;
 public final class KnockbackCommand implements CommandExecutor, TabCompleter {
 
     private final KnockbackPlugin plugin;
-    private final KnockbackManager manager;
+    /** D22：按房间分桶的状态；每个入口按发送者/玩家路由到他自己那一份。 */
+    private final KnockbackRooms rooms;
 
-    public KnockbackCommand(KnockbackPlugin plugin, KnockbackManager manager) {
+    public KnockbackCommand(KnockbackPlugin plugin, KnockbackRooms rooms) {
         this.plugin = plugin;
-        this.manager = manager;
+        this.rooms = rooms;
+    }
+
+    /** 这个发送者应该操作的房间状态：玩家 → 他自己那一份；控制台 → 最近有人加入的那一份。 */
+    private KnockbackManager stateOf(CommandSender sender) {
+        return sender instanceof Player p ? rooms.forPlayer(p) : rooms.lastJoined();
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        KnockbackManager manager = stateOf(sender);
         if (args.length == 0 || args[0].equalsIgnoreCase("help")) {
             help(sender);
             return true;
@@ -34,13 +41,13 @@ public final class KnockbackCommand implements CommandExecutor, TabCompleter {
             case "join" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.join(player);
+                    rooms.join(player);
                 }
             }
             case "leave" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.leave(player, false);
+                    rooms.leave(player, false);
                 }
             }
             case "list" -> list(sender);
@@ -168,6 +175,7 @@ public final class KnockbackCommand implements CommandExecutor, TabCompleter {
     }
 
     private void list(CommandSender sender) {
+        KnockbackManager manager = stateOf(sender);
         Chat.send(sender, "&b[" + KnockbackManager.GAME_NAME + "] &f状态："
                 + (manager.isRunning() ? "&a对局中 &7(剩余 " + manager.secondsLeft() + "s)" : "&e等待中"));
         Chat.send(sender, "&7场地：" + (manager.arena().isReady()
@@ -177,6 +185,7 @@ public final class KnockbackCommand implements CommandExecutor, TabCompleter {
     }
 
     private void setCorner(CommandSender sender, boolean first) {
+        KnockbackManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
