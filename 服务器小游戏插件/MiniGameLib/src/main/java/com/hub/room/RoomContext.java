@@ -62,6 +62,25 @@ public final class RoomContext {
         return r == null ? null : r.roomId;
     }
 
+    /**
+     * **会话键**（D22 后半的唯一原语）：这个玩家在这个游戏里，会话应该用哪个键索引。
+     *
+     * <p>规则：玩家有"玩家→房间"记录时用**房间 id**，否则退回**场地名**（老路径 / 静态场地）。
+     *
+     * <p>迁移要点（见 `docs/多房间会话.md`）：把 `ensureSession(arenaName)` 换成
+     * `ensureSession(RoomContext.sessionKeyFor(player, gameKey, arenaName))`，
+     * 并把所有 `sessions.get(arenaName)` 换成"先求键再取"。**一次只迁一个游戏，迁完就跑回归。**
+     */
+    public static String sessionKeyFor(java.util.UUID playerId, String gameKey, String arenaName) {
+        String roomId = roomIdOfPlayer(playerId);
+        if (roomId != null && !roomId.isBlank()) {
+            return roomId;
+        }
+        // 没有按玩家的记录时（静态场地 / 直接 `/xxx join` 的路径）退回场地名，
+        // 与迁移前的行为一致 —— 迁移是**加法**，不是替换。
+        return arenaName == null ? "" : arenaName;
+    }
+
     /** 玩家离开/对局结束时清掉（房间销毁时也会统一清）。 */
     public static void clearPlayer(java.util.UUID playerId) {
         if (playerId != null) {
