@@ -132,6 +132,11 @@ public final class GroupRaceManager {
 
     private YamlConfiguration data;
 
+    /** I3：会话里的搬迁代码要用到 plugin（原 Listener 的字段）。 */
+    public GroupRacePlugin plugin() {
+        return plugin;
+    }
+
     public GroupRaceManager(GroupRacePlugin plugin) {
         this.plugin = plugin;
         this.liveSidebar = new LiveSidebar(plugin);

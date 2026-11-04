@@ -80,6 +80,11 @@ public class HotPotatoManager {
     private final Map<String, List<Location>> joinSigns = new LinkedHashMap<>();
     private final Map<UUID, String> pendingSign = new LinkedHashMap<>();
 
+    /** I3：会话里的搬迁代码要用到 plugin（原 Listener 的字段）。 */
+    public HotPotatoPlugin plugin() {
+        return plugin;
+    }
+
     public HotPotatoManager(HotPotatoPlugin plugin) {
         this.plugin = plugin;
         this.liveSidebar = new LiveSidebar(plugin);

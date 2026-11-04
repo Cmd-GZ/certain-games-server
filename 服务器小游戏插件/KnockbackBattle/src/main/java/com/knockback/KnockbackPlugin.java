@@ -22,7 +22,7 @@ public class KnockbackPlugin extends JavaPlugin {
             kb.setExecutor(command);
             kb.setTabCompleter(command);
         }
-        getServer().getPluginManager().registerEvents(new KnockbackListener(manager), this);
+        // I3：本插件已无 Listener —— 事件由框架按归属派发到 Session 的钩子
         // 玩家执行 /hub 或右键回主城道具时，HubCore 回调这里把玩家移出对局
         HubAPI.registerLobbyHandler(player -> manager.leave(player, true));
 

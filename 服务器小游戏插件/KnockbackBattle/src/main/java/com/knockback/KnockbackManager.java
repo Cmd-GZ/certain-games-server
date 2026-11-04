@@ -97,6 +97,11 @@ public final class KnockbackManager {
     private YamlConfiguration data;
     private final LiveSidebar liveSidebar;
 
+    /** I3：会话里的搬迁代码要用到 plugin（原 Listener 的字段）。 */
+    public KnockbackPlugin plugin() {
+        return plugin;
+    }
+
     public KnockbackManager(KnockbackPlugin plugin) {
         this.plugin = plugin;
         this.liveSidebar = new LiveSidebar(plugin);

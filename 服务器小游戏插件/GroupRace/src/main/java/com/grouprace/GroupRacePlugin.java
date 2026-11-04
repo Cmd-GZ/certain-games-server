@@ -22,7 +22,7 @@ public class GroupRacePlugin extends JavaPlugin {
             race.setExecutor(command);
             race.setTabCompleter(command);
         }
-        getServer().getPluginManager().registerEvents(new GroupRaceListener(manager), this);
+        // I3：本插件已无 Listener —— 事件由框架按归属派发到 Session 的钩子
         HubAPI.registerLobbyHandler(player -> manager.leave(player, true));
 
         getLogger().info("GroupRace 已启用。");

@@ -147,6 +147,11 @@ public final class AnimalSlaughterManager {
         }
     }
 
+    /** I3：会话里的搬迁代码要用到 plugin（原 Listener 的字段）。 */
+    public AnimalSlaughterPlugin plugin() {
+        return plugin;
+    }
+
     public AnimalSlaughterManager(AnimalSlaughterPlugin plugin) {
         this.plugin = plugin;
         this.arena = new AnimalSlaughterArena(plugin);

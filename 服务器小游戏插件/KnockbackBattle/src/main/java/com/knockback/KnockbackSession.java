@@ -2,6 +2,16 @@ package com.knockback;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.entity.Snowball;
+import org.bukkit.event.entity.ProjectileHitEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.Event;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import com.hub.util.Chat;
 import org.bukkit.event.block.Action;
 import org.bukkit.inventory.ItemStack;
@@ -90,6 +100,72 @@ final class KnockbackSession extends GameSession {
         if (manager.isWindCharge(item)) {
             event.setCancelled(true);
             manager.useWindCharge(player);
+        }
+    }
+
+    // ---------- I3：由 listener 机械搬迁过来的处理器（按事件类型分派） ----------
+
+
+    @Override
+    protected void onGameEvent(org.bukkit.event.Event event) {
+        if (event instanceof PlayerInteractEntityEvent e) {
+        Player player = e.getPlayer();
+        ItemStack held = player.getInventory().getItem(e.getHand());
+        if (!manager.isWindCharge(held)) {
+            return;
+        }
+        e.setCancelled(true);
+        manager.useWindCharge(player);
+                return;
+        }
+        if (event instanceof EntityDamageEvent e) {
+        if (e.getEntity() instanceof Player player && manager.isInGame(player)) {
+            e.setCancelled(true);
+        }
+                return;
+        }
+        if (event instanceof EntityDamageByEntityEvent e) {
+        if (!(e.getEntity() instanceof Player victim)
+                || !(e.getDamager() instanceof Player attacker)) {
+            return;
+        }
+        if (!manager.isPlaying(victim)) {
+            if (manager.isInGame(attacker)) {
+                e.setCancelled(true);
+            }
+            return;
+        }
+        e.setCancelled(true);
+        ItemStack main = attacker.getInventory().getItemInMainHand();
+        ItemStack off = attacker.getInventory().getItemInOffHand();
+        if (!manager.isStick(main) && !manager.isStick(off)) {
+            Chat.actionBar(attacker, "&e请手持击退镐再左键敲人");
+            return;
+        }
+        if (manager.stickHit(attacker, victim)) {
+            Chat.actionBar(attacker, "&a击飞！");
+        } else {
+            Chat.actionBar(attacker, "&c击退镐冷却中…");
+        }
+                return;
+        }
+        if (event instanceof ProjectileHitEvent e) {
+        if (!(e.getEntity() instanceof Snowball ball)) {
+            return;
+        }
+        if (!manager.isOurWindCharge(ball.getUniqueId())) {
+            return;
+        }
+        e.setCancelled(true);
+        manager.detonateWindCharge(ball);
+                return;
+        }
+        if (event instanceof PlayerMoveEvent e) {
+        if (e.getTo() == null) {
+            return;
+        }
+        manager.handleMove(e);
+                return;
         }
     }
 }

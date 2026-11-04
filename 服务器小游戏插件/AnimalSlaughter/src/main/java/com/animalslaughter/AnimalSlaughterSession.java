@@ -2,6 +2,18 @@ package com.animalslaughter;
 
 import com.hub.session.EndReason;
 import com.hub.session.GameSession;
+import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityDropItemEvent;
+import org.bukkit.event.player.PlayerAttemptPickupItemEvent;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.entity.Entity;
+import org.bukkit.event.Event;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.event.block.Action;
 import org.bukkit.Location;
@@ -104,6 +116,66 @@ final class AnimalSlaughterSession extends GameSession {
         if (manager.isStartItem(item)) {
             event.setCancelled(true);
             manager.handleStartPaper(player);
+        }
+    }
+
+    // ---------- I3：由 listener 机械搬迁过来的处理器（按事件类型分派） ----------
+
+
+    @Override
+    protected void onGameEvent(org.bukkit.event.Event event) {
+        if (event instanceof EntityDamageEvent e) {
+        if (e.getEntity() instanceof Player player) {
+            if (manager.isInGame(player)) {
+                e.setCancelled(true);
+            }
+            return;
+        }
+        Entity victim = e.getEntity();
+        if (!manager.isOurMob(victim)) {
+            return;
+        }
+        // 横扫之刃的溅射伤害直接丢掉，避免误伤旁边的干扰项
+        if (e.getCause() == EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK) {
+            e.setCancelled(true);
+            return;
+        }
+        if (e instanceof EntityDamageByEntityEvent by && by.getDamager() instanceof Player attacker) {
+            if (manager.isPlaying(attacker) && manager.isRunning()) {
+                e.setDamage(1.0);
+                manager.onMobHit((LivingEntity) victim, attacker);
+                return;
+            }
+        }
+        e.setCancelled(true);
+                return;
+        }
+        if (event instanceof EntityDeathEvent e) {
+        LivingEntity entity = e.getEntity();
+        if (!manager.isOurMob(entity)) {
+            return;
+        }
+        e.setDroppedExp(0);
+        manager.onMobDeath(entity, entity.getKiller());
+                return;
+        }
+        if (event instanceof EntityDropItemEvent e) {
+        if (manager.isOurMob(e.getEntity())) {
+            manager.markDrop(e.getItemDrop());
+        }
+                return;
+        }
+        if (event instanceof PlayerAttemptPickupItemEvent e) {
+        if (manager.isGameDrop(e.getItem())) {
+            e.setCancelled(true);
+        }
+                return;
+        }
+        if (event instanceof PlayerMoveEvent e) {
+        if (e.getTo() != null) {
+            manager.handleMove(e.getPlayer(), e.getTo());
+        }
+                return;
         }
     }
 }
