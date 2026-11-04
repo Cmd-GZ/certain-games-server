@@ -57,11 +57,55 @@ public class HotPotatoManager {
     /** D22：每个场地一个会话（多图游戏）。 */
     private final Map<String, HotPotatoSession> sessions = new LinkedHashMap<>();
 
-    private HotPotatoSession ensureSession(String arenaName) {
-        HotPotatoSession s = sessions.get(arenaName);
+    /** 玩家 → 房间键；房间键 → 场地名；每房间一份运行时场地实例（D22）。 */
+    private final Map<UUID, String> playerKey = new LinkedHashMap<>();
+    private final Map<String, String> keyArena = new LinkedHashMap<>();
+    private final Map<String, HotPotatoArena> liveArenas = new LinkedHashMap<>();
+
+    public String keyOf(UUID id) {
+        String k = playerKey.get(id);
+        if (k != null) {
+            return k;
+        }
+        String name = playerArena.get(id);
+        return name == null ? null : name;
+    }
+
+    public String arenaNameOfKey(String key) {
+        return keyArena.getOrDefault(key, key);
+    }
+
+    /** 该房间的运行时场地实例；首次使用时从配置模板克隆（只抄坐标）。 */
+    public HotPotatoArena liveArena(String key) {
+        HotPotatoArena live = liveArenas.get(key);
+        if (live != null) {
+            return live;
+        }
+        HotPotatoArena tpl = arenas.get(arenaNameOfKey(key));
+        if (tpl == null) {
+            return null;
+        }
+        HotPotatoArena copy = tpl.copyConfig();
+        copy.setRoomKey(key);
+        liveArenas.put(key, copy);
+        return copy;
+    }
+
+    /** 只按场地名找（无玩家上下文的只读路径；多房间时模糊）。 */
+    private HotPotatoArena arenaByName(String arenaName) {
+        for (HotPotatoArena live : liveArenas.values()) {
+            if (arenaName.equals(live.getName())) {
+                return live;
+            }
+        }
+        return arenas.get(arenaName);
+    }
+
+    private HotPotatoSession ensureSession(String key) {
+        HotPotatoSession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
-            s = new HotPotatoSession(this, arenaName);
-            sessions.put(arenaName, s);
+            s = new HotPotatoSession(this, arenaNameOfKey(key));
+            sessions.put(key, s);
         }
         return s;
     }
@@ -352,17 +396,29 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             msg(p, "&c人数已满（&e" + max + "&c）。");
             return false;
         }
+        // D22：键 = 房间 id（有房间时）；本局状态落在"本房间的"运行时场地实例上
+        String key = com.hub.room.RoomContext.roomKeyFor(p, "hotpotato", arenaName);
+        keyArena.put(key, arenaName);
+        HotPotatoArena live = liveArena(key);
+        if (live != null) {
+            a = live;
+        }
+        if (a.getState() == HotPotatoArena.State.RUNNING) {
+            msg(p, "&c该场正在游戏中。");
+            return false;
+        }
         // I1（D23）：先挂会话再入队；冲突直接拒绝，避免半加入状态
-        HotPotatoSession sess = ensureSession(arenaName);
+        HotPotatoSession sess = ensureSession(key);
         if (!sess.join(p)) {
             // 刚建出来的空会话不能留着 —— 否则 doctor 里会多出一个"0 人的等待中场地"，
             // 看起来像场地被占了，其实谁也没进去
             if (sess.players().isEmpty()) {
-                sessions.remove(arenaName);
+                sessions.remove(key);
             }
             return false;
         }
         playerArena.put(id, arenaName);
+        playerKey.put(id, key);
         a.getPlayers().add(id);
         a.recordJoin(id);   // D21：记加入 tick + 随机名次
         p.getInventory().clear();
@@ -410,7 +466,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             }
             return;
         }
-        HotPotatoArena a = arenas.get(name);
+        HotPotatoArena a = liveArena(keyOf(p.getUniqueId()));
         if (a != null) {
             a.getPlayers().remove(id);
             a.getEliminated().remove(id);
@@ -444,7 +500,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     }
 
     public boolean start(Player op, String arenaName) {
-        HotPotatoArena a = arenas.get(arenaName);
+        HotPotatoArena a = liveArena(keyOf(op.getUniqueId()));
         if (a == null) {
             msg(op, "&c场不存在。");
             return false;
@@ -515,17 +571,17 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             broadcast(a, "&cTNT 在 " + names + " &c身上！");
         }
         // 倒计时任务
-        BukkitTask old = roundTasks.remove(a.getName());
+        BukkitTask old = roundTasks.remove(a.roomKey());
         if (old != null) {
             old.cancel();
         }
-        roundTasks.put(a.getName(), Bukkit.getScheduler().runTaskTimer(plugin, () -> tickRound(a), 20L, 20L));
+        roundTasks.put(a.roomKey(), Bukkit.getScheduler().runTaskTimer(plugin, () -> tickRound(a), 20L, 20L));
         // 红色高亮：每 1/4 秒在持弹者身上铺一层红色粉尘（不用 GLOWING：它的描边只有白色）
-        BukkitTask oldGlow = glowTasks.remove(a.getName());
+        BukkitTask oldGlow = glowTasks.remove(a.roomKey());
         if (oldGlow != null) {
             oldGlow.cancel();
         }
-        glowTasks.put(a.getName(), Bukkit.getScheduler().runTaskTimer(plugin, () -> glowTick(a), 10L, 5L));
+        glowTasks.put(a.roomKey(), Bukkit.getScheduler().runTaskTimer(plugin, () -> glowTick(a), 10L, 5L));
     }
 
     /** 持弹者红色粒子壳（原版 GLOWING 描边是白色的，红色只能靠粒子）。 */
@@ -632,7 +688,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** 真正的收场逻辑（由 session.onEnd 回调）。 */
     void doEndGame(String arenaName) {
-        HotPotatoArena a = arenas.get(arenaName);
+        HotPotatoArena a = arenaByName(arenaName);
         if (a == null) {
             return;
         }
@@ -698,7 +754,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        HotPotatoArena a = arenas.get(name);
+        HotPotatoArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             return;
         }
@@ -780,7 +836,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (arenaName == null) {
             return;
         }
-        HotPotatoArena a = arenas.get(arenaName);
+        HotPotatoArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != HotPotatoArena.State.WAITING) {
             return;
         }
@@ -798,7 +854,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** 该场的等待倒计时实例：一场一个，懒创建。 */
     public int waitingCountOf(String arenaName) {
-        HotPotatoArena a = arenas.get(arenaName);
+        HotPotatoArena a = arenaByName(arenaName);
         return a == null ? 0 : a.getPlayers().size();
     }
 
@@ -810,7 +866,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
             return false;
         }
-        HotPotatoArena a = arenas.get(arenaName);
+        HotPotatoArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || p == null) {
             return false;
         }
@@ -819,7 +875,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     }
 
     private WaitCountdown wait(HotPotatoArena a) {
-        return waits.computeIfAbsent(a.getName(), n -> new WaitCountdown(plugin, new WaitCountdown.Host() {
+        return waits.computeIfAbsent(a.roomKey(), n -> new WaitCountdown(plugin, new WaitCountdown.Host() {
             @Override
             public Collection<UUID> waitingPlayers() {
                 return a.getPlayers();
@@ -1028,7 +1084,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (arenaName == null) {
             return;
         }
-        HotPotatoArena a = arenas.get(arenaName);
+        HotPotatoArena a = liveArena(keyOf(damager.getUniqueId()));
         if (a == null || a.getState() != HotPotatoArena.State.RUNNING) {
             return;
         }
@@ -1142,7 +1198,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        HotPotatoArena a = arenas.get(name);
+        HotPotatoArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != HotPotatoArena.State.RUNNING) {
             return;
         }
@@ -1320,7 +1376,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** OP 进入某场的配置模式：清背包并发配置工具。 */
     public boolean enterSetup(Player p, String arenaName) {
-        HotPotatoArena a = arenas.get(arenaName);
+        HotPotatoArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             msg(p, "&c场 &e" + arenaName + "&c 不存在。");
             return false;
@@ -1406,7 +1462,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (locs == null) {
             return;
         }
-        HotPotatoArena a = arenas.get(arenaName);
+        HotPotatoArena a = arenaByName(arenaName);
         int waiting = a == null ? 0 : a.getPlayers().size();
         boolean running = a != null && a.getState() == HotPotatoArena.State.RUNNING;
         for (Location loc : locs) {
@@ -1438,11 +1494,11 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     // ---------- 辅助 ----------
 
     private void cancelTask(HotPotatoArena a) {
-        BukkitTask t = roundTasks.remove(a.getName());
+        BukkitTask t = roundTasks.remove(a.roomKey());
         if (t != null) {
             t.cancel();
         }
-        BukkitTask g = glowTasks.remove(a.getName());
+        BukkitTask g = glowTasks.remove(a.roomKey());
         if (g != null) {
             g.cancel();
         }
