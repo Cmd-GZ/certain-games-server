@@ -34,6 +34,29 @@ public class DuelArena {
         this.name = name;
     }
 
+    /** 房间键（D22）：场地名是"哪张地图"，它表示"哪个房间的那一局"。 */
+    private String roomKey;
+
+    public String roomKey() {
+        return roomKey == null ? name : roomKey;
+    }
+
+    public void setRoomKey(String roomKey) {
+        this.roomKey = roomKey;
+    }
+
+    /** 克隆"配置部分"（坐标 + 职业套装引用），运行时状态全部全新。 */
+    public DuelArena copyConfig() {
+        DuelArena c = new DuelArena(name);
+        c.pos1 = this.pos1;
+        c.pos2 = this.pos2;
+        c.spawn1 = this.spawn1;
+        c.spawn2 = this.spawn2;
+        c.manualLobby = this.manualLobby;
+        c.kit = this.kit;
+        return c;
+    }
+
     public String getName() {
         return name;
     }

@@ -1,5 +1,5 @@
 name: DuelArena
-version: '1.9.0'
+version: '1.10.0'
 main: com.duel.arena.DuelPlugin
 api-version: '1.21'
 description: 单挑 PvP 插件：多决斗场、范围限制、物品配置窗口、战绩告示牌

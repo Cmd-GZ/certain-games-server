@@ -50,11 +50,54 @@ public class DuelManager {
     private java.util.UUID pendingWinner;
     private boolean pendingHasWinner;
 
-    private DuelSession ensureSession(String arenaName) {
-        DuelSession s = sessions.get(arenaName);
+    /** 玩家 → 房间键；房间键 → 场地名；每房间一份运行时场地实例（D22）。 */
+    private final java.util.Map<UUID, String> playerKey = new LinkedHashMap<>();
+    private final java.util.Map<String, String> keyArena = new LinkedHashMap<>();
+    private final Map<String, DuelArena> liveArenas = new LinkedHashMap<>();
+
+    public String keyOf(UUID id) {
+        String k = playerKey.get(id);
+        if (k != null) {
+            return k;
+        }
+        String name = playerArena.get(id);
+        return name == null ? null : name;
+    }
+
+    public String arenaNameOfKey(String key) {
+        return keyArena.getOrDefault(key, key);
+    }
+
+    public DuelArena liveArena(String key) {
+        DuelArena live = liveArenas.get(key);
+        if (live != null) {
+            return live;
+        }
+        DuelArena tpl = arenas.get(arenaNameOfKey(key));
+        if (tpl == null) {
+            return null;
+        }
+        DuelArena copy = tpl.copyConfig();
+        copy.setRoomKey(key);
+        liveArenas.put(key, copy);
+        return copy;
+    }
+
+    /** 只按场地名找（无玩家上下文的只读路径；多房间时模糊）。 */
+    private DuelArena arenaByName(String arenaName) {
+        for (DuelArena live : liveArenas.values()) {
+            if (arenaName.equals(live.getName())) {
+                return live;
+            }
+        }
+        return arenas.get(arenaName);
+    }
+
+    private DuelSession ensureSession(String key) {
+        DuelSession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
-            s = new DuelSession(this, arenaName);
-            sessions.put(arenaName, s);
+            s = new DuelSession(this, arenaNameOfKey(key));
+            sessions.put(key, s);
         }
         return s;
     }
@@ -364,7 +407,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     private final SetupMode.Handler setupHandler = new SetupMode.Handler() {
         @Override
         public void onTool(Player p, String arenaName, String toolId, Action action, Block clicked) {
-            DuelArena a = arenas.get(arenaName);
+            DuelArena a = liveArena(keyOf(p.getUniqueId()));
             if (a == null) {
                 exitSetup(p);
                 return;
@@ -470,7 +513,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return false;
         }
-        DuelArena a = arenas.get(name);
+        DuelArena a = liveArena(keyOf(id));
         return a != null && a.getState() == DuelArena.State.FIGHTING && a.isFighter(id);
     }
 
@@ -514,7 +557,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** 玩家加入场。 */
     public boolean join(Player p, String arenaName) {
-        DuelArena a = arenas.get(arenaName);
+        DuelArena a = arenas.get(arenaName);   // 模板：坐标来自配置
         if (a == null) {
             Chat.send(p, "&c决斗场 &e" + arenaName + "&c 不存在。");
             return false;
@@ -523,6 +566,13 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (playerArena.containsKey(id)) {
             Chat.send(p, "&c你已经在其他决斗场中。");
             return false;
+        }
+        // D22：键 = 房间 id（有房间时）；本局状态落在"本房间的"运行时场地实例上
+        String key = com.hub.room.RoomContext.roomKeyFor(p, "duel", arenaName);
+        keyArena.put(key, arenaName);
+        DuelArena live = liveArena(key);
+        if (live != null) {
+            a = live;
         }
         if (a.getState() == DuelArena.State.FIGHTING) {
             Chat.send(p, "&c该决斗场正在进行对战，请稍后再来。");
@@ -541,14 +591,15 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             Chat.send(p, "&c该决斗场尚未配置完成（需要范围与两个出生点）。");
             return false;
         }
-        DuelSession sess = ensureSession(arenaName);
+        DuelSession sess = ensureSession(key);
         if (!sess.join(p)) {
             if (sess.players().isEmpty()) {
-                sessions.remove(arenaName);
+                sessions.remove(key);
             }
             return false;
         }
         playerArena.put(id, arenaName);
+        playerKey.put(id, key);
         bindRoomIfAny();
         a.getQueue().add(id);
         a.recordJoin(id);   // D21
@@ -590,7 +641,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return false;
         }
-        DuelArena a = arenas.get(name);
+        DuelArena a = liveArena(keyOf(id));
         if (a == null) {
             return true;
         }
@@ -673,7 +724,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         // ① **父级委派优先**：派对叫我们来的，世界与场地名都由父级给（子游戏不自己搜房间）。
         com.hub.room.GameDelegation.Task task = com.hub.room.GameDelegation.current();
         if (task != null && "duel".equals(task.game()) && task.world() != null) {
-            DuelArena a = arenas.get(task.arenaName());
+            DuelArena a = arenaByName(task.arenaName() == null ? "" : task.arenaName());
             if (a != null && (a.getPos1() == null || !task.world().equals(a.getPos1().getWorld()))) {
                 a.bindWorld(task.world());   // 只覆盖读取，不动存储
                 plugin.getLogger().info("[DuelArena] 场地 " + a.getName() + " 已按父级委派换绑到世界 "
@@ -689,7 +740,11 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (room == null || room.world == null) {
             return;
         }
-        DuelArena a = arenas.get(room.arena());
+        String roomArena = room.arena();
+        DuelArena a = liveArena(roomArena == null ? "" : roomArena);
+        if (a == null) {
+            a = arenaByName(roomArena == null ? "" : roomArena);
+        }
         if (a == null) {
             return;
         }
@@ -727,7 +782,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (arenaName == null) {
             return;
         }
-        DuelArena a = arenas.get(arenaName);
+        DuelArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != DuelArena.State.WAITING) {
             return;
         }
@@ -749,7 +804,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** 该场的等待倒计时（每场一份；OP 暂停/人数不足取消/满人 3 秒/达标 30 秒的规则在公共库）。 */
     public int waitingCountOf(String arenaName) {
-        DuelArena a = arenas.get(arenaName);
+        DuelArena a = arenaByName(arenaName);
         return a == null ? 0 : a.getQueue().size();
     }
 
@@ -761,7 +816,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (!"host".equalsIgnoreCase(plugin.getConfig().getString("flow", "upstream"))) {
             return false;
         }
-        DuelArena a = arenas.get(arenaName);
+        DuelArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || p == null) {
             return false;
         }
@@ -1026,7 +1081,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        DuelArena a = arenas.get(name);
+        DuelArena a = liveArena(keyOf(victim.getUniqueId()));
         if (a == null || !a.isFighter(id)) {
             return;
         }
@@ -1071,7 +1126,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     void doEndFight(String arenaName) {
         // 房间销毁已**收敛到框架**（GameSession.end → RoomManager.deleteOwnedBy），
         // 游戏不再自己删：否则同一份"房间归属"有两个写者（R2），且子游戏会误删父级房间。
-        DuelArena a = arenas.get(arenaName);
+        DuelArena a = arenaByName(arenaName);
         if (a == null) {
             return;
         }
@@ -1155,7 +1210,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     public Location getFighterSpawn(UUID id) {
         String name = playerArena.get(id);
         if (name == null) return null;
-        DuelArena a = arenas.get(name);
+        DuelArena a = liveArena(keyOf(id));
         if (a == null) return null;
         if (id.equals(a.getFighter1())) return a.getSpawn1();
         if (id.equals(a.getFighter2())) return a.getSpawn2();
@@ -1168,7 +1223,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return false;
         }
-        DuelArena a = arenas.get(name);
+        DuelArena a = liveArena(keyOf(id));
         return a != null && a.getState() == DuelArena.State.FIGHTING && a.isFighter(id)
                 && System.currentTimeMillis() - a.getFightStartMs() < INVINCIBLE_SECONDS * 1000L;
     }
@@ -1217,7 +1272,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        DuelArena a = arenas.get(name);
+        DuelArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null || a.getState() != DuelArena.State.FIGHTING || !a.isFighter(id)) {
             return;
         }
@@ -1300,7 +1355,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        DuelArena a = arenas.get(name);
+        DuelArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             return;
         }
@@ -1436,7 +1491,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (name == null) {
             return;
         }
-        DuelArena a = arenas.get(name);
+        DuelArena a = liveArena(keyOf(p.getUniqueId()));
         if (a == null) {
             Chat.send(p, "&c场不存在。");
             return;
