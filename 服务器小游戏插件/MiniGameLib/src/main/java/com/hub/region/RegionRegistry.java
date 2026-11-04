@@ -114,6 +114,27 @@ public final class RegionRegistry {
         return best == null ? null : best.gameKey();
     }
 
+    /**
+     * 某个位置**落在哪块区域里**（重叠时取体积最小的那块，和 {@link #ownerAt(Location)} 同一规则）。
+     *
+     * <p>给"区域进出钩子"用：框架要在玩家换区域时告诉他"你现在进了哪一块"。
+     */
+    public static synchronized ArenaRegion regionAt(Location loc) {
+        if (loc == null || loc.getWorld() == null) {
+            return null;
+        }
+        ArenaRegion best = null;
+        for (ArenaRegion r : REGIONS.values()) {
+            if (!r.contains(loc)) {
+                continue;
+            }
+            if (best == null || r.volume() < best.volume()) {
+                best = r;
+            }
+        }
+        return best;
+    }
+
     public static synchronized List<ArenaRegion> all() {
         return new ArrayList<>(REGIONS.values());
     }

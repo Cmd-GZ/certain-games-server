@@ -132,14 +132,53 @@ public final class RegionEvents implements Listener {
      * 移动：**每 tick 每个玩家一条**，所以这里刻意只做"查归属 + 转发"，
      * 区域查表等重活由游戏自己按需缓存（见 docs/区域裁决设计.md §5）。
      */
+    /** 玩家 → 上一次所在区域的 gameKey（区域进出检测用）。 */
+    private static final java.util.Map<java.util.UUID, String> LAST_REGION_GAME = new java.util.HashMap<>();
+
     @EventHandler(priority = EventPriority.MONITOR)
     public void onMove(org.bukkit.event.player.PlayerMoveEvent event) {
+        // ① 区域进出检测（**不依赖会话**）：给"进区域才建会话"的游戏用（SkyPit / D26）
+        trackRegion(event.getPlayer(), event.getTo() == null ? event.getPlayer().getLocation() : event.getTo());
+        // ② 归属会话派发
         GameSession owner = ownerOfPlayer(event.getPlayer());
         if (owner == null) {
             return;
         }
         owner.fireGameEvent(event);
         owner.firePlayerMove(event);
+    }
+
+    /** 比较"上次所在区域"和"现在所在区域"，变化时回调 {@link com.hub.region.RegionHooks}。 */
+    private static void trackRegion(Player player, org.bukkit.Location to) {
+        com.hub.region.ArenaRegion now = com.hub.region.RegionRegistry.regionAt(to);
+        String nowKey = now == null ? null : now.gameKey();
+        java.util.UUID id = player.getUniqueId();
+        String wasKey = LAST_REGION_GAME.get(id);
+        if (java.util.Objects.equals(wasKey, nowKey)) {
+            return;
+        }
+        if (nowKey == null) {
+            LAST_REGION_GAME.remove(id);
+        } else {
+            LAST_REGION_GAME.put(id, nowKey);
+        }
+        try {
+            if (wasKey != null) {
+                com.hub.region.ArenaRegion was = com.hub.region.RegionRegistry.regionAt(player.getLocation());
+                com.hub.region.RegionHooks.fireLeave(wasKey, player, was == null ? now : was);
+            }
+            if (nowKey != null) {
+                com.hub.region.RegionHooks.fireEnter(nowKey, player, now);
+            }
+        } catch (RuntimeException ex) {
+            Failures.recordAndWarn("RegionEvents.区域进出", ex);
+        }
+    }
+
+    /** 玩家离线/被清理时把"上次所在区域"也清掉，免得复用时误判。 */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onQuitForRegion(org.bukkit.event.player.PlayerQuitEvent event) {
+        LAST_REGION_GAME.remove(event.getPlayer().getUniqueId());
     }
 
 
@@ -166,6 +205,19 @@ public final class RegionEvents implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockBurn(org.bukkit.event.block.BlockBurnEvent event) {
         bridgeLocation(event, event.getBlock().getLocation());
+    }
+
+    /**
+     * 区块加载：按**区块所在位置**找归属者（I2 区域表）。
+     *
+     * <p>真实漏点（2026-11-04）：SkyPit 的 `onChunkLoad`（区块加载时刷新排行榜）被搬迁脚本跳过了
+     * —— 它的签名是**全限定类名**（`org.bukkit.event.world.ChunkLoadEvent`），脚本的正则只认简单名。
+     * 补上这条桥接，这类"世界级、按位置"的事件才有归属者。
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onChunkLoad(org.bukkit.event.world.ChunkLoadEvent event) {
+        bridgeLocation(event, new Location(event.getWorld(),
+                (event.getChunk().getX() << 4) + 8, 64, (event.getChunk().getZ() << 4) + 8));
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
