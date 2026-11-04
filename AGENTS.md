@@ -91,12 +91,23 @@ tools/smoke-arcade-party.txt  # 派对冒烟的命令脚本（配合 --fake-play
    <房间>/session.lock
    <房间>/level.dat_old
    ```
-5. **验证"场地是否正常加载"之前，先把 run 副本的配置从 `.server/server/...`（pristine）还原。**
-   插件在关服时会把配置写回去，多跑几轮冒烟后 run 副本会和原始状态漂移，
-   此时"区域少了几块"是**配置漂移**而不是代码回归 —— 今天已因此误判过一次。
+5. **规则 5 只管一件事：为了测试而改的数据，测完要还原。**
+   插件关服时会写回配置，多跑几轮冒烟后**测试副本**会和"你要测的状态"漂移；
+   此时"场地少了几块 / 某个游戏死活不开局"是**漂移**而不是代码回归（真实误判过一次）。
+
+   ⚠️ **不要把它理解成"不许改配置"**：`.server/run` 的配置**早就和上游不一样了**（房间化改造过），
+   **需要改配置就直接改**（包括 `.server/run`）。只是：
+
+   - 为**测试**而临时改的（改场地名、塞假数据），测完要还原；
+   - **有意的**配置/数据改动（例如为多房间补的场地别名条目、快照副本）就是交付内容，
+     写进 `docs/改动记录.md`，别被"还原"抹掉 —— 还原的基准是**交付副本 `.server/run`**，
+     不是 pristine：
+
    ```bash
-   P=.server/server/small_games/*/plugins; S=.server/run/small_games/*/plugins
-   for d in $P/*/; do n=$(basename "$d"); for f in "$d"*.yml "$d"*.snap; do [ -f "$f" ] && cp "$f" "$S/$n/"; done; done
+   # 测试副本从交付副本还原（不是从 .server/server/... pristine）
+   P=$(ls -d .server/run/small_games/*/plugins); A=.server/run_alt/plugins
+   for d in "$P"/*/; do g=$(basename "$d"); [ "$g" = ArcadeParty ] && continue
+     mkdir -p "$A/$g"; for f in "$d"*.yml "$d"*.snap; do [ -f "$f" ] && cp "$f" "$A/$g/"; done; done
    ```
 6. **用户说"检查/看看"时，只检查、不改。** 结论先给出，等点头再动手。
    真实教训：用户问"`/gameworld` 是 `/gw` 的别名吗"，我查完顺手把别名加进了 `plugin.yml`、
