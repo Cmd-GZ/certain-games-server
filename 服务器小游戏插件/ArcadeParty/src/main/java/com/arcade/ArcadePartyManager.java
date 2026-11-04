@@ -703,6 +703,19 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
 
     // ---------- 加入 / 离开 ----------
 
+    /**
+     * 确保有一个"可加入"的派对会话（I1）。
+     *
+     * <p>语义：等待区阶段就要有会话，玩家一进队列就挂在链上；会话结束（ENDED）后换新的。
+     * 这与其它游戏 `ensureSession()` 的写法一致。
+     */
+    private void ensureSession() {
+        if (session == null || session.state().isFinal()) {
+            session = new ArcadePartySession(this);
+            plugin.getLogger().info("[派对] 新建等待中的派对会话（等待区阶段玩家就在归属链上）");
+        }
+    }
+
     public void join(Player player) {
         UUID id = player.getUniqueId();
         if (state != State.WAITING) {
@@ -722,6 +735,21 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         if (lobbyNow == null) {
             Chat.send(player, "&c派对还没配置等待区（/arcade setlobby）。");
             return;
+        }
+        // I1（D23）：**先把玩家挂到归属链，成功了才写进等待队列**。
+        // 为什么在 join 就建会话：以前会话是在 startParty() 里建的，于是"派对等待区"阶段
+        // 玩家的归属链是空的（doctor 显示 `0 人有归属`）—— 既不符合 I1 的模型
+        // （他明明已经在排队等这一场派对），也让 I3 的区域裁决没有归属者可派发。
+        ensureSession();
+        if (!session.join(player)) {
+            Chat.send(player, "&c加入失败：你正在另一局游戏里，请先退出那一局。");
+            plugin.getLogger().info("[派对] 拒绝 " + player.getName() + " 加入：会话归属链挂接失败（"
+                    + session.describe() + "）");
+            return;
+        }
+        var roomNow = partyRoom();
+        if (roomNow != null) {
+            session.bindRoom(roomNow.roomId);
         }
         waiting.add(id);
         player.getInventory().clear();
@@ -925,7 +953,8 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             }
         }
         // 会话（I1/I4/I5）：整场派对 = 一个 session，玩家挂到它的归属链上；无 children（D17）
-        session = new ArcadePartySession(this);
+        // 会话在 join() 时就已经建好（等待区阶段玩家也在归属链上），这里只复用/兜底新建。
+        ensureSession();
         // **把房间号盖到会话上**（D25：对局结束 -> 销毁房间）。
         // 注意：派对会话的 gameKey 是 "arcade"，而房间上下文是按 room.game()（"arcadeparty"）绑的，
         // 靠 GameSession 构造时自动盖章是拿不到的（真实事故：派对收场后房间没销毁，
