@@ -1,6 +1,7 @@
 package com.digdown;
 
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 
 import java.util.ArrayList;
@@ -20,6 +21,87 @@ public class DigToBottomArena {
 
     public enum State {
         WAITING, RUNNING
+    }
+
+    /**
+     * D22：这个场地实例**钉死**的房间世界（每个房间一份实例）。
+     *
+     * <p>{@link com.hub.room.RoomBinding} 是"按游戏一个槽"，两房间同时跑时后一个覆盖前一个 ——
+     * 甲房的实例会读到乙房的世界（人被传错房间）。钉死之后读取只认自己的世界。
+     */
+    private World roomWorld;
+
+    /** D22：房间键（有房间时 = 房间 id；没有房间时就是场地名本身）。 */
+    private String roomKey;
+
+    public void bindWorld(World world) {
+        this.roomWorld = world;
+    }
+
+    public World boundWorld() {
+        return roomWorld;
+    }
+
+    /** 房间键：场地名是"哪张地图"，它表示"哪个房间的那一局"。 */
+    public String roomKey() {
+        return roomKey == null || roomKey.isBlank() ? name : roomKey;
+    }
+
+    public void setRoomKey(String roomKey) {
+        this.roomKey = roomKey;
+    }
+
+    /**
+     * 读坐标时的世界解析：**钉死了就只认自己的房间世界**，没钉才退回按上下文的换绑。
+     *
+     * <p>钉死之后**不能**再回落 {@link com.hub.room.RoomBinding}：它先看"派对委派"、再看
+     * "该游戏唯一的房间"，两者都是**按游戏一个槽**；两房间同时跑时会给出另一个房间的世界。
+     */
+    private Location apply(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld != null) {
+            if (roomWorld.equals(loc.getWorld())) {
+                return loc;
+            }
+            return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+        }
+        return com.hub.room.RoomBinding.apply("digdown", loc);
+    }
+
+    /**
+     * **把解析出来的坐标重新钉回自己的房间世界**（读 config 时用）。
+     *
+     * <p>`tpl:` 的解析看"当前房间上下文"，如果那次上下文指向**别的**房间，解析结果就会落到
+     * 别人的世界里。钉回去之后，房间实例无论如何重载都只认自己的世界。
+     */
+    private Location pin(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld == null || roomWorld.equals(loc.getWorld())) {
+            return loc;
+        }
+        return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+    }
+
+    /**
+     * 克隆"配置部分"（圆心/等待点/观战点/坑位数/半径/建场标记），**本局运行时状态全新**。
+     *
+     * <p>为什么不是直接复用同一份：`arenas` 表是"地图定义"，同一张图可以被两个房间同时开 ——
+     * 共用一份对象就等于两个房间共用玩家列表/进度/计时，必然串房。
+     */
+    public DigToBottomArena copyConfig() {
+        DigToBottomArena c = new DigToBottomArena(name);
+        c.center = this.center;
+        c.lobby = this.lobby;
+        c.spectator = this.spectator;
+        c.lanes = this.lanes;
+        c.radius = this.radius;
+        c.built = this.built;
+        c.builtHeight = this.builtHeight;
+        return c;
     }
 
     private String name;
@@ -69,7 +151,7 @@ public class DigToBottomArena {
     }
 
     public Location getCenter() {
-        return  com.hub.room.RoomBinding.apply("digdown", center);
+        return apply(center);
     }
 
     public void setCenter(Location center) {
@@ -78,7 +160,7 @@ public class DigToBottomArena {
     }
 
     public Location getLobby() {
-        return  com.hub.room.RoomBinding.apply("digdown", lobby);
+        return apply(lobby);
     }
 
     public void setLobby(Location lobby) {
@@ -86,7 +168,7 @@ public class DigToBottomArena {
     }
 
     public Location getSpectator() {
-        return  com.hub.room.RoomBinding.apply("digdown", spectator);
+        return apply(spectator);
     }
 
     public void setSpectator(Location spectator) {
@@ -263,9 +345,10 @@ public class DigToBottomArena {
         if (sec == null) {
             return a;
         }
-        a.center = com.hub.world.Worlds.readLocation(sec, "center");
-        a.lobby = com.hub.world.Worlds.readLocation(sec, "lobby");
-        a.spectator = com.hub.world.Worlds.readLocation(sec, "spectator");
+        // D22：读出来的坐标**钉回本房间的世界**（`tpl:` 解析看上下文，可能指到别人的房间）
+        a.center = a.pin(com.hub.world.Worlds.readLocation(sec, "center"));
+        a.lobby = a.pin(com.hub.world.Worlds.readLocation(sec, "lobby"));
+        a.spectator = a.pin(com.hub.world.Worlds.readLocation(sec, "spectator"));
         a.lanes = Math.max(1, sec.getInt("lanes", 8));
         a.radius = Math.max(1, sec.getInt("radius", 8));
         a.built = sec.getBoolean("built", false);

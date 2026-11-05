@@ -210,7 +210,11 @@ public class DigToBottomCommand implements CommandExecutor, TabCompleter {
                     if (a == null) return true;
                     arenaName = a.getName();
                 } else {
-                    Chat.send(sender, "&c控制台启动需要指定场地：/dig start <场名>");
+                    // 控制台不指定场地（派对/倒计时开局）：把每个有待开队列的房间都开起来
+                    int started = m.startAllWaiting();
+                    if (started == 0) {
+                        Chat.send(sender, "&e没有正在等待开局的场地。");
+                    }
                     return true;
                 }
                 m.start(player, arenaName);
@@ -228,11 +232,11 @@ public class DigToBottomCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
             case "list" -> {
-                if (m.getArenas().isEmpty()) {
+                if (m.displayArenas().isEmpty()) {
                     Chat.send(sender, "&7暂无场。");
                     return true;
                 }
-                for (DigToBottomArena a : m.getArenas().values()) {
+                for (DigToBottomArena a : m.displayArenas()) {
                     Chat.send(sender, "&e" + a.getName() + " &f[" + a.getState().name() + "] "
                             + (a.isReady() ? "&a已建好" : a.isBuilt() ? "&c缺等待点" : "&c未建场")
                             + " &7" + a.totalPlayers() + "人 &7坑位=" + a.getLanes() + " 半径=" + a.getRadius()
@@ -285,7 +289,7 @@ public class DigToBottomCommand implements CommandExecutor, TabCompleter {
             Chat.send(p, "&c请先 /dig create 或 /dig edit <场名>。");
             return null;
         }
-        DigToBottomArena a = plugin.getManager().getArena(name);
+        DigToBottomArena a = plugin.getManager().resolveArena(name);   // D22：房间上下文优先
         if (a == null) {
             editing.remove(p.getUniqueId());
             Chat.send(p, "&c场已被删除。");

@@ -23,18 +23,18 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 
 /**
- * DigToBottom 的对局会话（D22：**每个场地一个会话**，多图游戏照 TntRun 的写法）。
+ * DigToBottom 的对局会话（D22：**每个房间一个会话**；键是房间键，没有房间时就是场地名）。
  */
 final class DigToBottomSession extends GameSession {
 
     private final DigToBottomManager manager;
 
-    DigToBottomSession(DigToBottomManager manager, String arenaName) {
+    DigToBottomSession(DigToBottomManager manager, String roomKey) {
         // R1（单点事实源）：这里的 key 必须与 HubCore 的 registry / games.yml / maps.yml 一致。
         // **曾经是 "digdown"**：配置与注册表重命名成 digtobottom 之后，插件内部还留着旧 key，
         // 后果是派对委派时 GameDelegation 匹配不上 → 会话挂不到父对局 → 加入被 I1 拒绝，
         // 而且那条路径没有提示，表现就是"这个游戏在房间里怎么都开不了局"。
-        super("digtobottom", arenaName);
+        super("digtobottom", roomKey);
         this.manager = manager;
         // I3 C1：场地里对局进行中禁放方块（`onBlockBreak` 是**玩法**：挖到的东西算进度，留在 listener）
         arbiter().on(com.hub.session.EventKind.BLOCK_PLACE, ctx -> {
@@ -70,7 +70,7 @@ final class DigToBottomSession extends GameSession {
     @Override
     protected void onPlayerRespawn(PlayerRespawnEvent event) {
         Player player = event.getPlayer();
-        DigToBottomArena arena = manager.getArena(manager.arenaOf(player.getUniqueId()));
+        DigToBottomArena arena = manager.forPlayer(player);   // D22：按玩家房间路由
         if (arena == null) {
             return;
         }
@@ -84,7 +84,7 @@ final class DigToBottomSession extends GameSession {
     @Override
     protected void onPlayerDropItem(PlayerDropItemEvent event) {
         Player player = event.getPlayer();
-        DigToBottomArena arena = manager.getArena(manager.arenaOf(player.getUniqueId()));
+        DigToBottomArena arena = manager.forPlayer(player);   // D22：按玩家房间路由
         if (arena == null) {
             return;
         }
@@ -166,7 +166,7 @@ final class DigToBottomSession extends GameSession {
         }
         if (event instanceof PlayerMoveEvent e) {
         Player player = e.getPlayer();
-        DigToBottomArena arena = manager.getArena(manager.arenaOf(player.getUniqueId()));
+        DigToBottomArena arena = manager.forPlayer(player);   // D22：按玩家房间路由
         if (arena == null) {
             return;
         }
