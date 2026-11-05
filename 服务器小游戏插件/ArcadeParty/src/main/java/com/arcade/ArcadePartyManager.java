@@ -1183,8 +1183,12 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
                 if (stageWorld != null) {
                     party().currentArena = stageArena;
                     // 带上派对会话：子游戏会话会挂到它下面（I1 嵌套：派对 ⊃ 当前子游戏）
-                    com.hub.room.GameDelegation.begin(party().currentGameKey, stageWorld,
-                            stageArena, new ArrayList<>(party().transitionParticipants), party().session);
+                    // **必须在"本派对房间"上下文里 begin**：GameDelegation 现在按 (游戏,房间) 分槽，
+                    // 没有上下文会落进"最后一次委派"的兜底槽 —— 两场派对并行时就会互相覆盖。
+                    final org.bukkit.World stageW = stageWorld;
+                    final String stageA = stageArena;
+                    withPartyRoom(() -> com.hub.room.GameDelegation.begin(party().currentGameKey, stageW,
+                            stageA, new ArrayList<>(party().transitionParticipants), party().session));
                     plugin.getLogger().info("[派对] 已委派 " + party().currentGameKey + " 到房间 "
                             + room.roomId + " 的世界 " + stageWorld.getName()
                             + "（场地 " + party().currentArena + "，"
@@ -1361,7 +1365,16 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         // 绝不能还读到本场派对的房间世界（真实风险：委派残留 → 场地被绑到别人的房间）。
         if (com.hub.room.GameDelegation.current() != null) {
             plugin.getLogger().info("[派对] 撤销委派：" + com.hub.room.GameDelegation.current().game());
-            com.hub.room.GameDelegation.end();
+            final String delegatedGame = com.hub.room.GameDelegation.current().game();
+            final Party endParty = party();
+            withPartyRoom(() -> {
+                String rid = endParty.roomId;
+                if (rid != null) {
+                    com.hub.room.GameDelegation.end(delegatedGame, rid);   // 只撤销这一场
+                } else {
+                    com.hub.room.GameDelegation.end();
+                }
+            });
         }
         cancelTimeout();
 

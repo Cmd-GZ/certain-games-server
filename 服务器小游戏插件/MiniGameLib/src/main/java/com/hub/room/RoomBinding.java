@@ -32,7 +32,23 @@ public final class RoomBinding {
         if (delegated != null) {
             return delegated;
         }
-        // ② 没有委派 → 老路径：找"名下有房间"的那个（单开普通游戏/独立房间时用）。
+        // ② **房间上下文优先**（D22 后半）：有上下文就是"这一间"，不再靠"名下有房间"猜。
+        //    两房间同游戏并行时，`activeFor` 按设计返回 null，这条是唯一正确的来源。
+        String roomId = RoomContext.currentRoomId();
+        if (roomId != null) {
+            RoomManager.Room ctx = RoomManager.room(roomId);
+            if (ctx != null) {
+                World w = ctx.arenasOf(gameKey).stream()
+                        .map(RoomManager.ArenaSlot::world)
+                        .filter(java.util.Objects::nonNull)
+                        .findFirst()
+                        .orElse(ctx.world);
+                if (w != null) {
+                    return w;
+                }
+            }
+        }
+        // ③ 老路径：没有上下文 → 找"名下恰好一个房间"的那个（单开普通游戏时用）。
         RoomManager.Room room = RoomManager.activeFor(gameKey);
         return room == null ? null : room.world;
     }

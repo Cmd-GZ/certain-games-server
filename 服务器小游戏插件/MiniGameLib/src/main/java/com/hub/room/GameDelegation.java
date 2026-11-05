@@ -29,6 +29,15 @@ public final class GameDelegation {
                        com.hub.session.GameSession parentSession) {
     }
 
+    /**
+     * **按 (游戏, 房间) 记的委派表**（D22 后半，2026-11-05）。
+     *
+     * <p>为什么必须多槽：以前只有一个 `Task current`，两场派对同时开局时**后一场会覆盖前一场** →
+     * 先开始的那场读到的是别人的世界（表现为"委派到 room_pd1"但场地坐标落在 room_pd2）。
+     * 现在按房间分槽，并用 {@link RoomContext#currentRoomId()} 解析。
+     */
+    private static final java.util.Map<String, Task> BY_ROOM = new java.util.HashMap<>();
+    /** 兜底：没有房间上下文的旧路径（单派对/单游戏）用"最后一次委派"。 */
     private static Task current;
 
     private GameDelegation() {
@@ -42,13 +51,47 @@ public final class GameDelegation {
     /** 带父会话的委派：子游戏会话会挂到它下面（I1 的嵌套形态）。 */
     public static void begin(String game, World world, String arenaName, List<UUID> players,
                              com.hub.session.GameSession parentSession) {
-        current = new Task(game, world, arenaName,
+        Task task = new Task(game, world, arenaName,
                 players == null ? List.of() : List.copyOf(players), parentSession);
+        current = task;
+        String roomId = RoomContext.currentRoomId();
+        if (roomId != null && game != null) {
+            synchronized (BY_ROOM) {
+                BY_ROOM.put(game + "@" + roomId, task);
+            }
+        }
     }
 
-    /** 结束委派。 */
+    /** 结束委派：**只清当前房间那一条**（没有房间上下文时清兜底）。 */
     public static void end() {
-        current = null;
+        String roomId = RoomContext.currentRoomId();
+        Task removed = null;
+        if (roomId != null) {
+            synchronized (BY_ROOM) {
+                java.util.Iterator<java.util.Map.Entry<String, Task>> it = BY_ROOM.entrySet().iterator();
+                while (it.hasNext()) {
+                    var e = it.next();
+                    if (e.getKey().endsWith("@" + roomId)) {
+                        removed = e.getValue();
+                        it.remove();
+                    }
+                }
+            }
+        }
+        if (removed == null || (current != null && current == removed)) {
+            current = null;
+        }
+    }
+
+    /** 按房间结束委派（派对换关时用，避免误清别场）。 */
+    public static void end(String game, String roomId) {
+        Task removed;
+        synchronized (BY_ROOM) {
+            removed = BY_ROOM.remove(game + "@" + roomId);
+        }
+        if (removed != null && removed == current) {
+            current = null;
+        }
     }
 
     /** 当前委派（没有则 null）。 */
@@ -62,8 +105,23 @@ public final class GameDelegation {
      * @return 委派的世界；没有委派、或委派的不是这个游戏，返回 null
      */
     public static World worldFor(String gameKey) {
+        if (gameKey == null) {
+            return null;
+        }
+        // ① 有房间上下文 → 只认这个房间的那一条（两场派对并行时互不干扰）
+        String roomId = RoomContext.currentRoomId();
+        if (roomId != null) {
+            Task byRoom;
+            synchronized (BY_ROOM) {
+                byRoom = BY_ROOM.get(gameKey + "@" + roomId);
+            }
+            if (byRoom != null) {
+                return byRoom.world();
+            }
+        }
+        // ② 旧路径：没有房间上下文（或该房间没有委派）→ 退回"最后一次委派"
         Task t = current;
-        if (t == null || gameKey == null || !gameKey.equals(t.game())) {
+        if (t == null || !gameKey.equals(t.game())) {
             return null;
         }
         return t.world();
