@@ -31,13 +31,22 @@ public final class TNTBattleCore {
     public static final String DEFAULT_ARENA = "双岛";
 
     private final TNTBattlePlugin plugin;
+    /** 地图定义（每张图一份配置 + 一份"没有房间时"的实例）。 */
     private final Map<String, TNTBattleArena> arenas = new LinkedHashMap<>();
     private final Map<String, TNTBattleManager> matches = new LinkedHashMap<>();
     private final Map<UUID, TNTBattleManager> playerMatch = new LinkedHashMap<>();
+    /** D22：**每个房间一份运行时状态**（房间 id → 那一份实例）。 */
+    private final TNTBattleRooms rooms;
     private TNTBattleManager primary;
 
     public TNTBattleCore(TNTBattlePlugin plugin) {
         this.plugin = plugin;
+        this.rooms = new TNTBattleRooms(plugin, this);
+    }
+
+    /** D22：房间路由表。 */
+    public TNTBattleRooms rooms() {
+        return rooms;
     }
 
     // ---------- 生命周期 ----------
@@ -85,6 +94,8 @@ public final class TNTBattleCore {
     }
 
     public void shutdown() {
+        // D22：房间实例先收尾（它们可能正跑着对局）
+        rooms.shutdownAll();
         for (TNTBattleManager manager : matches.values()) {
             manager.shutdown();
         }
@@ -106,16 +117,27 @@ public final class TNTBattleCore {
         return matches.values();
     }
 
+    /** 全部实例：地图定义实例 + 各房间的运行时实例（按实体/TNT 反查归属时要用全量）。 */
+    public Collection<TNTBattleManager> allManagers() {
+        List<TNTBattleManager> all = new ArrayList<>(matches.values());
+        all.addAll(rooms.live().values());
+        return all;
+    }
+
     /**
      * 声明地盘（{@code docs/框架不变量.md} 的 I2）：把每个场地的边界报给框架。
      *
-     * <p>1.12.1 起 TNTBattle 支持多场地（每场独立等待室/出生点），
-     * 所以声明必须遍历 {@link #arenas}，每个场地一块 AABB。
+     * <p>1.12.1 起 TNTBattle 支持多场地（每场独立等待室/出生点）；
+     * D22 起**每个房间各声明自己那一块**（名用房间键），地图定义实例只在
+     * "坐标没落进房间世界"时声明 —— 否则会和房间实例那块自重叠。
      */
     public void publishRegions() {
         com.hub.region.Regions.begin("tntbattle");
-        for (TNTBattleArena a : arenas.values()) {
-            com.hub.region.Regions.box("tntbattle", a.name(), a.getPos1(), a.getPos2());
+        for (TNTBattleManager manager : matches.values()) {
+            manager.publishRegion();
+        }
+        for (TNTBattleManager manager : rooms.live().values()) {
+            manager.publishRegion();
         }
     }
 
@@ -237,7 +259,8 @@ public final class TNTBattleCore {
         if (manager != null) {
             return manager;
         }
-        for (TNTBattleManager candidate : matches.values()) {
+        // D22：房间实例不在地图表里，扫描必须走 allManagers()
+        for (TNTBattleManager candidate : allManagers()) {
             if (candidate.isInGame(id)) {
                 playerMatch.put(id, candidate);
                 return candidate;
@@ -251,7 +274,7 @@ public final class TNTBattleCore {
     }
 
     public TNTBattleManager managerForTnt(TNTPrimed tnt) {
-        for (TNTBattleManager manager : matches.values()) {
+        for (TNTBattleManager manager : allManagers()) {
             if (manager.ownsTnt(tnt)) {
                 return manager;
             }
@@ -260,7 +283,7 @@ public final class TNTBattleCore {
     }
 
     public TNTBattleManager managerForFlame(SmallFireball fireball) {
-        for (TNTBattleManager manager : matches.values()) {
+        for (TNTBattleManager manager : allManagers()) {
             if (manager.ownsFlame(fireball)) {
                 return manager;
             }
@@ -269,7 +292,7 @@ public final class TNTBattleCore {
     }
 
     public TNTBattleManager managerForBridgeEgg(Egg egg) {
-        for (TNTBattleManager manager : matches.values()) {
+        for (TNTBattleManager manager : allManagers()) {
             if (manager.ownsBridgeEgg(egg)) {
                 return manager;
             }
@@ -278,7 +301,7 @@ public final class TNTBattleCore {
     }
 
     public TNTBattleManager ownedExplosion(Block block) {
-        for (TNTBattleManager manager : matches.values()) {
+        for (TNTBattleManager manager : allManagers()) {
             if (manager.isOwnedExplosion(block)) {
                 return manager;
             }
@@ -290,6 +313,7 @@ public final class TNTBattleCore {
         TNTBattleManager manager = managerFor(player);
         if (manager != null) {
             manager.leave(player, true);
+            rooms.retireIfIdle(manager);
         } else {
             unbind(player.getUniqueId());
         }
@@ -299,6 +323,7 @@ public final class TNTBattleCore {
         TNTBattleManager manager = managerFor(player);
         if (manager != null) {
             manager.quit(player);
+            rooms.retireIfIdle(manager);
         }
         unbind(player.getUniqueId());
     }

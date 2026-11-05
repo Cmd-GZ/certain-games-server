@@ -103,10 +103,17 @@ public final class TNTBattleCommand implements CommandExecutor, TabCompleter {
             Chat.send(sender, "&c只有玩家可以加入游戏。");
             return;
         }
-        TNTBattleManager manager = resolve(args, 1, sender);
-        if (manager != null) {
-            manager.join(player);
+        // D22：地图名只决定"进哪张图"，**房间键**（RoomContext）决定"哪一份运行时状态"
+        String arenaName = null;
+        if (args.length > 1) {
+            if (core.match(args[1]) == null) {
+                Chat.send(sender, "&c没有这个场地：&f" + args[1] + "&c。可用：&f"
+                        + String.join("、", arenaNames()));
+                return;
+            }
+            arenaName = args[1];
         }
+        core.rooms().join(player, arenaName);
     }
 
     private void leave(CommandSender sender) {
@@ -114,12 +121,12 @@ public final class TNTBattleCommand implements CommandExecutor, TabCompleter {
             Chat.send(sender, "&c只有玩家可以离开游戏。");
             return;
         }
-        TNTBattleManager manager = core.managerFor(player);
+        TNTBattleManager manager = core.rooms().forPlayer(player);
         if (manager == null || !manager.isPlaying(player)) {
             Chat.send(player, "&7你不在游戏中。");
             return;
         }
-        manager.leave(player, false);
+        core.rooms().leave(player, false);
         Chat.send(player, "&7已离开 TNT 对战。");
     }
 
@@ -145,6 +152,17 @@ public final class TNTBattleCommand implements CommandExecutor, TabCompleter {
                         + "&7/&f" + manager.teamSize(TNTBattleArena.Team.RED)
                         + " &8| &7蓝队存活 &f" + manager.aliveCountTotal(TNTBattleArena.Team.BLUE)
                         + "&7/&f" + manager.teamSize(TNTBattleArena.Team.BLUE));
+            }
+        }
+        java.util.Map<String, TNTBattleManager> live = core.rooms().live();
+        if (!live.isEmpty()) {
+            Chat.send(sender, "&c----- 正在使用的房间（" + live.size() + "） -----");
+            for (TNTBattleManager manager : live.values()) {
+                String state = manager.isRunning() ? "&c游戏中"
+                        : (manager.isEnding() ? "&c结算中" : "&e等待中");
+                Chat.send(sender, "&e" + manager.roomKey() + " &7（图 " + manager.arenaLabel()
+                        + "） &7[" + manager.arena().worldName() + "] " + state
+                        + " &7| 玩家 &f" + manager.statesCount());
             }
         }
         Chat.send(sender, "&7配置场地：/tntbattle create <场名>，然后对该场执行 pos1/pos2/setspawn/setlobby/save");
@@ -514,26 +532,28 @@ public final class TNTBattleCommand implements CommandExecutor, TabCompleter {
     }
 
     private void start(CommandSender sender, String[] args) {
+        // D22：开局目标是**房间实例**（玩家 → 他自己那一份；控制台 → 房间上下文/最近加入）
+        TNTBattleManager target = sender instanceof Player p
+                ? core.rooms().forPlayer(p) : core.rooms().current();
         // D21：开始权在主持人手上；主持人不能突破 min-players（管理员可以）
         boolean isAdminS = !(sender instanceof Player sp) || sp.hasPermission("tntbattle.admin");
         if (!isAdminS) {
-            TNTBattleManager tryMgr = resolve(args, 1, sender);
-            if (tryMgr == null || !(sender instanceof Player sp2) || !tryMgr.isHost(sp2)) {
+            if (target == null || !target.isHost(sender)) {
                 requireAdmin(sender);   // 借用它的提示
                 return;
             }
-            if (tryMgr.waitingCountPublic() < tryMgr.minPlayersPublic()) {
-                Chat.send(sender, "&c人数还没达到 &f" + tryMgr.minPlayersPublic()
+            if (target.waitingCountPublic() < target.minPlayersPublic()) {
+                Chat.send(sender, "&c人数还没达到 &f" + target.minPlayersPublic()
                         + " 人&c，主持人也不能开始。");
                 return;
             }
         }
-        TNTBattleManager manager = resolve(args, 1, sender);
-        if (manager == null) {
-            return;
-        }
-        if (!manager.startGame(true)) {
-            Chat.send(sender, "&c无法开始 &f" + manager.arena().name() + " &c：检查场地配置和等待玩家。");
+        String arenaName = args.length > 1 && core.match(args[1]) != null ? args[1] : null;
+        int started = core.rooms().startAllWaiting(arenaName);
+        if (started <= 0) {
+            Chat.send(sender, "&c没有可开始的房间：检查场地配置和等待玩家。");
+        } else if (!(sender instanceof Player)) {
+            Chat.send(sender, "&a已开始 &f" + started + " &a个房间的对局。");
         }
     }
 
@@ -541,20 +561,43 @@ public final class TNTBattleCommand implements CommandExecutor, TabCompleter {
         if (!requireAdmin(sender)) {
             return;
         }
-        TNTBattleManager manager = resolve(args, 1, sender);
+        TNTBattleManager manager = sender instanceof Player p
+                ? core.rooms().forPlayer(p) : core.rooms().current();
+        if (manager == null) {
+            manager = resolve(args, 1, sender);
+        }
         if (manager == null) {
             return;
         }
         if (!manager.isRunning()) {
-            Chat.send(sender, "&7" + manager.arena().name() + " 当前没有进行中的对局。");
+            Chat.send(sender, "&7" + manager.arenaLabel() + " 当前没有进行中的对局。");
             return;
         }
         manager.endGame(null);
-        Chat.send(sender, "&a已结束 &f" + manager.arena().name() + " &a对局。");
+        Chat.send(sender, "&a已结束 &f" + manager.arenaLabel() + " &a对局。");
     }
 
     private void reload(CommandSender sender) {
         if (!requireAdmin(sender)) {
+            return;
+        }
+        // D22：**房间上下文里只重载这一间**
+        //（`/hub join` 时 HubCore 会用房间上下文发 `<game> reload` —— 那条命令没有房间上下文时
+        //  会让地图定义实例的 `tpl:` 落到别人房间的世界里，HillKing 的自重叠就是这么来的）
+        String ctx = com.hub.room.RoomContext.currentRoomId();
+        if (ctx != null && com.hub.room.RoomManager.room(ctx) != null) {
+            TNTBattleManager live = core.rooms().liveOf(ctx);
+            if (live == null) {
+                // 现场建：此时压着房间上下文，`tpl:` 坐标解析得对（这一步已经把配置读进来了）
+                core.rooms().current();
+            } else if (live.inUse()) {
+                Chat.send(sender, "&c房间 &f" + ctx + " &c还有玩家或正在对局，跳过重载。");
+                return;
+            } else {
+                plugin.reloadConfig();
+                live.reload(false);
+            }
+            Chat.send(sender, "&a房间 &f" + ctx + " &a的场地配置已重新载入。");
             return;
         }
         for (TNTBattleManager manager : core.matches()) {

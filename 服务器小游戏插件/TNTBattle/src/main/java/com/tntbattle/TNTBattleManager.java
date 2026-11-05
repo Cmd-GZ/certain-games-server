@@ -72,14 +72,24 @@ import java.util.UUID;
 /** TNT 对战：双队、TNT 发射器、定时羊毛、淘汰与胜负。 */
 public final class TNTBattleManager {
 
-    /** D22：会话层统一按场地键索引（本游戏目前单场地）。 */
+    /**
+     * D22：这个实例负责的**房间键**（有房间时 = 房间 id；没有房间时 = 地图/场地名）。
+     *
+     * <p>每个房间一份实例 = 一份运行时状态，所以两场派对不会互相踩。
+     * 会话键、`StartCountdown` 键、侧边栏键、区域声明名都用它。
+     */
+    private final String roomKey;
+    /** 侧边栏的键：每房间一份，否则两个房间互相覆盖。 */
+    private final String sidebarKey;
+
+    /** D22：会话层按**房间键**索引（两场派对各一份会话）。 */
     private final java.util.Map<String, TNTBattleSession> sessions = new java.util.LinkedHashMap<>();
     private TNTBattleArena.Team pendingWinner;
     private boolean pendingHasWinner;
     private TNTBattleSession session;
 
     private TNTBattleSession ensureSession() {
-        String key = "main";
+        String key = roomKey;   // D22：每房间一个会话（否则两场派对共用同一份会话）
         TNTBattleSession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
             s = new TNTBattleSession(this, key);
@@ -165,9 +175,19 @@ public final class TNTBattleManager {
     private final TNTBattleMusic music;
 
     public TNTBattleManager(TNTBattlePlugin plugin, TNTBattleCore core, TNTBattleArena arena) {
+        this(plugin, core, arena, arena == null ? null : arena.name());
+    }
+
+    /**
+     * @param roomKey D22：房间键（房间 id）；没有房间的"地图定义实例"传场地名即可
+     */
+    public TNTBattleManager(TNTBattlePlugin plugin, TNTBattleCore core, TNTBattleArena arena, String roomKey) {
         this.plugin = plugin;
         this.core = core;
         this.arena = arena;
+        this.roomKey = roomKey == null || roomKey.isBlank()
+                ? (arena == null ? "" : arena.name()) : roomKey;
+        this.sidebarKey = "tntbattle:" + this.roomKey;
         this.liveSidebar = new LiveSidebar(plugin);
         this.music = new TNTBattleMusic(plugin, this);
         this.tntKey = new NamespacedKey(plugin, "tnt_ammo");
@@ -193,7 +213,13 @@ public final class TNTBattleManager {
         createCountdown();
         music.load();
         reportArena();
-        plugin.getLogger().info("场地 " + arena.name() + (arena.ready() ? " 已配置" : " 未配置") + "。");
+        publishRegion();
+        plugin.getLogger().info((roomScoped() ? "房间 " + roomKey + " 的场地 " : "场地 ")
+                + arena.name() + (arena.ready() ? " 已配置" : " 未配置") + "。");
+        if (roomScoped()) {
+            // 房间实例不重复播配置摘要（地图定义实例已经播过一遍）
+            return;
+        }
         plugin.getLogger().info("TNT 配置：冷却 " + plugin.getConfig().getInt("tnt-cooldown-seconds", 5)
                 + "s，引信 " + plugin.getConfig().getInt("tnt-fuse-ticks", 40)
                 + " tick，速度 " + plugin.getConfig().getDouble("tnt-velocity", 1.5)
@@ -390,7 +416,10 @@ public final class TNTBattleManager {
     /** 重载前先把当前场地（可能还没 /save）写回配置，再重新读取。 */
     public void reload(boolean primary) {
         this.primary = primary;
-        saveArena();
+        if (!roomScoped()) {
+            // R2：房间实例不写配置 —— 场地坐标是**地图级**的，写者只留地图定义实例一个
+            saveArena();
+        }
         if (countdown != null) {
             countdown.cancel();
         }
@@ -406,6 +435,7 @@ public final class TNTBattleManager {
         createCountdown();
         music.load();
         reportArena();
+        publishRegion();
     }
 
     private void createCountdown() {
@@ -585,7 +615,7 @@ public final class TNTBattleManager {
         TNTBattleSession sess = ensureSession();
         if (!sess.join(player)) {
             if (sess.players().isEmpty()) {
-                sessions.remove("main");
+                sessions.remove(roomKey);
             }
             return false;
         }
@@ -698,7 +728,7 @@ public final class TNTBattleManager {
             return false;
         }
 
-        if (startCountdown().begin(arena.name(), new ArrayList<>(states.keySet()), () -> startGame(force))) {
+        if (startCountdown().begin(roomKey, new ArrayList<>(states.keySet()), () -> startGame(force))) {
             return true;
         }
         if (countdown != null) {
@@ -2548,7 +2578,7 @@ public final class TNTBattleManager {
         List<LiveSidebar.Line> lines = new ArrayList<>();
         lines.add(new LiveSidebar.Line("§c红队存活", red));
         lines.add(new LiveSidebar.Line("§9蓝队存活", blue));
-        liveSidebar.update(sidebarKey(), "&c&lTNT 对战 · 存活", new ArrayList<>(teams.keySet()), lines);
+        liveSidebar.update(sidebarKey, "&c&lTNT 对战 · 存活", new ArrayList<>(teams.keySet()), lines);
         // LiveSidebar 会给玩家换计分板；换完再挂一次队伍，保证发光颜色还在
         for (UUID id : teams.keySet()) {
             if (eliminated.contains(id)) {
@@ -2583,7 +2613,7 @@ public final class TNTBattleManager {
         ending = true;
         running = false;
         music.stopPlayback();
-        liveSidebar.hide(sidebarKey());
+        liveSidebar.hide(sidebarKey);
         cancelTasks();
         cancelEffects();
         removeFlames();
@@ -2641,10 +2671,41 @@ public final class TNTBattleManager {
         restoring = false;
         reportArena();
         countdown.update();
+        // D22：一局打完、人都走了 → 这个房间的运行时状态可以回收了
+        //（party 流程里玩家是被 teleportToLobby 带走的，那时 states 已清空，`leave` 查不到归属）
+        if (roomScoped()) {
+            core.rooms().retireIfIdle(this);
+        }
     }
 
     public boolean inUse() {
         return running || ending || !states.isEmpty();
+    }
+
+    /** 没有玩家、也没在结算 —— 房间实例可以回收了。 */
+    public boolean idle() {
+        return !running && !ending && states.isEmpty();
+    }
+
+    /** D22：这个实例是"某个房间的一份运行时状态"，还是"没有房间时的地图定义实例"。 */
+    public boolean roomScoped() {
+        return arena != null && roomKey != null && !roomKey.equals(arena.name());
+    }
+
+    /** D22：本实例的房间键（会话键 / 侧边栏键 / 区域声明名都用它）。 */
+    public String roomKey() {
+        return roomKey;
+    }
+
+    /**
+     * 中央菜单/派对里显示的场地名 —— **仍然是地图名**。
+     *
+     * <p>派对是靠"游戏注册的场地名"选图、再把 `{arena}` 填进 `tntbattle join {arena}` 的；
+     * 换成房间键会让 `tntbattle join room_pd1` 找不到地图。房间隔离靠 {@code RoomContext}，不靠这个名字
+     * （`TntRun/ColorParty/DigToBottom` 同样保留地图名）。
+     */
+    public String arenaLabel() {
+        return arena == null ? roomKey : arena.name();
     }
 
     /** 原来承载排行榜的场被删除后，把排行榜交给新的主场地。 */
@@ -2652,6 +2713,37 @@ public final class TNTBattleManager {
         primary = true;
         loadLeaderboard();
         startLeaderboardTask();
+    }
+
+    /** 声明本实例的地盘（I2）：**名用房间键**，同一张图两个房间各一块、不互相覆盖。 */
+    void publishRegion() {
+        if (arena == null) {
+            return;
+        }
+        if (roomScoped()) {
+            com.hub.region.Regions.box("tntbattle", roomKey, arena.getPos1(), arena.getPos2());
+            return;
+        }
+        // 地图定义实例（没钉死房间世界）：
+        // ① 在房间上下文里不声明（那一块由该房间自己的实例声明）；
+        // ② 坐标若被 `tpl:` 兜底解析进了**房间世界**也不声明 —— 否则会和房间实例那块**自重叠**
+        //    （HillKing 的真实事故：doctor 报 72 行 `同游戏场地重叠`）。
+        if (com.hub.room.RoomContext.currentRoomId() != null) {
+            return;
+        }
+        World world = arena.world();
+        if (world != null && com.hub.room.RoomManager.templateKeyOfRoomWorld(world.getName()) != null) {
+            plugin.getLogger().info("[TNTBattle] 地图定义实例 " + arena.name() + " 的坐标落在房间世界 "
+                    + world.getName() + "，跳过地盘声明（由该房间自己的实例声明）。");
+            return;
+        }
+        com.hub.region.Regions.box("tntbattle", arena.name(), arena.getPos1(), arena.getPos2());
+    }
+
+    /** 房间销毁/空闲回收时：把本实例的侧边栏从共享监听里摘掉（防泄漏）。 */
+    public void releaseSidebar() {
+        liveSidebar.hide(sidebarKey);
+        liveSidebar.dispose();
     }
 
     public void saveArena() {
@@ -2664,7 +2756,8 @@ public final class TNTBattleManager {
 
     /** 删除场地时清理本场资源，但不写回 arena 配置（否则会把刚删掉的场又写回来）。 */
     public void dispose() {
-        liveSidebar.hideAll();
+        liveSidebar.hide(sidebarKey);
+        liveSidebar.dispose();
         music.shutdown();
         music.clearEnabled();
         if (countdown != null) {
@@ -2699,12 +2792,8 @@ public final class TNTBattleManager {
         ending = false;
     }
 
-    private String sidebarKey() {
-        return "tntbattle:" + arena.name();
-    }
-
     public void shutdown() {
-        liveSidebar.hideAll();
+        liveSidebar.hide(sidebarKey);
         ending = true;
         restoring = true;
         music.shutdown();
@@ -2745,7 +2834,10 @@ public final class TNTBattleManager {
         leaderboardDisplay = null;
         running = false;
         ending = false;
-        saveArena();
+        if (!roomScoped()) {
+            // R2：房间实例不写配置 —— 场地坐标是地图级的，写者只留地图定义实例一个
+            saveArena();
+        }
     }
 
     private void removeTnt() {

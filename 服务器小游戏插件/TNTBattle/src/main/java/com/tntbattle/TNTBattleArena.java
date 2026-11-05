@@ -15,18 +15,72 @@ public final class TNTBattleArena {
 
     private final TNTBattlePlugin plugin;
     private final String name;
+
+    /**
+     * D22：这个场地实例**钉死**的房间世界（每个房间一份实例）。
+     *
+     * <p>{@link com.hub.room.RoomBinding} 是"按游戏一个槽"，两个房间同时跑时后一个覆盖前一个 ——
+     * 甲房的实例会读到乙房的世界（人被传错房间，或 {@code Location cannot be in a different world}）。
+     * 钉死之后读取只认自己的世界。
+     */
+    private World roomWorld;
+
+    public void bindWorld(World world) {
+        this.roomWorld = world;
+    }
+
+    public World boundWorld() {
+        return roomWorld;
+    }
+
+    /**
+     * 读坐标时的世界解析：**钉死了就只认自己的房间世界**，没钉才退回按上下文的换绑。
+     *
+     * <p>钉死之后**不能**再回落 {@link com.hub.room.RoomBinding}：它先看"派对委派"、再看
+     * "该游戏唯一的房间"，两者都是**按游戏一个槽**；两房间同时跑时会给出另一个房间的世界，
+     * 于是同一份代码里"世界"和"坐标"对不上（抛 {@code Location cannot be in a different world}）。
+     */
+    private Location apply(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld != null) {
+            if (roomWorld.equals(loc.getWorld())) {
+                return loc;
+            }
+            return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+        }
+        return com.hub.room.RoomBinding.apply("tntbattle", loc);
+    }
+
+    /**
+     * **把解析出来的坐标重新钉回自己的房间世界**（{@code load()} 用）。
+     *
+     * <p>{@code tpl:} 的解析看"当前房间上下文"，而 {@code /hub join} 会让 HubCore 给子游戏发一次
+     * {@code reload}；如果那次上下文指向**别的**房间，解析结果就会落到别人的世界里。
+     */
+    private Location pin(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld == null || roomWorld.equals(loc.getWorld())) {
+            return loc;
+        }
+        return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+    }
+
     private String worldName = "world";
     private Location pos1;
     private Location pos2;
 
     /** 场地边界角 1（供区域声明用，{@code docs/框架不变量.md} I2）。 */
     public Location getPos1() {
-        return  com.hub.room.RoomBinding.apply("tntbattle", pos1);
+        return apply(pos1 == null ? null : pos1.clone());
     }
 
     /** 场地边界角 2。 */
     public Location getPos2() {
-        return  com.hub.room.RoomBinding.apply("tntbattle", pos2);
+        return apply(pos2 == null ? null : pos2.clone());
     }
     private Location lobby;
     private final List<Location> redSpawns = new ArrayList<>();
@@ -56,32 +110,33 @@ public final class TNTBattleArena {
         }
         FileConfiguration cfg = plugin.getConfig();
         worldName = sec.getString("world", cfg.getString("arena.world", "world"));
-        pos1 = parse(sec.getString("pos1", ""));
-        pos2 = parse(sec.getString("pos2", ""));
-        lobby = parse(sec.getString("lobby", ""));
+        // D22：解析出来的坐标**钉回本房间的世界**（`tpl:` 解析看上下文，可能指到别人的房间）
+        pos1 = pin(parse(sec.getString("pos1", "")));
+        pos2 = pin(parse(sec.getString("pos2", "")));
+        lobby = pin(parse(sec.getString("lobby", "")));
         redSpawns.clear();
         blueSpawns.clear();
         for (String raw : sec.getStringList("red-spawns")) {
-            Location loc = parse(raw);
+            Location loc = pin(parse(raw));
             if (loc != null) {
                 redSpawns.add(loc);
             }
         }
         for (String raw : sec.getStringList("blue-spawns")) {
-            Location loc = parse(raw);
+            Location loc = pin(parse(raw));
             if (loc != null) {
                 blueSpawns.add(loc);
             }
         }
         // 兼容旧版单出生点配置
         if (redSpawns.isEmpty()) {
-            Location legacy = parse(sec.getString("red-spawn", ""));
+            Location legacy = pin(parse(sec.getString("red-spawn", "")));
             if (legacy != null) {
                 redSpawns.add(legacy);
             }
         }
         if (blueSpawns.isEmpty()) {
-            Location legacy = parse(sec.getString("blue-spawn", ""));
+            Location legacy = pin(parse(sec.getString("blue-spawn", "")));
             if (legacy != null) {
                 blueSpawns.add(legacy);
             }
@@ -101,28 +156,84 @@ public final class TNTBattleArena {
         plugin.reloadConfig();
         FileConfiguration cfg = plugin.getConfig();
         String path = "arenas." + name;
-        // R2：写世界 token（房间实例 → tpl:模板键），别把临时房间名写进配置
-        cfg.set(path + ".world",
-                world() == null ? worldName : com.hub.world.Worlds.tokenOf(world()));
-        cfg.set(path + ".pos1", format(pos1));
-        cfg.set(path + ".pos2", format(pos2));
-        cfg.set(path + ".lobby", format(lobby));
+        // R2：只写 `tpl:` 令牌；**读不出来就整项跳过**，绝不把磁盘上已有的坐标擦成 ''
+        //（真实事故：TNTBattle 配置里出现 `pos1: room_tb3_1,334.00,...`；反向事故是把已配好的键写成空串）。
+        String token = encodeWorld();
+        if (token != null) {
+            cfg.set(path + ".world", token);
+        }
+        write(cfg, path + ".pos1", pos1);
+        write(cfg, path + ".pos2", pos2);
+        write(cfg, path + ".lobby", lobby);
         cfg.set(path + ".red-spawn", null);
         cfg.set(path + ".blue-spawn", null);
-        cfg.set(path + ".red-spawns", strings(redSpawns));
-        cfg.set(path + ".blue-spawns", strings(blueSpawns));
+        List<String> red = encodeAll(redSpawns);
+        if (!red.isEmpty()) {
+            cfg.set(path + ".red-spawns", red);
+        }
+        List<String> blue = encodeAll(blueSpawns);
+        if (!blue.isEmpty()) {
+            cfg.set(path + ".blue-spawns", blue);
+        }
         cfg.set(path + ".void-y", voidY);
         cfg.set(path + ".build-height-limit", buildHeightLimit);
         cfg.set(path + ".max-players", maxPlayers);
         plugin.saveConfig();
     }
 
-    private List<String> strings(List<Location> locations) {
+    /** 本场世界 → 配置令牌；读不出来（无世界 / 房间实例反查不到模板）返回 null。 */
+    private String encodeWorld() {
+        World world = world();
+        if (world == null) {
+            return null;
+        }
+        return encodeWorldName(world);
+    }
+
+    private static String encodeWorldName(World world) {
+        String token = com.hub.world.Worlds.tokenOf(world);
+        if (token == null || token.isBlank() || token.startsWith("room_")) {
+            return null;
+        }
+        return token;
+    }
+
+    private List<String> encodeAll(List<Location> locations) {
         List<String> out = new ArrayList<>();
         for (Location location : locations) {
-            out.add(format(location));
+            String token = encode(location);
+            if (token != null) {
+                out.add(token);
+            }
         }
         return out;
+    }
+
+    /** 写一个坐标；**写不了就什么都不做**（保留磁盘上的原值）。 */
+    private static void write(FileConfiguration cfg, String path, Location loc) {
+        String token = encode(loc);
+        if (token != null) {
+            cfg.set(path, token);
+        }
+    }
+
+    /**
+     * 坐标 → 存档 token；**写不了时返回 null**（调用方跳过）。
+     *
+     * <p>房间化之后场地跑在 `room_xxx` 里，把临时房间名写进配置（R2 违规）会让删房后配置永久失效。
+     * {@link com.hub.world.Worlds#tokenOf} 会把房间实例还原成 `tpl:<模板键>`；反查不到模板就拒绝写。
+     */
+    public static String encode(Location location) {
+        if (location == null || location.getWorld() == null) {
+            return null;
+        }
+        String token = encodeWorldName(location.getWorld());
+        if (token == null) {
+            return null;
+        }
+        return String.format(Locale.ROOT, "%s,%.2f,%.2f,%.2f,%.2f,%.2f",
+                token, location.getX(), location.getY(), location.getZ(),
+                location.getYaw(), location.getPitch());
     }
 
     public void setCorner(int index, Location location) {
@@ -182,23 +293,29 @@ public final class TNTBattleArena {
     }
 
     public boolean regionConfigured() {
-        return pos1 != null && pos2 != null
-                && pos1.getWorld() != null && pos2.getWorld() != null
-                && pos1.getWorld().getName().equals(pos2.getWorld().getName());
+        Location a = getPos1();
+        Location b = getPos2();
+        return a != null && b != null
+                && a.getWorld() != null && b.getWorld() != null
+                && a.getWorld().equals(b.getWorld());
     }
 
     public boolean ready() {
-        if (!regionConfigured() || lobby == null || redSpawns.isEmpty() || blueSpawns.isEmpty()) {
+        Location corner = getPos1();
+        if (!regionConfigured() || corner == null || corner.getWorld() == null
+                || lobby() == null || redSpawns.isEmpty() || blueSpawns.isEmpty()) {
             return false;
         }
-        String world = pos1.getWorld().getName();
+        World world = corner.getWorld();
         for (Location spawn : redSpawns) {
-            if (spawn.getWorld() == null || !world.equals(spawn.getWorld().getName())) {
+            Location bound = apply(spawn);
+            if (bound == null || bound.getWorld() == null || !world.equals(bound.getWorld())) {
                 return false;
             }
         }
         for (Location spawn : blueSpawns) {
-            if (spawn.getWorld() == null || !world.equals(spawn.getWorld().getName())) {
+            Location bound = apply(spawn);
+            if (bound == null || bound.getWorld() == null || !world.equals(bound.getWorld())) {
                 return false;
             }
         }
@@ -206,16 +323,19 @@ public final class TNTBattleArena {
     }
 
     public boolean contains(Location location) {
-        if (!regionConfigured() || location == null || location.getWorld() == null) {
+        Location a = getPos1();
+        Location b = getPos2();
+        if (a == null || b == null || a.getWorld() == null
+                || location == null || location.getWorld() == null) {
             return false;
         }
-        if (!location.getWorld().getName().equals(pos1.getWorld().getName())) {
+        if (!location.getWorld().equals(a.getWorld()) || !a.getWorld().equals(b.getWorld())) {
             return false;
         }
-        int minX = Math.min(pos1.getBlockX(), pos2.getBlockX());
-        int maxX = Math.max(pos1.getBlockX(), pos2.getBlockX());
-        int minZ = Math.min(pos1.getBlockZ(), pos2.getBlockZ());
-        int maxZ = Math.max(pos1.getBlockZ(), pos2.getBlockZ());
+        int minX = Math.min(a.getBlockX(), b.getBlockX());
+        int maxX = Math.max(a.getBlockX(), b.getBlockX());
+        int minZ = Math.min(a.getBlockZ(), b.getBlockZ());
+        int maxZ = Math.max(a.getBlockZ(), b.getBlockZ());
         // pos1/pos2 只决定 X/Z 对角线；Y 覆盖整个世界高度（从世界最低到最高）
         int minY = location.getWorld().getMinHeight();
         int maxY = location.getWorld().getMaxHeight() - 1;
@@ -224,12 +344,21 @@ public final class TNTBattleArena {
                 && location.getBlockZ() >= minZ && location.getBlockZ() <= maxZ;
     }
 
+    /**
+     * 场地所在世界：**必须与 {@link #getPos1()} / {@link #lobby()} / {@link #spawn} 同源**，
+     * 否则会出现"世界是 A 房、坐标是 B 房"的组合（{@code different world} 就是这么来的）。
+     */
     public World world() {
+        if (roomWorld != null) {
+            return roomWorld;
+        }
         if (regionConfigured()) {
-            return pos1.getWorld();
+            Location resolved = apply(pos1);
+            return resolved == null ? null : resolved.getWorld();
         }
         if (!redSpawns.isEmpty()) {
-            return redSpawns.get(0).getWorld();
+            Location resolved = apply(redSpawns.get(0));
+            return resolved == null ? null : resolved.getWorld();
         }
         return com.hub.world.Worlds.resolve(worldName);
     }
@@ -244,23 +373,24 @@ public final class TNTBattleArena {
         if (list.isEmpty()) {
             return null;
         }
-        return list.get(Math.floorMod(index, list.size())).clone();
+        return apply(list.get(Math.floorMod(index, list.size())).clone());
     }
 
+    /** 原始出生点表（**可变**：setSpawn/addSpawn/clearSpawns 改的就是它）；要落地坐标请用 {@link #spawn}。 */
     public List<Location> spawns(Team team) {
         return team == Team.RED ? redSpawns : blueSpawns;
     }
 
     public Location lobby() {
-        return  com.hub.room.RoomBinding.apply("tntbattle", lobby == null ? null : lobby.clone());
+        return apply(lobby == null ? null : lobby.clone());
     }
 
     public Location pos1() {
-        return  com.hub.room.RoomBinding.apply("tntbattle", pos1 == null ? null : pos1.clone());
+        return apply(pos1 == null ? null : pos1.clone());
     }
 
     public Location pos2() {
-        return  com.hub.room.RoomBinding.apply("tntbattle", pos2 == null ? null : pos2.clone());
+        return apply(pos2 == null ? null : pos2.clone());
     }
 
     public String sizeText() {
@@ -276,14 +406,20 @@ public final class TNTBattleArena {
     /** 淘汰后的旁观位置：优先等待点，否则第一个红队出生点上方。 */
     public Location spectatorLocation() {
         if (lobby != null) {
-            return lobby.clone();
+            return apply(lobby.clone());
         }
         if (!redSpawns.isEmpty()) {
-            return redSpawns.get(0).clone().add(0, 8, 0);
+            return apply(redSpawns.get(0).clone().add(0, 8, 0));
         }
         return null;
     }
 
+    /**
+     * 坐标 → 配置字符串（排行榜等**全局**坐标用它）；读不出世界时返回空串。
+     *
+     * <p>这里保留旧语义（返回 "" 而不是 null），因为调用方是"整数倍于字符串"的写配置；
+     * 场地坐标一律走 {@link #encode}（读不出来就不写）。
+     */
     public static String format(Location location) {
         if (location == null || location.getWorld() == null) {
             return "";
