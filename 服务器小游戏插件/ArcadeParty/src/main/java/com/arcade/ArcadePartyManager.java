@@ -152,6 +152,31 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
      * <p>在委派/开局这里压一次房间上下文，所有子游戏都天然拿对房间 —— 比每个游戏各自打
      * `startAllWaiting()` 之类的补丁干净得多。
      */
+    /**
+     * **把某一场派对绑进调度回调**。
+     *
+     * <p>为什么必须有：`runTaskTimer` 的回调跑在主线程、**没有 `/hub join` 的房间上下文**，
+     * `party()` 只能退回 `partyRoom()`（= 最后 join 的那一场）→ 两场派对同时开局时，
+     * 两边的 transition/guard 任务会互相改同一场，结果是**只有一场真正走到 dispatchCommand**。
+     */
+    private void withParty(Party p, Runnable body) {
+        if (p == null) {
+            body.run();
+            return;
+        }
+        Party prev = forcedParty.get();
+        forcedParty.set(p);
+        try {
+            body.run();
+        } finally {
+            if (prev == null) {
+                forcedParty.remove();
+            } else {
+                forcedParty.set(prev);
+            }
+        }
+    }
+
     private void withPartyRoom(Runnable body) {
         String id = party().roomId;
         if (id == null || id.isBlank()) {
@@ -1191,7 +1216,9 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         }
         updateTransitionBar();
         reportArena();
-        party().transitionTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickTransition, 20L, 20L);
+        final Party transP = party();
+        party().transitionTask = Bukkit.getScheduler().runTaskTimer(plugin,
+                () -> withParty(transP, this::tickTransition), 20L, 20L);
     }
 
     private void tickTransition() {
@@ -1279,16 +1306,23 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
                 + (party().transitionSpectators.isEmpty() ? "" : "（" + party().transitionSpectators.size() + " 人旁观）"));
         // 控制台开局：**必须带上本派对的房间上下文**，否则子游戏会去开"最近加入的那一间"
         final String startCmd = start;
-        withPartyRoom(() -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), startCmd));
+        withPartyRoom(() -> {
+            if (!Bukkit.dispatchCommand(Bukkit.getConsoleSender(), startCmd)) {
+                plugin.getLogger().warning("[派对] 开局命令没有插件处理：" + startCmd);
+            }
+        });
         party().guardTicks = 0;
         party().guardIdleTicks = 0;
-        party().guardTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickRoundGuard, 20L, 20L);
-        party().timeoutTask = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        final Party guardP = party();
+        party().guardTask = Bukkit.getScheduler().runTaskTimer(plugin,
+                () -> withParty(guardP, this::tickRoundGuard), 20L, 20L);
+        final Party timeoutP = party();
+        party().timeoutTask = Bukkit.getScheduler().runTaskLater(plugin, () -> withParty(timeoutP, () -> {
             if (!party().roundResolved && party().state == State.ROUND) {
                 Chat.broadcast("&e小游戏超时，本局按无人得分处理。");
                 finishRound(List.of(), List.of(), List.of());
             }
-        }, roundTimeoutSeconds() * 20L);
+        }), roundTimeoutSeconds() * 20L);
     }
 
     @Override
@@ -1458,8 +1492,10 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
                     announcePodiumResults();
                     int delay = endDelaySeconds();
                     if (delay > 0) {
+                        final Party endP = party();
                         party().endTask = Bukkit.getScheduler().runTaskLater(plugin,
-                                () -> endParty(EndReason.ROUND_END, null), delay * 20L);
+                                () -> withParty(endP, () -> endParty(EndReason.ROUND_END, null)),
+                                delay * 20L);
                     } else {
                         endParty(EndReason.ROUND_END, null);
                     }

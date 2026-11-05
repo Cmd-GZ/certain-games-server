@@ -171,4 +171,22 @@ public final class SnakePartyRooms {
     public Map<String, SnakePartyManager> live() {
         return java.util.Collections.unmodifiableMap(liveArenas);
     }
+
+    /**
+     * 控制台（没有玩家、可能也没有房间上下文）该操作哪一份状态：
+     * **有房间上下文就取那一份**（派对开局时框架会压），否则退回最近有人加入的那一份。
+     *
+     * <p>为什么必须看上下文：派对用 `dispatchCommand(控制台, "<game> start")` 开局，
+     * 只认"最近加入"会让两场派对都去开同一间，另一间永远 WAITING。
+     */
+    public SnakePartyManager current() {
+        String ctx = com.hub.room.RoomContext.currentRoomId();
+        if (ctx != null) {
+            SnakePartyManager live = liveArenas.get(ctx);
+            if (live != null) {
+                return live;
+            }
+        }
+        return lastJoined();
+    }
 }

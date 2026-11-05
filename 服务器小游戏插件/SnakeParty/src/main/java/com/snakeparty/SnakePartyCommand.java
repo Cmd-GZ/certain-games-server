@@ -26,7 +26,7 @@ public final class SnakePartyCommand implements CommandExecutor, TabCompleter {
 
     /** 这个发送者应该操作的房间状态：玩家 → 他自己那一份；控制台 → 最近有人加入的那一份。 */
     private SnakePartyManager stateOf(CommandSender sender) {
-        return sender instanceof Player p ? rooms.forPlayer(p) : rooms.lastJoined();
+        return sender instanceof Player p ? rooms.forPlayer(p) : rooms.current();
     }
 
     @Override
