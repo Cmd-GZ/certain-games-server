@@ -1331,6 +1331,60 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
 
     @Override
     public void onRoundResult(String gameKey, List<UUID> firsts, List<UUID> seconds, List<UUID> thirds) {
+        // **哪一场派对的子游戏结束了？** 子游戏是从自己的上下文里上报的，
+        // 调度线程/子游戏侧通常没有"本派对"的房间上下文 → `party()` 会退回"最后 join 的那一场"。
+        // 两场派对同时跑同一个子游戏时，结果就会串到同一场（实测：一场正常结算、另一场永远等不到结果）。
+        // 用**上报的玩家**反查是哪一场，再把它绑进上下文。
+        Party owner = partyForReport(gameKey, firsts, seconds, thirds);
+        if (owner == null || owner.state != State.ROUND || owner.roundResolved) {
+            return;
+        }
+        if (gameKey == null || !gameKey.equals(owner.currentGameKey)) {
+            return;
+        }
+        forcedParty.set(owner);
+        try {
+            handleRoundResult(owner, gameKey, firsts, seconds, thirds);
+        } finally {
+            if (party() == owner) {
+                forcedParty.remove();
+            } else {
+                forcedParty.remove();
+            }
+        }
+    }
+
+    /** 用上报的玩家反查：这一局属于哪一场派对。 */
+    private Party partyForReport(String gameKey, List<UUID>... groups) {
+        java.util.Set<UUID> ids = new java.util.LinkedHashSet<>();
+        for (List<UUID> g : groups) {
+            if (g != null) {
+                ids.addAll(g);
+            }
+        }
+        Party fallback = null;
+        for (Party p : parties.all().values()) {
+            if (p == null || p.state != State.ROUND) {
+                continue;
+            }
+            if (gameKey != null && !gameKey.equals(p.currentGameKey)) {
+                continue;
+            }
+            if (fallback == null) {
+                fallback = p;   // 上报里没有玩家（例如"无人得分"）时用它兜底
+            }
+            for (UUID id : ids) {
+                if (p.roundParticipants.contains(id)) {
+                    return p;
+                }
+            }
+        }
+        return fallback;
+    }
+
+    /** 真正的结算逻辑（已经绑定了具体那一场）。 */
+    private void handleRoundResult(Party owner, String gameKey, List<UUID> firsts,
+                                   List<UUID> seconds, List<UUID> thirds) {
         if (party().state != State.ROUND || party().roundResolved) {
             return;
         }
