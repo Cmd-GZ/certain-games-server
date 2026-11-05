@@ -464,7 +464,14 @@ public class HubManager implements HubService {
     // ---------- 菜单 ----------
 
     /** 游戏 -> 场地名 -> 场地信息（由各游戏插件通过 HubAPI.setArena 实时上报）。 */
-    private final Map<String, Map<String, ArenaInfo>> arenaInfos = new LinkedHashMap<>();
+    /**
+     * 场地状态：游戏 → 场地 → **房间键** → 状态。
+     *
+     * <p>为什么多一层（2026-11-05）：以前是"游戏 → 场地 → 状态"，两个房间跑同一张图时
+     * **后上报的会覆盖前一个**，中央菜单里那张图的羊毛颜色/人数就乱跳。
+     * 现在按 {@code RoomContext.currentRoomId()} 分开存；没有房间上下文（老路径/单机测试）落在 "" 槽。
+     */
+    private final Map<String, Map<String, Map<String, ArenaInfo>>> arenaInfos = new LinkedHashMap<>();
 
     /** 某游戏一个场地的最新状态。 */
     public record ArenaInfo(GameState state, int players, String extra) {
@@ -486,7 +493,10 @@ public class HubManager implements HubService {
             return;
         }
         String canon = plugin.getRegistry().canonicalName(game);
-        arenaInfos.computeIfAbsent(canon, k -> new LinkedHashMap<>()).put(arena, new ArenaInfo(state, players, extra));
+        String roomKey = currentRoomKey();
+        arenaInfos.computeIfAbsent(canon, k -> new LinkedHashMap<>())
+                .computeIfAbsent(arena, k -> new LinkedHashMap<>())
+                .put(roomKey, new ArenaInfo(state, players, extra));
     }
 
     /** 游戏插件删除场地时移除其状态。 */
@@ -495,7 +505,7 @@ public class HubManager implements HubService {
             return;
         }
         String canon = plugin.getRegistry().canonicalName(game);
-        Map<String, ArenaInfo> m = arenaInfos.get(canon);
+        Map<String, Map<String, ArenaInfo>> m = arenaInfos.get(canon);
         if (m != null) {
             m.remove(arena);
         }
@@ -535,8 +545,38 @@ public class HubManager implements HubService {
      * 不归一化会返回空表 → 场地子菜单一个物品都没有（表现就是"看不到羊毛"）。
      */
     public Map<String, ArenaInfo> arenasOf(String game) {
-        Map<String, ArenaInfo> m = arenaInfos.get(plugin.getRegistry().canonicalName(game));
-        return m == null ? Map.of() : m;
+        Map<String, Map<String, ArenaInfo>> byArena =
+                arenaInfos.get(plugin.getRegistry().canonicalName(game));
+        if (byArena == null) {
+            return Map.of();
+        }
+        // 对外仍是"场地名 → 状态"，但每条是**多个房间合成**后的视图（见 aggregate）
+        Map<String, ArenaInfo> out = new LinkedHashMap<>();
+        byArena.forEach((arena, byRoom) -> {
+            ArenaInfo info = aggregate(byRoom);
+            if (info != null) {
+                out.put(arena, info);
+            }
+        });
+        return out;
+    }
+
+    /** 精确到房间的场地视图（两房间同图时用它看各自的真实状态）。 */
+    public Map<String, ArenaInfo> arenasInRoom(String game, String roomId) {
+        Map<String, Map<String, ArenaInfo>> byArena =
+                arenaInfos.get(plugin.getRegistry().canonicalName(game));
+        if (byArena == null) {
+            return Map.of();
+        }
+        String key = roomId == null ? "" : roomId;
+        Map<String, ArenaInfo> out = new LinkedHashMap<>();
+        byArena.forEach((arena, byRoom) -> {
+            ArenaInfo info = byRoom.get(key);
+            if (info != null) {
+                out.put(arena, info);
+            }
+        });
+        return out;
     }
 
     /** HubAPI 查询入口：返回某游戏全部场地的只读快照（街机派对用来挑空场）。 */
@@ -556,7 +596,46 @@ public class HubManager implements HubService {
     }
 
     private ArenaInfo arenaInfo(String game, String arena) {
-        return arenaInfos.getOrDefault(plugin.getRegistry().canonicalName(game), Map.of()).get(arena);
+        Map<String, ArenaInfo> byRoom =
+                arenaInfos.getOrDefault(plugin.getRegistry().canonicalName(game), Map.of()).get(arena);
+        return byRoom == null ? null : aggregate(byRoom);
+    }
+
+    /** 当前房间键（没有上下文时 "" 这一槽）。 */
+    private static String currentRoomKey() {
+        String id = com.hub.room.RoomContext.currentRoomId();
+        return id == null ? "" : id;
+    }
+
+    /**
+     * 把一个场地的多房间状态合成一条**对外**视图：
+     * 状态取"最活跃"的那个（PLAYING &gt; WAITING &gt; 其它），人数求和。
+     *
+     * <p>为什么要有合成：菜单与派对挑图都按"场地名"看，两房间同图时不该互相覆盖，
+     * 也不该凭空少一条 —— 合成后"这张图有人在玩"是真实信息。要精确到某房间用
+     * {@link #arenas(String, String)}。
+     */
+    private static ArenaInfo aggregate(Map<String, ArenaInfo> byRoom) {
+        ArenaInfo best = null;
+        int players = 0;
+        for (ArenaInfo info : byRoom.values()) {
+            players += info.players();
+            if (best == null || rank(info.state()) > rank(best.state())) {
+                best = info;
+            }
+        }
+        return best == null ? null : new ArenaInfo(best.state(), players, best.extra());
+    }
+
+    private static int rank(GameState s) {
+        if (s == null) {
+            return 0;
+        }
+        return switch (s) {
+            case PLAYING -> 3;
+            case WAITING -> 2;
+            default -> 1;
+        };
     }
 
     /**
@@ -931,7 +1010,7 @@ public class HubManager implements HubService {
 
     /** 该游戏人最多的等待中场地；没有任何场地信息时回退配置的静态 command（如 gtb join）。 */
     private String bestJoinCommand(String game) {
-        Map<String, ArenaInfo> arenas = arenaInfos.get(game);
+        Map<String, ArenaInfo> arenas = arenasOf(game);   // 已按多房间聚合
         if (arenas != null && !arenas.isEmpty()) {
             String best = null;
             int bestPlayers = -1;
