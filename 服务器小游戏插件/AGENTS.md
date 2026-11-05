@@ -29,20 +29,21 @@
 
 Paper 26.2 / Java 25，端口 25560，`online-mode=false`，一个主城 + 一堆小游戏。
 
-**26 个 Maven 模块 = 框架 3 个 + 游戏 23 个**：
+**30 个 Maven 模块 = 框架 3 个（MiniGameLib / HubCore / GameWorlds）+ 游戏/工具 27 个**：
 
 ```
 MiniGameLib（公共库）        HubCore（主城：菜单/tab/游戏注册表）
     ↑                             ↑
-    └────── 23 个小游戏 ──────────┘        GameWorlds（多世界托管）
+    └────── 27 个游戏/工具模块 ────┘       GameWorlds（多世界托管）
 ```
 
 - 依赖方向：**游戏 + HubCore → MiniGameLib（编译期 provided）**；
   运行时所有游戏 `depend: [MiniGameLib, HubCore]`、`softdepend: [GameWorlds]`（后者纯粹为了加载顺序）。
 - **改了 MiniGameLib ⇒ 全部 jar 都要一起重传**（它是所有人的编译依赖）。
-- 另有 2 个"编不出来"的：`HoldTheFort`（git submodule `paper-hold-the-fort`）、
-  `OneShot`（**只有线上 jar，源码缺失**）。
-  线上 HubCore 登记 25 个游戏 = 23 个模块 + 这 2 个。
+- `HoldTheFort` 是 **git submodule**（`paper-hold-the-fort`，Gradle 项目）：
+  `tools/build.sh` 不管它，本机用 `.server/htf-build.sh` 手工 javac 出 jar；正式发版要有 Gradle 的环境跑 `./gradlew build`。
+- `OneShot` **已在上游合并时补全源码**（是普通 Maven 模块，D22 已房间化 1.8.0），不再是"只有 jar"。
+- HubCore 登记 **27 个游戏 key**；整服插件数 **33 个**（含 DevTools / GameWorlds / PlayerTitles / Quark 等非游戏插件）。
 - 玩家记录（战绩/击杀/第一名/玩家名）**只有一个文件**：`server/plugins/MiniGameLib/players.yml`。
 
 ### 重构期已新增的公共能力（都在 MiniGameLib）
@@ -118,7 +119,7 @@ D:\BuildBattle\pack-upload.bat                # 打包上传
 ```
 改了什么：<文件列表，一句话一个>
 编译：tools/build.sh --deploy 成功（或 build.ps1 -Deploy）
-冒烟：tools/smoke.sh → Done (xx.xs) / 31 插件 / ERROR 0 行
+冒烟：tools/smoke.sh → Done (xx.xs) / 33 插件 / ERROR 0 行
 要传的 jar：<逐字节大小>
 游戏里怎么验证：<具体命令/操作 + 期望现象>
 写进文档：<更新了哪个 README / docs + 框架不变量第 6 节进度表是否同步>

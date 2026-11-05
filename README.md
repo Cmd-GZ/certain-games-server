@@ -6,7 +6,7 @@ Paper 26.2 / Java 25 服务器插件合集：一套自研的主城 + 多小游�
 
 | 路径 | 说明 |
 | --- | --- |
-| `服务器小游戏插件/` | **BuildBattle 主工程**：`MiniGameLib` 公共库 + `HubCore` 主城 + `GameWorlds` 多世界 + 23 个小游戏（共 26 个 Maven 模块），含 `docs/` 与 PowerShell 构建/部署脚本 |
+| `服务器小游戏插件/` | **BuildBattle 主工程**：`MiniGameLib` 公共库 + `HubCore` 主城 + `GameWorlds` 多世界 + 27 个游戏/工具模块（共 30 个 Maven 模块），含 `docs/` 与 PowerShell 构建/部署脚本 |
 | `PlayerTitles/` | 头衔插件，通过 Bukkit Services 暴露 `TitleProvider` |
 | `JoinQuitBroadcast/` | 进服/退服播报，编译期依赖 `PlayerTitles` |
 | `paper-hold-the-fort/` | Hold the Fort 战线模式（Gradle / Kotlin DSL）。**独立仓库，以 git submodule 引入** |

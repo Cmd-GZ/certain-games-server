@@ -142,7 +142,7 @@ tools/smoke-arcade-party.txt  # 派对冒烟的命令脚本（配合 --fake-play
 | 上游服务器包 | `.server/small_games.zip`（已解压到 `.server/server/`；`.server/` 全部 gitignore） |
 | 可直接开服的副本 | `.server/run/small_games/b064ede…/` |
 | JDK | `/usr/lib/jvm/java-25-openjdk`（Paper 26.2 最低 25） |
-| Paper | 26.2-126，31 个插件，端口 25560，`online-mode=false` |
+| Paper | 26.2-126，**33 个插件**（含框架/工具），端口 25560，`online-mode=false` |
 | 世界布局 | Paper Moonrise 布局：**`world/dimensions/minecraft/<名字>/`**，每个"世界"是一个维度目录 |
 | 开发机文件系统 | btrfs（支持 reflink） |
 | **生产机文件系统** | **ext4**（无 reflink），内存 32GB |
@@ -150,7 +150,7 @@ tools/smoke-arcade-party.txt  # 派对冒烟的命令脚本（配合 --fake-play
 | 房间创建耗时（实测） | 异步复制 **9–10ms** + 主线程加载 **24–61ms**（复制已移出主线程） |
 | **主线程阻塞（已闭环）** | 插件级 3 个热点**已修**：`MurderMystery GoldScan`（同步 `getChunkAt`）、`TNTBattle loadLeaderboard`（`location.getChunk()`）、`GuessTheBuild Arena#applyFloor`（整块地板一次性重铺，实测 4.1s）。卡顿 4183+969ms → 归因仅剩 **3595ms 的 `SavedDataStorage#saveAndJoin`**，即 **Paper 启动时给 15 个世界存盘**（`Saving chunks for level ...`），框架自身、与世界数量成正比，插件层修不了。`/hub doctor` 的 `[卡顿]` 段看可疑帧 |
 | **上游回退过的功能** | 「密室杀手开局打乱全员皮肤」——上游加了又回退（本快照里没有）。它是 `Unsafe#park` 型阻塞（逐个解析 `PlayerProfile`）。**要重做必须异步批量取档案，不能在主线程逐个解析** |
-| **游戏只能从房间进（2026-11-03 起）** | 世界重排后，游戏配置里的世界是 `tpl:<模板键>` 令牌，**只有存活房间时才解析**。所以开服时各游戏 WARN「场地未配置完整」是**预期**；玩任何游戏都必须先 `/hub create ...` 再 `/hub join <房间>`。开服区域声明只剩 `skypit` 那一块。 |
+| **游戏只能从房间进（2026-11-03 起）** | 世界重排后，游戏配置里的世界是 `tpl:<模板键>` 令牌，**只有存活房间时才解析**。所以开服时各游戏 WARN「场地未配置完整」是**预期**；玩任何游戏都必须先 `/hub create ...` 再 `/hub join <房间>`。开服区域声明只有 **2 块**（`skypit` + 当前房间里的派对场地），其余都随房间声明。 |
 | 假玩家登录延迟 | **根因已定位（2026-11-03）**：`SkinsRestorer` 在 `AsyncPlayerPreLoginEvent` 里**同步等 Mojang API，超时 60s**；而 Paper 的登录门槛是 `sipush 600`（30s）→ 无外网的机器上必然时不时被 `multiplayer.disconnect.slow_login` 踢。**测试环境已把 `SkinsRestorer.jar`（含数据目录）移到 `plugins-disabled/`**（`--deploy` 不会拷回、没有插件依赖它）。工具侧同时改成"停滞 10s 即重连（上限 28s，永远小于 30s 门槛）+ 就绪闸门边等边应答心跳" |
 | 假玩家多开 | `fakeclient` 有**就绪闸门**：所有 bot 都进游戏阶段才统一 t0（`== ALL READY (N/N) ==`），`smoke.sh` 等这行出现才喂控制台命令；等不到即快速失败。单 bot 时闸门自动关闭 |
 | 服务端堆 | `-Xms1G -Xmx2G`（**物理 32GB 用不上**）；开服后实测 421–824MB（20–40%）。见 D13 |
