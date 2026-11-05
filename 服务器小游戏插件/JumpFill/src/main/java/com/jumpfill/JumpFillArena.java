@@ -22,7 +22,6 @@ import java.util.Map;
 public final class JumpFillArena {
 
     private final JumpFillPlugin plugin;
-    private final File snapshotFile;
     private final Map<String, String> snapshot = new LinkedHashMap<>();
 
     /**
@@ -97,7 +96,22 @@ public final class JumpFillArena {
 
     public JumpFillArena(JumpFillPlugin plugin) {
         this.plugin = plugin;
-        this.snapshotFile = new File(plugin.getDataFolder(), "arena.snapshot.yml");
+    }
+
+    /**
+     * 水域快照文件：**按世界名一份**（D22，2026-11-05）。
+     *
+     * <p>以前是每插件一份 `arena.snapshot.yml`：两场派对同时开局时，后一局建快照会把前一局那份覆盖，
+     * 于是 A 房收场时按 B 房的方块数据还原 → 把别人的水域改掉。房间世界的名字各不相同
+     * （`room_xxx_1`），按世界名分文件即可彻底隔开；没有世界名时退回老文件名（兼容单机/老配置）。
+     */
+    private File snapshotFile() {
+        String name = worldName();
+        if (name == null || name.isBlank()) {
+            return new File(plugin.getDataFolder(), "arena.snapshot.yml");
+        }
+        String safe = name.replaceAll("[^A-Za-z0-9_.-]", "_");
+        return new File(plugin.getDataFolder(), "arena.snapshot." + safe + ".yml");
     }
 
     public void load() {
@@ -376,10 +390,10 @@ public final class JumpFillArena {
     }
 
     private void loadSnapshot() {
-        if (!snapshotFile.isFile()) {
+        if (!snapshotFile().isFile()) {
             return;
         }
-        YamlConfiguration data = YamlConfiguration.loadConfiguration(snapshotFile);
+        YamlConfiguration data = YamlConfiguration.loadConfiguration(snapshotFile());
         snapshotWorld = data.getString("world");
         ConfigurationSection blocks = data.getConfigurationSection("blocks");
         if (blocks == null) {
@@ -397,7 +411,7 @@ public final class JumpFillArena {
             data.set("blocks." + entry.getKey(), entry.getValue());
         }
         try {
-            data.save(snapshotFile);
+            data.save(snapshotFile());
         } catch (IOException exception) {
             plugin.getLogger().warning("保存水域快照失败: " + exception.getMessage());
         }
@@ -405,7 +419,7 @@ public final class JumpFillArena {
 
     private void deleteSnapshot() {
         try {
-            Files.deleteIfExists(snapshotFile.toPath());
+            Files.deleteIfExists(snapshotFile().toPath());
         } catch (IOException ignored) {
             // 下次开局会覆盖
         }
