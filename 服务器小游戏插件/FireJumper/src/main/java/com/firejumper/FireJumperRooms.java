@@ -136,6 +136,16 @@ public final class FireJumperRooms {
      * @return 真的开了几间
      */
     public int startAllWaiting() {
+        // 框架/派对**压了房间上下文**时（将来的正确修法，见 docs/交接.md §0.29 纪律三），
+        // 只开那一间；没有上下文才退化到"开所有有待开队列的房间"。
+        String ctx = RoomContext.currentRoomId();
+        if (ctx != null) {
+            FireJumperManager live = liveArenas.get(ctx);
+            if (live != null && live.state() == FireJumperManager.State.WAITING && live.waitingCount() > 0) {
+                live.startGame(true);
+                return 1;
+            }
+        }
         int started = 0;
         for (FireJumperManager manager : new ArrayList<>(liveArenas.values())) {
             if (manager.state() == FireJumperManager.State.WAITING && manager.waitingCount() > 0) {
