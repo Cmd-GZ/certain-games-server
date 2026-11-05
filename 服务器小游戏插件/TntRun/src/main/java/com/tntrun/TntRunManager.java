@@ -97,6 +97,18 @@ public class TntRunManager {
     }
 
     /** 只按场地名找（无玩家上下文的只读路径；多房间时是模糊的）。 */
+    /** 控制台开局用：房间上下文优先，其次按场地名找活实例（多房间时不要用 arenas 模板）。 */
+    private TntRunArena liveArenaInRoom(String arenaName) {
+        String ctx = com.hub.room.RoomContext.currentRoomId();
+        if (ctx != null) {
+            TntRunArena live = liveArenas.get(ctx);
+            if (live != null) {
+                return live;
+            }
+        }
+        return arenaByName(arenaName);
+    }
+
     private TntRunArena arenaByName(String arenaName) {
         for (TntRunArena live : liveArenas.values()) {
             if (arenaName.equals(live.getName())) {
@@ -597,7 +609,11 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     }
 
     public boolean start(Player op, String arenaName) {
-        TntRunArena a = liveArena(keyOf(op.getUniqueId()));
+        // **控制台开局**（派对用 `dispatchCommand(控制台,"<game> start <场地>")`）时 op 是 null，
+        // 以前的 `keyOf(op.getUniqueId())` 直接 NPE → 子游戏永远停在 WAITING（2026-11-05 verify-round 抓到）。
+        // 没有玩家时按"房间上下文 + 场地名"找**这一间的活实例**。
+        TntRunArena a = op != null ? liveArena(keyOf(op.getUniqueId()))
+                : (arenaName == null ? null : liveArenaInRoom(arenaName));
         if (a == null) {
             msg(op, "&c场不存在。");
             return false;

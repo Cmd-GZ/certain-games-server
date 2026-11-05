@@ -117,6 +117,18 @@ public class MurderMysteryManager {
         return copy;
     }
 
+    /** 控制台开局用：房间上下文优先，否则退回最近用到的那一间（无玩家时没有 keyOf 可用）。 */
+    private MurderMysteryArena liveArenaInRoom() {
+        String ctx = com.hub.room.RoomContext.currentRoomId();
+        if (ctx != null) {
+            MurderMysteryArena live = liveArenas.get(ctx);
+            if (live != null) {
+                return live;
+            }
+        }
+        return liveArenas.isEmpty() ? null : liveArenas.values().iterator().next();
+    }
+
     private MurderMysteryArena arenaByName(String arenaName) {
         for (MurderMysteryArena live : liveArenas.values()) {
             if (arenaName.equals(live.getName())) {
@@ -1130,7 +1142,8 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     }
 
     public boolean start(Player op, String arenaName) {
-        MurderMysteryArena a = liveArena(keyOf(op.getUniqueId()));
+        MurderMysteryArena a = op != null ? liveArena(keyOf(op.getUniqueId()))
+                : liveArenaInRoom();   // 控制台开局时 op==null（以前这里直接 NPE）
         if (a == null) {
             msg(op, "&c场不存在。");
             return false;

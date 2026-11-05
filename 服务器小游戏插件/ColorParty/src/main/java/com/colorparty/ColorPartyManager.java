@@ -118,6 +118,18 @@ public class ColorPartyManager {
         return copy;
     }
 
+    /** 控制台开局用：房间上下文优先，否则退回最近用到的那一间（无玩家时没有 keyOf 可用）。 */
+    private ColorPartyArena liveArenaInRoom() {
+        String ctx = com.hub.room.RoomContext.currentRoomId();
+        if (ctx != null) {
+            ColorPartyArena live = liveArenas.get(ctx);
+            if (live != null) {
+                return live;
+            }
+        }
+        return liveArenas.isEmpty() ? null : liveArenas.values().iterator().next();
+    }
+
     private ColorPartyArena arenaByName(String arenaName) {
         for (ColorPartyArena live : liveArenas.values()) {
             if (arenaName.equals(live.getName())) {
@@ -549,7 +561,8 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     }
 
     public boolean start(Player op, String arenaName) {
-        ColorPartyArena a = liveArena(keyOf(op.getUniqueId()));
+        ColorPartyArena a = op != null ? liveArena(keyOf(op.getUniqueId()))
+                : liveArenaInRoom();   // 控制台开局时 op==null（以前这里直接 NPE）
         if (a == null) {
             msg(op, "&c场不存在。");
             return false;
