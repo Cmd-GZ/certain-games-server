@@ -136,7 +136,7 @@ public final class AnimalSlaughterRooms {
      * @return 真的开了几间
      */
     public int startAllWaiting() {
-        // 框架/派对**压了房间上下文**时（将来的正确修法，见 docs/交接.md §0.29 纪律三），
+        // 框架/派对**压了房间上下文**时（将来的正确修法，见 docs/交接.md §3 第 4 条），
         // 只开那一间；没有上下文才退化到"开所有有待开队列的房间"。
         String ctx = RoomContext.currentRoomId();
         if (ctx != null) {
