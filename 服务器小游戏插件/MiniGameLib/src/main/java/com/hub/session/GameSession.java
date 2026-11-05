@@ -204,14 +204,9 @@ public abstract class GameSession {
         state = to;
     }
 
+    /** 转移表本身在 {@link SessionState#canTransitionTo}（可单测），这里只做委托。 */
     private static boolean allowed(SessionState from, SessionState to) {
-        return switch (from) {
-            case CREATED -> to == SessionState.WAITING;
-            case WAITING -> to == SessionState.RUNNING;
-            case RUNNING -> to == SessionState.ENDING;
-            case ENDING -> to == SessionState.ENDED;
-            case ENDED -> false;   // 终态不可再变；end() 自己处理幂等
-        };
+        return SessionState.canTransitionTo(from, to);
     }
 
     // ---------- 生命周期：唯一出口 ----------

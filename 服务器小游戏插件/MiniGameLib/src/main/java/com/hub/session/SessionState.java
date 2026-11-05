@@ -37,4 +37,23 @@ public enum SessionState {
     public boolean isClosed() {
         return this == ENDING || this == ENDED;
     }
+
+    /**
+     * **转移表**（I5 的唯一事实源）。
+     *
+     * <p>之所以放在枚举里而不是 `GameSession` 的私有方法：这样它可以被单测直接验证，
+     * 不需要启动服务器（`GameSession` 依赖 Bukkit，测不动）。
+     */
+    public static boolean canTransitionTo(SessionState from, SessionState to) {
+        if (from == null || to == null) {
+            return false;
+        }
+        return switch (from) {
+            case CREATED -> to == WAITING;
+            case WAITING -> to == RUNNING;
+            case RUNNING -> to == ENDING;
+            case ENDING -> to == ENDED;
+            case ENDED -> false;   // 终态不可再变；end() 自己处理幂等
+        };
+    }
 }

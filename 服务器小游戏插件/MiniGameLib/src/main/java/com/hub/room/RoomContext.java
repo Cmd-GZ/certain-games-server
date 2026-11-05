@@ -33,20 +33,35 @@ public final class RoomContext {
      * 于是所有 `tpl:` 坐标都解析不出来（真实事故：两个密室房间 → 场地全"未就绪"）。
      * 房间是**操作发起者已知**的信息，不该事后去猜。
      */
-    private static final ThreadLocal<String> CURRENT_ROOM = new ThreadLocal<>();
+    private static final ThreadLocal<java.util.Deque<String>> CURRENT_ROOM =
+            ThreadLocal.withInitial(java.util.ArrayDeque::new);
 
-    /** 压入"当前正在操作哪个房间"，务必在 finally 里 {@link #popRoom()}。 */
+    /**
+     * 压入"当前正在操作哪个房间"，务必在 finally 里 {@link #popRoom()}。
+     *
+     * <p>**是栈，不是单值**（2026-11-05 自检抓出来的）：原来是 `set/remove`，
+     * 嵌套压栈时内层 `pop` 会把上下文清成 null，外层后续代码就读不到房间了
+     * （真实场景：`/hub join` 已压房间 → 派对 `startRound` 再压一次 → 内层 pop 后上下文丢失）。
+     */
     public static void pushRoom(String roomId) {
-        CURRENT_ROOM.set(roomId);
+        if (roomId == null || roomId.isBlank()) {
+            return;
+        }
+        CURRENT_ROOM.get().push(roomId);
     }
 
+    /** 弹出最近压入的房间（外层还在的话会**恢复外层**）。 */
     public static void popRoom() {
-        CURRENT_ROOM.remove();
+        java.util.Deque<String> stack = CURRENT_ROOM.get();
+        if (!stack.isEmpty()) {
+            stack.pop();
+        }
     }
 
-    /** 当前房间 id；没有上下文时返回 null。 */
+    /** 当前房间 id（栈顶）；没有上下文时返回 null。 */
     public static String currentRoomId() {
-        return CURRENT_ROOM.get();
+        java.util.Deque<String> stack = CURRENT_ROOM.get();
+        return stack.isEmpty() ? null : stack.peek();
     }
 
     private RoomContext() {
