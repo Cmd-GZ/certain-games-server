@@ -182,6 +182,16 @@ public abstract class GameSession {
 
     /** WAITING → RUNNING，并调用 {@link #onStart()}。 */
     protected final void enterRunning() {
+        // **幂等**：重复 start 是正常现象（控制台重试、脚本补发、玩家连点），
+        // 以前这里直接 transition → "RUNNING -> RUNNING" 抛 IllegalStateException，
+        // 整个命令报错（实测：FootballArena 的控制台开局，2026-11-06）。
+        // 注意：其它非法转移（例如 ENDED 之后再 start）仍然抛异常，I5 的封闭性不变。
+        if (state == SessionState.RUNNING) {
+            return;
+        }
+        if (state != SessionState.WAITING) {
+            throw new IllegalStateException("非法状态转移：" + gameKey + " " + state + " -> RUNNING");
+        }
         transition(SessionState.RUNNING);
         try {
             onStart();

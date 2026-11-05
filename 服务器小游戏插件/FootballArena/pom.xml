@@ -6,7 +6,7 @@
 
     <groupId>com.football</groupId>
     <artifactId>football-arena</artifactId>
-    <version>1.9.0</version>
+    <version>1.11.0</version>
     <packaging>jar</packaging>
 
     <name>FootballArena</name>
@@ -39,7 +39,7 @@
         <dependency>
             <groupId>com.hub</groupId>
             <artifactId>minigame-lib</artifactId>
-            <version>1.41.0</version>
+            <version>1.42.0</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

@@ -49,8 +49,17 @@ final class FootballSession extends GameSession {
         enterWaiting();
     }
 
+    /**
+     * 进入 RUNNING（**幂等**）。
+     *
+     * <p>为什么加守卫：I5 的状态机对"RUNNING → RUNNING"会抛异常，而"开局命令被调用两次"
+     * 是完全可能的（控制台重试、脚本补发、玩家连点开始）。以前这里直接 `enterRunning()`，
+     * 第二次就抛 `IllegalStateException: 非法状态转移` → 整个命令报错（实测于 2026-11-06）。
+     */
     void start() {
-        enterRunning();
+        if (state() == com.hub.session.SessionState.WAITING) {
+            enterRunning();
+        }
     }
 
     @Override

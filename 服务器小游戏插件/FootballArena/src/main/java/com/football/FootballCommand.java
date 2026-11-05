@@ -131,7 +131,11 @@ public class FootballCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
             case "start" -> {
-                if (!(sender instanceof Player p)) return true;
+                if (!(sender instanceof Player p)) {
+                    // 控制台开局（派对/脚本）：/fb start [场名]，manager 自己找房间上下文/有人那一间
+                    m.start(null, args.length >= 2 ? args[1] : null);
+                    return true;
+                }
                 // D21：开始权在主持人手上；主持人**不享受管理员特权**（人数不够不能开）
                 if (!admin) {
                     String tryArena = editing.getOrDefault(p.getUniqueId(), null);

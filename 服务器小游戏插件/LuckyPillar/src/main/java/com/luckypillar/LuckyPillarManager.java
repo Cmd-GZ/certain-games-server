@@ -596,7 +596,9 @@ public class LuckyPillarManager {
     // ---------- 开局 ----------
 
     public boolean start(Player op, String arenaName) {
-        LuckyPillarArena a = arenas.get(arenaName);
+        // **房间实例优先**（D22）：控制台开局时 op==null，不能靠 keyOf，
+        // 而且玩家是记在 liveArena 那份上的；用模板那份会"永远 0 人"。
+        LuckyPillarArena a = liveArenaInRoom(arenaName);
         if (a == null) {
             msg(op, "&c场不存在。");
             return false;
@@ -1892,4 +1894,28 @@ public class LuckyPillarManager {
     private String sessionKeyOf(LuckyPillarArena a) {
         return a == null ? null : a.roomKey();
     }
+    /** 房间上下文优先 → 等待中且有人 → 按场地名 → 任意一份。 */
+    private LuckyPillarArena liveArenaInRoom(String arenaName) {
+        String ctx = com.hub.room.RoomContext.currentRoomId();
+        if (ctx != null) {
+            LuckyPillarArena live = liveArenas.get(ctx);
+            if (live != null) {
+                return live;
+            }
+        }
+        for (LuckyPillarArena live : liveArenas.values()) {
+            if (!live.getPlayers().isEmpty()) {
+                return live;
+            }
+        }
+        if (arenaName != null) {
+            for (LuckyPillarArena live : liveArenas.values()) {
+                if (arenaName.equals(live.getName())) {
+                    return live;
+                }
+            }
+        }
+        return liveArenas.isEmpty() ? arenas.get(arenaName) : liveArenas.values().iterator().next();
+    }
+
 }
