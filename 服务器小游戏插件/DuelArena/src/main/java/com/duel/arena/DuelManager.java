@@ -958,7 +958,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
                 playerArena.remove(host);
 
-                DuelSession sess = sessions.get(a.getName());
+                DuelSession sess = sessionOf(a);
 
                 if (sess != null && hp != null && !sess.state().isFinal()) {
 
@@ -1033,7 +1033,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         a.setFighter2(f2);
         a.setState(DuelArena.State.FIGHTING);
         // I5/I4：会话状态跟着走（之前只改了场地状态，会话一直停在 WAITING）
-        DuelSession live = sessions.get(a.getName());
+        DuelSession live = sessionOf(a);
         if (live != null && live.state() == com.hub.session.SessionState.WAITING) {
             live.start();
         }
@@ -1159,7 +1159,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     private void endFight(DuelArena a, UUID winnerId) {
         pendingWinner = winnerId;
         pendingHasWinner = winnerId != null;
-        DuelSession sess = sessions.get(a.getName());
+        DuelSession sess = sessionOf(a);
         if (sess == null || sess.state().isFinal()) {
             doEndFight(a.getName());
             return;
@@ -1797,5 +1797,25 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         } catch (NumberFormatException ex) {
             return null;
         }
+    }
+
+    /**
+     * 取某个场地的会话：**先按房间键、再退回场地名**。
+     *
+     * <p>为什么需要：D22 之后会话键是**房间 id**，但不少地方仍写 `sessions.get(a.getName())` ——
+     * 于是拿到 null，`session.start()` / `end()` / `leave()` 全被静默跳过（实测：BuildRun 的会话
+     * 永远停在 WAITING，doctor 里看不到 RUNNING）。这里两种键都试，迁移期最稳。
+     */
+    private DuelSession sessionOf(DuelArena a) {
+        if (a == null) {
+            return null;
+        }
+        DuelSession s = sessions.get(a.roomKey());
+        return s != null ? s : sessions.get(a.getName());
+    }
+
+    /** 场地对应的会话键（房间键优先，没有就退回场地名）。 */
+    private String sessionKeyOf(DuelArena a) {
+        return a == null ? null : a.roomKey();
     }
 }

@@ -1120,7 +1120,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
                 playerArena.remove(host);
 
-                MurderMysterySession sess = sessions.get(a.getName());
+                MurderMysterySession sess = sessionOf(a);
 
                 if (sess != null && p != null && !sess.state().isFinal()) {
 
@@ -2241,7 +2241,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     private void endGame(MurderMysteryArena a, boolean innocentsWin, String outcome) {
         pendingInnocentsWin = innocentsWin;
         pendingOutcome = outcome;
-        MurderMysterySession sess = sessions.get(a.getName());
+        MurderMysterySession sess = sessionOf(a);
         if (sess == null || sess.state().isFinal()) {
             doEndGame(a.getName());
             return;
@@ -4256,5 +4256,25 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     private String nameOf(UUID id) {
         Player p = Bukkit.getPlayer(id);
         return p == null ? id.toString().substring(0, 6) : p.getName();
+    }
+
+    /**
+     * 取某个场地的会话：**先按房间键、再退回场地名**。
+     *
+     * <p>为什么需要：D22 之后会话键是**房间 id**，但不少地方仍写 `sessions.get(a.getName())` ——
+     * 于是拿到 null，`session.start()` / `end()` / `leave()` 全被静默跳过（实测：BuildRun 的会话
+     * 永远停在 WAITING，doctor 里看不到 RUNNING）。这里两种键都试，迁移期最稳。
+     */
+    private MurderMysterySession sessionOf(MurderMysteryArena a) {
+        if (a == null) {
+            return null;
+        }
+        MurderMysterySession s = sessions.get(a.roomKey());
+        return s != null ? s : sessions.get(a.getName());
+    }
+
+    /** 场地对应的会话键（房间键优先，没有就退回场地名）。 */
+    private String sessionKeyOf(MurderMysteryArena a) {
+        return a == null ? null : a.roomKey();
     }
 }

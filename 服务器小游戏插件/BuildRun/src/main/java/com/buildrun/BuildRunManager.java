@@ -192,12 +192,22 @@ public class BuildRunManager {
         return copy;
     }
 
-    /** 控制台开局用：房间上下文优先，否则退回最近用到的那一间（无玩家时没有 keyOf 可用）。 */
+    /**
+     * 控制台开局用：房间上下文优先，其次**等待中且有人**的那一间，最后才按场地名/任意实例。
+     *
+     * <p>为什么顺序这样（实测）：`liveArenas` 会保留**上一局房间**的实例（ENDING/清理中），
+     * 只按场地名挑会挑到它 → 报"该场正在游戏中"，控制台开局就永远开不起来。
+     */
     private BuildRunArena liveArenaInRoom() {
         String ctx = com.hub.room.RoomContext.currentRoomId();
         if (ctx != null) {
             BuildRunArena live = liveArenas.get(ctx);
             if (live != null) {
+                return live;
+            }
+        }
+        for (BuildRunArena live : liveArenas.values()) {
+            if (live.getPhase() == BuildRunArena.Phase.WAITING && !live.getPlayers().isEmpty()) {
                 return live;
             }
         }
@@ -753,7 +763,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             return;
         }
         a.setPhase(BuildRunArena.Phase.BUILDING);
-        BuildRunSession started = sessions.get(a.getName());
+        BuildRunSession started = sessionOf(a);
         if (started != null && !started.state().isFinal()) {
             started.start();
         }
@@ -1159,7 +1169,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         if (a.getPhase() == BuildRunArena.Phase.WAITING || a.getPhase() == BuildRunArena.Phase.ENDING) {
             return;
         }
-        BuildRunSession sess = sessions.get(a.getName());
+        BuildRunSession sess = sessionOf(a);
         if (sess != null && !sess.state().isFinal()) {
             sess.end(EndReason.ROUND_END);
             return;
@@ -2993,7 +3003,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
                 String name = p == null ? host.toString() : p.getName();
                 a.getPlayers().remove(host);
                 playerArena.remove(host);
-                BuildRunSession sess = sessions.get(a.getName());
+                BuildRunSession sess = sessionOf(a);
                 if (sess != null && p != null && !sess.state().isFinal()) {
                     sess.leave(p);
                 }
@@ -3154,5 +3164,25 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         public Inventory getInventory() {
             return inv;
         }
+    }
+
+    /**
+     * 取某个场地的会话：**先按房间键、再退回场地名**。
+     *
+     * <p>为什么需要：D22 之后会话键是**房间 id**，但不少地方仍写 `sessions.get(a.getName())` ——
+     * 于是拿到 null，`session.start()` / `end()` / `leave()` 全被静默跳过（实测：BuildRun 的会话
+     * 永远停在 WAITING，doctor 里看不到 RUNNING）。这里两种键都试，迁移期最稳。
+     */
+    private BuildRunSession sessionOf(BuildRunArena a) {
+        if (a == null) {
+            return null;
+        }
+        BuildRunSession s = sessions.get(a.roomKey());
+        return s != null ? s : sessions.get(a.getName());
+    }
+
+    /** 场地对应的会话键（房间键优先，没有就退回场地名）。 */
+    private String sessionKeyOf(BuildRunArena a) {
+        return a == null ? null : a.roomKey();
     }
 }

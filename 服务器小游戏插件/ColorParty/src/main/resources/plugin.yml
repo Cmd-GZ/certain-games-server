@@ -1,5 +1,5 @@
 name: ColorParty
-version: '1.10.0'
+version: '1.11.0'
 main: com.colorparty.ColorPartyPlugin
 api-version: '1.21'
 description: 色盲派对：地板每回合随机彩色混凝土，站上指定颜色，站错塌陷淘汰

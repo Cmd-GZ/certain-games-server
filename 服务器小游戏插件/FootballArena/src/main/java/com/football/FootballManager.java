@@ -528,7 +528,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             return;
         }
         a.setState(FootballArena.State.RUNNING);
-        FootballSession started = sessions.get(a.getName());
+        FootballSession started = sessionOf(a);
         if (started != null && !started.state().isFinal()) {
             started.start();
         }
@@ -1190,7 +1190,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     private void endMatch(FootballArena a, FootballArena.Team winner) {
         pendingWinner = winner;
         pendingHasWinner = winner != null;
-        FootballSession sess = sessions.get(a.getName());
+        FootballSession sess = sessionOf(a);
         if (sess == null || sess.state().isFinal()) {
             doEndMatch(a.getName());
             return;
@@ -1422,7 +1422,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
                 playerArena.remove(host);
 
-                FootballSession sess = sessions.get(a.getName());
+                FootballSession sess = sessionOf(a);
 
                 if (sess != null && hp != null && !sess.state().isFinal()) {
 
@@ -1777,5 +1777,25 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
                 && a.getBlockX() == b.getBlockX()
                 && a.getBlockY() == b.getBlockY()
                 && a.getBlockZ() == b.getBlockZ();
+    }
+
+    /**
+     * 取某个场地的会话：**先按房间键、再退回场地名**。
+     *
+     * <p>为什么需要：D22 之后会话键是**房间 id**，但不少地方仍写 `sessions.get(a.getName())` ——
+     * 于是拿到 null，`session.start()` / `end()` / `leave()` 全被静默跳过（实测：BuildRun 的会话
+     * 永远停在 WAITING，doctor 里看不到 RUNNING）。这里两种键都试，迁移期最稳。
+     */
+    private FootballSession sessionOf(FootballArena a) {
+        if (a == null) {
+            return null;
+        }
+        FootballSession s = sessions.get(a.roomKey());
+        return s != null ? s : sessions.get(a.getName());
+    }
+
+    /** 场地对应的会话键（房间键优先，没有就退回场地名）。 */
+    private String sessionKeyOf(FootballArena a) {
+        return a == null ? null : a.roomKey();
     }
 }

@@ -576,7 +576,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             return true;
         }
         a.setState(ColorPartyArena.State.RUNNING);
-        ColorPartySession started = sessions.get(a.getName());
+        ColorPartySession started = sessionOf(a);
         if (started != null && !started.state().isFinal()) {
             started.start();
         }
@@ -786,7 +786,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
     /** 收场入口（I4）：先让该场地的会话 end()，再由 onEnd 回到 doEndGame。 */
     private void endGame(ColorPartyArena a, UUID winner) {
         pendingWinner = winner;
-        ColorPartySession sess = sessions.get(a.getName());
+        ColorPartySession sess = sessionOf(a);
         if (sess == null || sess.state().isFinal()) {
             doEndGame(a.getName());
             return;
@@ -1049,7 +1049,7 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
                 playerArena.remove(host);
 
-                ColorPartySession s2 = sessions.get(a.getName());
+                ColorPartySession s2 = sessionOf(a);
 
                 if (s2 != null && hp != null && !s2.state().isFinal()) {
 
@@ -1255,5 +1255,25 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     private String shortLoc(Location loc) {
         return loc.getWorld().getName() + " " + loc.getBlockX() + " " + loc.getBlockY() + " " + loc.getBlockZ();
+    }
+
+    /**
+     * 取某个场地的会话：**先按房间键、再退回场地名**。
+     *
+     * <p>为什么需要：D22 之后会话键是**房间 id**，但不少地方仍写 `sessions.get(a.getName())` ——
+     * 于是拿到 null，`session.start()` / `end()` / `leave()` 全被静默跳过（实测：BuildRun 的会话
+     * 永远停在 WAITING，doctor 里看不到 RUNNING）。这里两种键都试，迁移期最稳。
+     */
+    private ColorPartySession sessionOf(ColorPartyArena a) {
+        if (a == null) {
+            return null;
+        }
+        ColorPartySession s = sessions.get(a.roomKey());
+        return s != null ? s : sessions.get(a.getName());
+    }
+
+    /** 场地对应的会话键（房间键优先，没有就退回场地名）。 */
+    private String sessionKeyOf(ColorPartyArena a) {
+        return a == null ? null : a.roomKey();
     }
 }

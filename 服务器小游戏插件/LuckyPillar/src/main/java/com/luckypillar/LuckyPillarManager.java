@@ -1119,7 +1119,7 @@ public class LuckyPillarManager {
         pendingWinner = winner;
         pendingHasWinner = winner != null;
         pendingDraw = draw;
-        LuckyPillarSession sess = sessions.get(a.getName());
+        LuckyPillarSession sess = sessionOf(a);
         if (sess == null || sess.state().isFinal()) {
             doEndMatch(a.getName());
             return;
@@ -1446,7 +1446,7 @@ public class LuckyPillarManager {
 
                 playerArena.remove(host);
 
-                LuckyPillarSession s2 = sessions.get(a.getName());
+                LuckyPillarSession s2 = sessionOf(a);
 
                 if (s2 != null && hp != null && !s2.state().isFinal()) {
 
@@ -1871,5 +1871,25 @@ public class LuckyPillarManager {
                 clear = null;
             }
         }
+    }
+
+    /**
+     * 取某个场地的会话：**先按房间键、再退回场地名**。
+     *
+     * <p>为什么需要：D22 之后会话键是**房间 id**，但不少地方仍写 `sessions.get(a.getName())` ——
+     * 于是拿到 null，`session.start()` / `end()` / `leave()` 全被静默跳过（实测：BuildRun 的会话
+     * 永远停在 WAITING，doctor 里看不到 RUNNING）。这里两种键都试，迁移期最稳。
+     */
+    private LuckyPillarSession sessionOf(LuckyPillarArena a) {
+        if (a == null) {
+            return null;
+        }
+        LuckyPillarSession s = sessions.get(a.roomKey());
+        return s != null ? s : sessions.get(a.getName());
+    }
+
+    /** 场地对应的会话键（房间键优先，没有就退回场地名）。 */
+    private String sessionKeyOf(LuckyPillarArena a) {
+        return a == null ? null : a.roomKey();
     }
 }
