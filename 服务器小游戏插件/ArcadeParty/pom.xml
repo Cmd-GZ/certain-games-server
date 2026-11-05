@@ -6,7 +6,7 @@
 
     <groupId>com.arcade</groupId>
     <artifactId>arcade-party</artifactId>
-    <version>1.18.0</version>
+    <version>1.19.0</version>
     <packaging>jar</packaging>
 
     <name>ArcadeParty</name>

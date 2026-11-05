@@ -141,6 +141,35 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         return parties.ofKey(key, k -> new Party());
     }
 
+    /**
+     * **在"本派对房间"的上下文里执行一段代码**（D22 关键）。
+     *
+     * <p>为什么必须有：子游戏的"开一局"是通过控制台命令 `<game> start` 触发的，
+     * 而**控制台没有 `/hub join` 的房间上下文** → 子游戏里"当前房间"的解析会退化成
+     * "最近有人加入的那一间" → 两场派对同时开局时**两边都去开同一间**，另一间永远 WAITING
+     * （实测 `room_pd1 [RUNNING] / room_pd2 [WAITING]`，随后那场派对超时收场）。
+     *
+     * <p>在委派/开局这里压一次房间上下文，所有子游戏都天然拿对房间 —— 比每个游戏各自打
+     * `startAllWaiting()` 之类的补丁干净得多。
+     */
+    private void withPartyRoom(Runnable body) {
+        String id = party().roomId;
+        if (id == null || id.isBlank()) {
+            var r = partyRoom();
+            id = (r == null) ? null : r.roomId;
+        }
+        if (id == null || id.isBlank()) {
+            body.run();
+            return;
+        }
+        com.hub.room.RoomContext.pushRoom(id);
+        try {
+            body.run();
+        } finally {
+            com.hub.room.RoomContext.popRoom();
+        }
+    }
+
     /** 这场派对的等待倒计时（懒创建；host 回调绑在**这个** Party 上）。 */
     private WaitCountdown countdown() {
         Party p = party();
@@ -1140,15 +1169,18 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             plugin.getLogger().info("[派对] 给 " + party().transitionParticipants.size()
                     + " 人执行关卡命令：/" + join + "（委派=" + (com.hub.room.GameDelegation.current() == null
                     ? "无" : com.hub.room.GameDelegation.current().game()) + "）");
+            final String joinCmd = join;
+            withPartyRoom(() -> {
             for (UUID id : party().transitionParticipants) {
                 Player p = Bukkit.getPlayer(id);
                 if (p != null) {
-                    boolean ok = p.performCommand(join);
+                    boolean ok = p.performCommand(joinCmd);
                     if (!ok) {
-                        plugin.getLogger().warning("[派对] 关卡命令执行失败（未知命令？）：/" + join);
+                        plugin.getLogger().warning("[派对] 关卡命令执行失败（未知命令？）：/" + joinCmd);
                     }
                 }
             }
+            });
         }
         setupSidebar();
         broadcast("&e" + roundLabel() + "：&f"
@@ -1228,12 +1260,15 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             rejoin = rejoin.replace("{arena}", party().currentArena);
         }
         if (rejoin != null && !rejoin.isBlank()) {
-            for (UUID id : new ArrayList<>(party().roundParticipants)) {
-                Player p = Bukkit.getPlayer(id);
-                if (p != null) {
-                    p.performCommand(rejoin);
+            final String rejoinCmd = rejoin;
+            withPartyRoom(() -> {
+                for (UUID id : new ArrayList<>(party().roundParticipants)) {
+                    Player p = Bukkit.getPlayer(id);
+                    if (p != null) {
+                        p.performCommand(rejoinCmd);
+                    }
                 }
-            }
+            });
         }
         if (party().roundParticipants.isEmpty() || start == null || start.isBlank()) {
             Chat.broadcast("&c小游戏 " + displayOf(party().currentGameKey) + " 启动失败，跳过本局。");
@@ -1242,7 +1277,9 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         }
         broadcast("&6&l" + roundLabel() + "：&e" + displayOf(party().currentGameKey) + " &7开始！"
                 + (party().transitionSpectators.isEmpty() ? "" : "（" + party().transitionSpectators.size() + " 人旁观）"));
-        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), start);
+        // 控制台开局：**必须带上本派对的房间上下文**，否则子游戏会去开"最近加入的那一间"
+        final String startCmd = start;
+        withPartyRoom(() -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), startCmd));
         party().guardTicks = 0;
         party().guardIdleTicks = 0;
         party().guardTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickRoundGuard, 20L, 20L);
