@@ -9,6 +9,7 @@ softdepend: [GameWorlds]
 # 小游戏自动发现标记（扫描 plugins 目录 jar 的 plugin.yml）
 minigame:
   key: murdermystery          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
+  contract: 1                                    # 框架契约版本（MiniGameLib 的 Contract.VERSION）
   name: 密室杀手
   icon: IRON_SWORD
   color: '8'

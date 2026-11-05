@@ -38,6 +38,7 @@ public final class SelfCheck {
         checkRoomContext();
         checkRoomScoped();
         checkDelegationSlots();
+        checkContract();
 
         System.out.println();
         System.out.println("自检结果：" + passed + " 条通过，" + failures.size() + " 条失败");
@@ -196,6 +197,18 @@ public final class SelfCheck {
                     case "equals" -> proxy == (args == null || args.length == 0 ? null : args[0]);
                     default -> null;
                 });
+    }
+
+    // ---------- R4：契约版本 ----------
+
+    private static void checkContract() {
+        ok("版本一致（当前版本）", com.hub.api.Contract.matches(com.hub.api.Contract.VERSION));
+        bad("版本不一致（旧版本）", com.hub.api.Contract.matches(com.hub.api.Contract.VERSION - 1));
+        bad("未声明（-1）不算一致", com.hub.api.Contract.matches(-1));
+        ok("describe(一致)", "一致".equals(com.hub.api.Contract.describe(com.hub.api.Contract.VERSION)));
+        ok("describe(未声明)", com.hub.api.Contract.describe(-1).contains("未声明"));
+        ok("describe(不一致) 带期望值",
+                com.hub.api.Contract.describe(com.hub.api.Contract.VERSION + 7).contains("不一致"));
     }
 
     // ---------- 断言 ----------

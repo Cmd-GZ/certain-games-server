@@ -9,6 +9,7 @@ softdepend: [GameWorlds, DigToBottom, AnvilBattle, AnimalSlaughter, SnakeParty]
 minigame-game: true
 minigame:
   key: arcadeparty          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
+  contract: 1                                    # 框架契约版本（MiniGameLib 的 Contract.VERSION）
   name: 街机派对
   icon: FIREWORK_ROCKET
   color: 'e'

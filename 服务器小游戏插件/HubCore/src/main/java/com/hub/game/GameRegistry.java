@@ -107,6 +107,19 @@ public class GameRegistry {
      * 扫描 plugins 目录下所有 jar，读取各自 plugin.yml，
      * 发现 {@code minigame-game: true}（或存在 {@code minigame:} 段）的小游戏插件并登记。
      */
+    /**
+     * 契约检查结果（R4）：插件名 → 声明的契约版本（-1 = 未声明）。
+     *
+     * <p>为什么在这里做：本方法本来就在遍历 jar 读 `plugin.yml`（`minigame.key`），
+     * 顺手把 `minigame.contract` 读出来即可，不必再解析一次。
+     */
+    private final java.util.Map<String, Integer> contracts = new java.util.LinkedHashMap<>();
+
+    /** 插件名 → 声明的契约版本（-1 = 未声明）。 */
+    public synchronized java.util.Map<String, Integer> contracts() {
+        return java.util.Map.copyOf(contracts);
+    }
+
     private void scanPluginsFolder() {
         File pluginsDir = plugin.getDataFolder().getParentFile();
         File[] jars = pluginsDir == null ? null : pluginsDir.listFiles((d, n) -> n.toLowerCase(Locale.ROOT).endsWith(".jar"));
@@ -143,6 +156,7 @@ public class GameRegistry {
                                 pendingKeys.put(key.toLowerCase(java.util.Locale.ROOT), pluginName);
                             }
                         }
+                        contracts.put(pluginName, mg.getInt("contract", -1));
                         icon = mg.getString("icon", "GRASS_BLOCK");
                         color = mg.getString("color", "");
                     } else {

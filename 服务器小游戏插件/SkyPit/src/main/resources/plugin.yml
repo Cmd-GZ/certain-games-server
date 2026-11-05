@@ -22,6 +22,7 @@ permissions:
 minigame-game: true
 minigame:
   key: skypit          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
+  contract: 1                                    # 框架契约版本（MiniGameLib 的 Contract.VERSION）
   name: 天坑
   icon: IRON_SWORD
   color: '6'

@@ -26,6 +26,7 @@ permissions:
 minigame-game: true
 minigame:
   key: landclaim          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
+  contract: 1                                    # 框架契约版本（MiniGameLib 的 Contract.VERSION）
   name: 'battlefield 1 (占地1)'
   icon: DIAMOND_HOE
   color: 'a'

@@ -10,6 +10,7 @@ softdepend: [GameWorlds]
 minigame-game: true
 minigame:
   key: anvilbattle          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
+  contract: 1                                    # 框架契约版本（MiniGameLib 的 Contract.VERSION）
   name: 铁砧掘战
   icon: ANVIL
   color: '7'

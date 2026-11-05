@@ -1157,6 +1157,33 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             if (rooms.isEmpty() && !tpls.isEmpty()) {
                 out.add("  &7提示：/hub room create <模板> 建一个试试");
             }
+
+            // [契约] R4：各游戏声明的 minigame.contract 与 MiniGameLib.Contract.VERSION 是否一致
+            var contracts = registry.contracts();
+            int okContract = 0;
+            StringBuilder badContract = new StringBuilder();
+            StringBuilder noContract = new StringBuilder();
+            for (var e : contracts.entrySet()) {
+                int declared = e.getValue() == null ? -1 : e.getValue();
+                if (com.hub.api.Contract.matches(declared)) {
+                    okContract++;
+                } else if (declared < 0) {
+                    noContract.append("&f").append(e.getKey()).append("&7 ");
+                } else {
+                    badContract.append("&f").append(e.getKey()).append("&7(声明 &c").append(declared)
+                            .append("&7) ");
+                }
+            }
+            if (badContract.length() > 0) {
+                out.add("&b[契约] &c不一致（框架 " + com.hub.api.Contract.VERSION + "）：" + badContract
+                        + "&7→ 这些插件与 MiniGameLib 版本不匹配，可能 NoClassDefFoundError");
+            } else if (noContract.length() > 0) {
+                out.add("&b[契约] &e" + okContract + " 个一致；" + noContract.toString().trim()
+                        + "&e 未声明 minigame.contract（老插件，建议补上）");
+            } else if (!contracts.isEmpty()) {
+                out.add("&b[契约] &a" + okContract + " / " + contracts.size() + " 个插件与框架一致（"
+                        + com.hub.api.Contract.VERSION + "）");
+            }
         }
 
         // ---- 8. 堆内存（决定"还能不能再塞常驻房间世界"） ----

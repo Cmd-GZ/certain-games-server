@@ -5,6 +5,7 @@ api-version: '1.21'
 description: 色盲派对：地板每回合随机彩色混凝土，站上指定颜色，站错塌陷淘汰
 minigame:
   key: colorparty          # 游戏 key（与 maps.yml / games.yml / players.yml 一致）
+  contract: 1                                    # 框架契约版本（MiniGameLib 的 Contract.VERSION）
   name: 色盲派对
   icon: MAGENTA_CONCRETE
   color: d
