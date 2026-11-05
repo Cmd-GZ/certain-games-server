@@ -823,10 +823,35 @@ public class HubManager implements HubService {
             }
         }
 
-        // ⑤ 注册表里登记了 key 的游戏数（供确认 plugin.yml 的 minigame.key 是否齐全）
+        // ⑤ **显示名只有一个事实源**（R1）：`plugin.yml` 的 `minigame.name`。
+        //    派对为了自己的 UI 会把语言包写在 ArcadeParty/config.yml 的 `games.<key>.display`，
+        //    两份名字不一致时，菜单（registry）和派对（配置）会对同一个游戏叫不同名字。
+        java.util.List<String> nameDrift = new java.util.ArrayList<>();
+        var partyCfgFile = new java.io.File(
+                plugin.getDataFolder().getParentFile(), "ArcadeParty/config.yml");
+        if (partyCfgFile.isFile()) {
+            var partyCfg = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(partyCfgFile);
+            var gamesSec = partyCfg.getConfigurationSection("games");
+            var registry = plugin.getRegistry();
+            if (gamesSec != null && registry != null) {
+                for (String key : gamesSec.getKeys(false)) {
+                    String inParty = gamesSec.getString(key + ".display", "");
+                    // 派对配置用的是**小写游戏 key**，注册表要按 key 查（按名字查会落空）
+                    String regDisplay = registry.displayOfKey(key);
+                    if (regDisplay == null || inParty == null || inParty.isBlank()) {
+                        continue;
+                    }
+                    if (!inParty.equals(regDisplay)) {
+                        nameDrift.add(key + "（注册表=" + regDisplay + " / 派对=" + inParty + "）");
+                    }
+                }
+            }
+        }
+
+        // ⑥ 注册表里登记了 key 的游戏数（供确认 plugin.yml 的 minigame.key 是否齐全）
         int regKeys = plugin.getRegistry() == null ? 0 : plugin.getRegistry().keys().size();
         plugin.getLogger().info("[key审计] 注册表已登记小写 key " + regKeys + " 个");
-        boolean clean = noCmd.isEmpty() && noMap.isEmpty() && subNoMap.isEmpty();
+        boolean clean = noCmd.isEmpty() && noMap.isEmpty() && subNoMap.isEmpty() && nameDrift.isEmpty();
         if (clean) {
             plugin.getLogger().info("[key审计] 游戏 key 一致：maps.yml " + inMaps.size()
                     + " 个 / games.yml " + inGames.size() + " 个 / 派对子游戏 "
@@ -845,6 +870,10 @@ public class HubManager implements HubService {
         if (!subNoMap.isEmpty()) {
             plugin.getLogger().warning("[key审计] 派对的子小游戏在 maps.yml 里没有地图"
                     + "（派对永远选不到它）：" + subNoMap);
+        }
+        if (!nameDrift.isEmpty()) {
+            plugin.getLogger().warning("[key审计] 显示名有两份且不一致（R1：应当只有 plugin.yml 的"
+                    + " minigame.name 一份）：" + nameDrift);
         }
     }
 
