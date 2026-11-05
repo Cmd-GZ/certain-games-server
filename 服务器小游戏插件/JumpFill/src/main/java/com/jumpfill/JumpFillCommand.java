@@ -24,11 +24,17 @@ public final class JumpFillCommand implements CommandExecutor, TabCompleter {
             "setwater", "addstart", "clearstarts", "setlobby", "save", "start", "stop", "reload");
 
     private final JumpFillPlugin plugin;
-    private final JumpFillManager manager;
+    /** D22：按房间分桶的状态；每个入口按发送者/玩家路由到他自己那一份。 */
+    private final JumpFillRooms rooms;
 
-    public JumpFillCommand(JumpFillPlugin plugin, JumpFillManager manager) {
+    public JumpFillCommand(JumpFillPlugin plugin, JumpFillRooms rooms) {
         this.plugin = plugin;
-        this.manager = manager;
+        this.rooms = rooms;
+    }
+
+    /** 这个发送者应该操作的房间状态：玩家 → 他自己那一份；控制台 → 当前房间上下文/最近有人加入的那一份。 */
+    private JumpFillManager stateOf(CommandSender sender) {
+        return sender instanceof Player p ? rooms.forPlayer(p) : rooms.current();
     }
 
     @Override
@@ -63,7 +69,7 @@ public final class JumpFillCommand implements CommandExecutor, TabCompleter {
             Chat.send(sender, "&c只有玩家可以加入游戏。");
             return;
         }
-        manager.join(player);
+        rooms.join(player);
     }
 
     private void leave(CommandSender sender) {
@@ -71,15 +77,16 @@ public final class JumpFillCommand implements CommandExecutor, TabCompleter {
             Chat.send(sender, "&c只有玩家可以离开游戏。");
             return;
         }
-        if (!manager.isPlaying(player)) {
+        if (!rooms.forPlayer(player).isPlaying(player)) {
             Chat.send(player, "&7你不在游戏中。");
             return;
         }
-        manager.leave(player, false);
+        rooms.leave(player, false);
         Chat.send(player, "&7已离开跳水填格。");
     }
 
     private void list(CommandSender sender) {
+        JumpFillManager manager = stateOf(sender);
         Chat.send(sender, "&6===== 跳水填格 =====");
         String state = manager.isRunning() ? "&c游戏中" : (manager.isEnding() ? "&c结算中" : "&e等待中");
         Chat.send(sender, "&7状态: " + state + " &7| 玩家: &f" + manager.statesCount()
@@ -100,6 +107,7 @@ public final class JumpFillCommand implements CommandExecutor, TabCompleter {
     }
 
     private void stats(CommandSender sender, String[] args) {
+        JumpFillManager manager = stateOf(sender);
         String name;
         UUID id;
         if (args.length >= 2) {
@@ -144,6 +152,7 @@ public final class JumpFillCommand implements CommandExecutor, TabCompleter {
     }
 
     private void setWater(CommandSender sender, String[] args) {
+        JumpFillManager manager = stateOf(sender);
         if (!requireAdmin(sender)) {
             return;
         }
@@ -171,6 +180,7 @@ public final class JumpFillCommand implements CommandExecutor, TabCompleter {
     }
 
     private void addStart(CommandSender sender) {
+        JumpFillManager manager = stateOf(sender);
         if (!requireAdmin(sender)) {
             return;
         }
@@ -184,6 +194,7 @@ public final class JumpFillCommand implements CommandExecutor, TabCompleter {
     }
 
     private void clearStarts(CommandSender sender) {
+        JumpFillManager manager = stateOf(sender);
         if (!requireAdmin(sender)) {
             return;
         }
@@ -192,6 +203,7 @@ public final class JumpFillCommand implements CommandExecutor, TabCompleter {
     }
 
     private void setLobby(CommandSender sender) {
+        JumpFillManager manager = stateOf(sender);
         if (!requireAdmin(sender)) {
             return;
         }
@@ -204,6 +216,7 @@ public final class JumpFillCommand implements CommandExecutor, TabCompleter {
     }
 
     private void save(CommandSender sender) {
+        JumpFillManager manager = stateOf(sender);
         if (!requireAdmin(sender)) {
             return;
         }
@@ -222,6 +235,16 @@ public final class JumpFillCommand implements CommandExecutor, TabCompleter {
     }
 
     private void start(CommandSender sender) {
+        // 控制台开局（派对就是这么开的：dispatchCommand(控制台, "jump start")）：
+        // 控制台没有房间上下文，两场派对同时开局时"只开最近加入的那一间"会让另一间永远停在等待。
+        if (!(sender instanceof Player)) {
+            int started = rooms.startAllWaiting();
+            if (started == 0) {
+                Chat.send(sender, "&e没有正在等待开局的房间。");
+            }
+            return;
+        }
+        JumpFillManager manager = stateOf(sender);
         // D21：开始权在主持人手上；主持人**不享受管理员特权**（人数不够不能开）
         boolean isAdminS = !(sender instanceof Player sp) || sp.hasPermission("jumpfill.admin");
         if (!isAdminS) {
@@ -241,6 +264,7 @@ public final class JumpFillCommand implements CommandExecutor, TabCompleter {
     }
 
     private void stop(CommandSender sender) {
+        JumpFillManager manager = stateOf(sender);
         if (!requireAdmin(sender)) {
             return;
         }
@@ -253,6 +277,7 @@ public final class JumpFillCommand implements CommandExecutor, TabCompleter {
     }
 
     private void reload(CommandSender sender) {
+        JumpFillManager manager = stateOf(sender);
         if (!requireAdmin(sender)) {
             return;
         }

@@ -66,6 +66,13 @@ public final class JumpFillManager {
     };
 
     private final JumpFillPlugin plugin;
+    /**
+     * D22：这个实例负责的**房间键**（有房间时 = 房间 id；没有房间时 = {@link #ARENA}）。
+     * 每个房间一份实例 = 一份运行时状态，所以两场派对不会互相踩。
+     */
+    private final String roomKey;
+    /** 侧边栏的键：每房间一份，否则两个房间互相覆盖。 */
+    private final String sidebarKey;
     private final JumpFillArena arena;
     private final NamespacedKey startItemKey;
     private final Map<UUID, PlayerState> states = new LinkedHashMap<>();
@@ -104,7 +111,7 @@ public final class JumpFillManager {
     private JumpFillSession session;
 
     private JumpFillSession ensureSession() {
-        String key = "main";
+        String key = roomKey;   // D22：每房间一个会话（否则两场派对共用同一份会话）
         JumpFillSession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
             s = new JumpFillSession(this, key);
@@ -124,8 +131,14 @@ public final class JumpFillManager {
     private int secondsLeft;
 
     public JumpFillManager(JumpFillPlugin plugin) {
-        this.liveSidebar = new LiveSidebar(plugin);
+        this(plugin, ARENA);
+    }
+
+    public JumpFillManager(JumpFillPlugin plugin, String roomKey) {
         this.plugin = plugin;
+        this.roomKey = roomKey == null || roomKey.isBlank() ? ARENA : roomKey;
+        this.sidebarKey = "jumpfill:" + this.roomKey;
+        this.liveSidebar = new LiveSidebar(plugin);
         this.arena = new JumpFillArena(plugin);
         this.startItemKey = new NamespacedKey(plugin, "start_item");
     }
@@ -327,18 +340,21 @@ public final class JumpFillManager {
             Chat.send(player, "&c颜色已经用完了（最多 16 人）。");
             return false;
         }
-        states.put(id, PlayerState.capture(player));
-        joinTick.put(id, (long) Bukkit.getCurrentTick());
-        joinSeed.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
         // I1（D23）：玩家已在别的对局里 -> **拒绝加入**并把话说清楚。
         // 这一步必须在把玩家写进本游戏队列**之前**，否则会留下
         // "游戏队列里有他、归属链上没他"的半加入状态（doctor 里查不出来，事后很难查）。
-        ensureSession();
-        if (session != null && !session.join(player)) {
+        JumpFillSession sess = ensureSession();
+        if (sess != null && !sess.join(player)) {
+            if (sess.players().isEmpty()) {
+                sessions.remove(roomKey);
+            }
             Chat.send(player, "&c你正在另一局游戏里，请先退出再加入（右键 &f回主城&c 或输入 &f/hub&c）。");
             plugin.getLogger().warning("[JumpFill] " + player.getName() + " 已在别的对局，拒绝加入");
             return false;
         }
+        states.put(id, PlayerState.capture(player));
+        joinTick.put(id, (long) Bukkit.getCurrentTick());
+        joinSeed.put(id, java.util.concurrent.ThreadLocalRandom.current().nextLong());
         names.put(id, player.getName());
         scores.put(id, 0);
         colors.put(id, color);
@@ -424,7 +440,7 @@ public final class JumpFillManager {
             return false;
         }
 
-        if (startCountdown().begin("main", new ArrayList<>(states.keySet()), () -> startGame(force))) {
+        if (startCountdown().begin(roomKey, new ArrayList<>(states.keySet()), () -> startGame(force))) {
             return true;
         }
         if (countdown != null) {
@@ -583,7 +599,7 @@ public final class JumpFillManager {
         for (UUID id : online) {
             lines.add(new LiveSidebar.Line("§e" + names.getOrDefault(id, "?"), scores.getOrDefault(id, 0)));
         }
-        liveSidebar.update("jumpfill", "&b&l跳水填格 · 排名", online, lines);
+        liveSidebar.update(sidebarKey, "&b&l跳水填格 · 排名", online, lines);
     }
 
     private String colorList() {
@@ -803,7 +819,7 @@ public final class JumpFillManager {
             return;
         }
         ending = true;
-        liveSidebar.hide("jumpfill");
+        liveSidebar.hide(sidebarKey);
         running = false;
         if (scanTask != null) {
             scanTask.cancel();
@@ -927,9 +943,9 @@ public final class JumpFillManager {
         if (!arena.waterConfigured()) {
             return;
         }
-        HubAPI.setArena(GAME, ARENA, (running || ending) ? GameState.PLAYING : GameState.WAITING,
+        HubAPI.setArena(GAME, arenaLabel(), (running || ending) ? GameState.PLAYING : GameState.WAITING,
                 states.size(), (running || ending) ? "剩余 " + remaining + " 格" : null);
-        HubAPI.setArenaSpectator(GAME, ARENA, arena.lobby());
+        HubAPI.setArenaSpectator(GAME, arenaLabel(), arena.lobby());
     }
 
     private void prepareWaiting(Player player) {
@@ -1076,10 +1092,27 @@ public final class JumpFillManager {
 
     /** 声明地盘（{@code docs/框架不变量.md} 的 I2）。 */
     public void publishRegions() {
-        com.hub.region.Regions.begin("jumpfill");
-        if (arena != null) {
-            com.hub.region.Regions.box("jumpfill", "", arena.getPos1(), arena.getPos2());
+        if (roomKey.equals(ARENA)) {
+            com.hub.region.Regions.begin("jumpfill");   // 只有默认实例负责"清掉上一轮"
         }
+        if (arena != null) {
+            com.hub.region.Regions.box("jumpfill", roomKey, arena.getPos1(), arena.getPos2());
+        }
+    }
+
+    /** D22：本实例负责的房间键。 */
+    public String roomKey() {
+        return roomKey;
+    }
+
+    /** 菜单/日志里用的场地名：默认实例仍叫「水池」，房间实例用房间 id。 */
+    public String arenaLabel() {
+        return roomKey;
+    }
+
+    /** 这个实例是不是已经空着（外层据此回收房间实例）。 */
+    public boolean idle() {
+        return !running && !ending && states.isEmpty();
     }
 
     public JumpFillArena arena() {
