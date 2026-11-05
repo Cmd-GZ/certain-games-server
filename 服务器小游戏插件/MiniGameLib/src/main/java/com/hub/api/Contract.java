@@ -46,4 +46,46 @@ public final class Contract {
     public static boolean matches(int declared) {
         return declared == VERSION;
     }
+
+    /**
+     * 读某个游戏 key 声明的契约版本（**按 key 查插件 jar 里的 plugin.yml**）。
+     *
+     * <p>为什么要从 jar 读：`PluginDescriptionFile` 没有通用的自定义字段访问器，
+     * 而 HubCore 的 `GameRegistry` 本来就在扫 jar 解析 `minigame.key`。
+     *
+     * @return 声明值；读不到返回 -1
+     */
+    public static int declaredByKey(String gameKey) {
+        if (gameKey == null) {
+            return -1;
+        }
+        for (org.bukkit.plugin.Plugin p : org.bukkit.Bukkit.getPluginManager().getPlugins()) {
+            java.io.File file = p.getDataFolder() == null ? null
+                    : new java.io.File(p.getDataFolder().getParentFile(), p.getName() + ".jar");
+            if (file == null || !file.isFile()) {
+                continue;
+            }
+            try (java.util.jar.JarFile jf = new java.util.jar.JarFile(file)) {
+                java.util.jar.JarEntry e = jf.getJarEntry("plugin.yml");
+                if (e == null) {
+                    continue;
+                }
+                try (var in = jf.getInputStream(e)) {
+                    String text = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                    var cfg = org.bukkit.configuration.file.YamlConfiguration
+                            .loadConfiguration(new java.io.StringReader(text));
+                    var mg = cfg.getConfigurationSection("minigame");
+                    if (mg == null) {
+                        continue;
+                    }
+                    if (gameKey.equalsIgnoreCase(mg.getString("key", ""))) {
+                        return mg.getInt("contract", -1);
+                    }
+                }
+            } catch (Exception ignored) {
+                // 读不到就当未声明（R3：doctor 的 [契约] 段会显示"未声明"）
+            }
+        }
+        return -1;
+    }
 }

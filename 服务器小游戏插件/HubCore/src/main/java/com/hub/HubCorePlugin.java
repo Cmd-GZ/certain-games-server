@@ -33,6 +33,8 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
     private HubManager manager;
     private GameRegistry registry;
     private MenuLayout menuLayout;
+    /** 游戏目录（R1）：plugin.yml / maps.yml / games.yml 的合并只读视图。 */
+    private com.hub.game.GameCatalog gameCatalog;
     private MenuEditor menuEditor;
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
     /** 主城固定时间：1000 = 上午（0 日出 / 6000 正午 / 12000 日落 / 18000 午夜）。 */
@@ -58,6 +60,19 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
         // 菜单审计必须**在注册表就绪之后**：它要用 registry 把显示名解析成 gameKey。
         // （我第一版放在 new HubManager() 之后 → 开服必抛 NPE，被 Failures 吞成一行 WARN，
         //   审计等于没跑。R3 的价值就在这：异常没被吞掉，一眼看到。）
+        try {
+            gameCatalog = new com.hub.game.GameCatalog(this);
+            gameCatalog.snapshot();
+            getLogger().info("[目录] " + gameCatalog.summary());
+            for (String d : gameCatalog.drift()) {
+                getLogger().warning("[目录] " + d);
+            }
+            for (String n : gameCatalog.notes()) {
+                getLogger().info("[目录] " + n);
+            }
+        } catch (Exception ex) {
+            Failures.recordAndWarn("HubCore.游戏目录", ex);
+        }
         try {
             manager.auditGameKeys();   // R3：游戏 key 在四处各写一遍，启动时核对一次
         } catch (Exception ex) {
@@ -1184,6 +1199,18 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
                 out.add("&b[契约] &a" + okContract + " / " + contracts.size() + " 个插件与框架一致（"
                         + com.hub.api.Contract.VERSION + "）");
             }
+
+            // [目录] R1：plugin.yml / maps.yml / games.yml 合并视图
+            if (gameCatalog != null) {
+                gameCatalog.snapshot();
+                out.add("&b[目录] &7" + gameCatalog.summary());
+                for (String d : gameCatalog.drift()) {
+                    out.add("  &c" + d);
+                }
+                for (String n : gameCatalog.notes()) {
+                    out.add("  &7" + n);
+                }
+            }
         }
 
         // ---- 8. 堆内存（决定"还能不能再塞常驻房间世界"） ----
@@ -1225,6 +1252,11 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
 
     public GameRegistry getRegistry() {
         return registry;
+    }
+
+    /** 游戏目录（L1 只读视图）；可能为 null（初始化失败）。 */
+    public com.hub.game.GameCatalog getGameCatalog() {
+        return gameCatalog;
     }
 
     public MenuLayout getMenuLayout() {
