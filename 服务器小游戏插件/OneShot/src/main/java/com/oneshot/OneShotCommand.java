@@ -16,11 +16,17 @@ import java.util.Locale;
 public final class OneShotCommand implements CommandExecutor, TabCompleter {
 
     private final OneShotPlugin plugin;
-    private final OneShotManager manager;
+    /** D22：按房间分桶的状态；每个入口按发送者/玩家路由到他自己那一份。 */
+    private final OneShotRooms rooms;
 
-    public OneShotCommand(OneShotPlugin plugin, OneShotManager manager) {
+    public OneShotCommand(OneShotPlugin plugin, OneShotRooms rooms) {
         this.plugin = plugin;
-        this.manager = manager;
+        this.rooms = rooms;
+    }
+
+    /** 这个发送者应该操作的房间状态：玩家 → 他自己那一份；控制台 → 当前房间上下文/最近有人加入的那一份。 */
+    private OneShotManager stateOf(CommandSender sender) {
+        return sender instanceof Player p ? rooms.forPlayer(p) : rooms.current();
     }
 
     @Override
@@ -34,44 +40,53 @@ public final class OneShotCommand implements CommandExecutor, TabCompleter {
             case "join" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.join(player);
+                    rooms.join(player);
                 }
             }
             case "leave" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.leave(player, false);
+                    rooms.leave(player, false);
                 }
             }
             case "list" -> list(sender);
             case "stats" -> stats(sender, args);
             case "start" -> {
+                // 控制台开局（派对就是这么开的：dispatchCommand(控制台, "oneshot start")）：
+                // 控制台没有房间上下文，两场派对同时开局时"只开最近加入的那一间"会让另一间永远停在等待。
+                if (!(sender instanceof Player)) {
+                    int started = rooms.startAllWaiting();
+                    if (started == 0) {
+                        Chat.send(sender, "&e没有正在等待开局的房间。");
+                    }
+                    return true;
+                }
                 // D21：开始权在主持人手上；主持人**不享受管理员特权**（人数不够不能开）
                 boolean isAdminS = !(sender instanceof Player sp) || sp.hasPermission("oneshot.admin");
                 if (!isAdminS) {
-                    if (!manager.isHost(sender)) {
+                    if (!stateOf(sender).isHost(sender)) {
                         Chat.send(sender, "&c只有本局**主持人**或管理员可以开始。");
                         return true;
                     }
-                    if (manager.waitingCountPublic() < manager.minPlayersPublic()) {
-                        Chat.send(sender, "&c人数还没达到 &f" + manager.minPlayersPublic()
+                    if (stateOf(sender).waitingCountPublic() < stateOf(sender).minPlayersPublic()) {
+                        Chat.send(sender, "&c人数还没达到 &f" + stateOf(sender).minPlayersPublic()
                                 + " 人&c，主持人也不能开始。");
                         return true;
                     }
                 }
-                if (manager.state() != OneShotManager.State.WAITING) {
+                if (stateOf(sender).state() != OneShotManager.State.WAITING) {
                     Chat.send(sender, "&e对局已经在进行中。");
-                } else if (manager.arena().isReady()) {
-                    manager.startGame(true);
+                } else if (stateOf(sender).arena().isReady()) {
+                    stateOf(sender).startGame(true);
                 } else {
-                    Chat.send(sender, "&c场地未配置完整（缺 " + manager.arena().missing() + "）。");
+                    Chat.send(sender, "&c场地未配置完整（缺 " + stateOf(sender).arena().missing() + "）。");
                 }
             }
             case "stop" -> {
                 if (!admin(sender)) {
                     return true;
                 }
-                manager.stopGame();
+                stateOf(sender).stopGame();
             }
             case "build" -> build(sender, args);
             case "pos1" -> setPos(sender, true);
@@ -84,8 +99,8 @@ public final class OneShotCommand implements CommandExecutor, TabCompleter {
                 if (player == null) {
                     return true;
                 }
-                manager.arena().setLobby(player.getLocation());
-                manager.saveAll();
+                stateOf(sender).arena().setLobby(player.getLocation());
+                stateOf(sender).saveAll();
                 Chat.send(sender, "&a等待点已设置为 " + describe(player.getLocation()) + "。");
             }
             case "addspawn" -> {
@@ -96,28 +111,28 @@ public final class OneShotCommand implements CommandExecutor, TabCompleter {
                 if (player == null) {
                     return true;
                 }
-                manager.arena().addSpawn(player.getLocation());
-                manager.saveAll();
+                stateOf(sender).arena().addSpawn(player.getLocation());
+                stateOf(sender).saveAll();
                 Chat.send(sender, "&a已添加出生点 " + describe(player.getLocation())
-                        + "（共 " + manager.arena().getSpawns().size() + " 个）。");
+                        + "（共 " + stateOf(sender).arena().getSpawns().size() + " 个）。");
             }
             case "clearspawns" -> {
                 if (!admin(sender)) {
                     return true;
                 }
-                manager.arena().clearSpawns();
-                manager.saveAll();
+                stateOf(sender).arena().clearSpawns();
+                stateOf(sender).saveAll();
                 Chat.send(sender, "&a已清空出生点。");
             }
             case "genspawns" -> {
                 if (!admin(sender)) {
                     return true;
                 }
-                if (!manager.arena().hasCircle()) {
+                if (!stateOf(sender).arena().hasCircle()) {
                     Chat.send(sender, "&c先用 /oneshot build <半径> [台高] 建好场地。");
                     return true;
                 }
-                int count = manager.maxPlayers();
+                int count = stateOf(sender).maxPlayers();
                 if (args.length > 1) {
                     try {
                         count = Integer.parseInt(args[1]);
@@ -130,7 +145,7 @@ public final class OneShotCommand implements CommandExecutor, TabCompleter {
                     Chat.send(sender, "&c数量需在 1~64 之间。");
                     return true;
                 }
-                int generated = manager.generateSpawns(count);
+                int generated = stateOf(sender).generateSpawns(count);
                 if (generated <= 0) {
                     Chat.send(sender, "&c没生成出生点：确认场地已经建好。");
                 } else {
@@ -141,19 +156,19 @@ public final class OneShotCommand implements CommandExecutor, TabCompleter {
                 if (!admin(sender)) {
                     return true;
                 }
-                manager.saveAll();
+                stateOf(sender).saveAll();
                 Chat.send(sender, "&a场地配置已保存。");
             }
             case "reload" -> {
                 if (!admin(sender)) {
                     return true;
                 }
-                if (manager.state() != OneShotManager.State.WAITING) {
+                if (stateOf(sender).state() != OneShotManager.State.WAITING) {
                     Chat.send(sender, "&c对局进行中，不能重载配置。");
                     return true;
                 }
                 plugin.reloadConfig();
-                manager.reload();
+                stateOf(sender).reload();
                 Chat.send(sender, "&a配置已重新载入。");
             }
             default -> Chat.send(sender, "&c未知子指令，输入 &f/oneshot help &c查看帮助。");
@@ -170,8 +185,8 @@ public final class OneShotCommand implements CommandExecutor, TabCompleter {
         if (player == null) {
             return;
         }
-        int radius = manager.arena().getRadius();
-        int height = manager.arena().getHeight();
+        int radius = stateOf(sender).arena().getRadius();
+        int height = stateOf(sender).arena().getHeight();
         if (args.length >= 2) {
             try {
                 radius = Integer.parseInt(args[1]);
@@ -200,13 +215,13 @@ public final class OneShotCommand implements CommandExecutor, TabCompleter {
         center.setX(center.getBlockX() + 0.5);
         center.setZ(center.getBlockZ() + 0.5);
         center.setY(center.getBlockY() + height);
-        manager.arena().setHeight(height);
-        int[] result = manager.build(center, radius, manager.arena().getDepth(), true);
-        Location top = manager.arena().center();
+        stateOf(sender).arena().setHeight(height);
+        int[] result = stateOf(sender).build(center, radius, stateOf(sender).arena().getDepth(), true);
+        Location top = stateOf(sender).arena().center();
         if (top != null) {
             player.teleport(top);
         }
-        Chat.send(sender, "&a场地已建好：圆心 " + describe(manager.arena().center())
+        Chat.send(sender, "&a场地已建好：圆心 " + describe(stateOf(sender).arena().center())
                 + "，半径 &e" + radius + " &a，台高 &e" + height
                 + " &a| 铺设方块 &e" + result[0] + " &a格");
         if (result[1] > 0) {
@@ -226,16 +241,16 @@ public final class OneShotCommand implements CommandExecutor, TabCompleter {
             return;
         }
         if (first) {
-            manager.arena().setPos1(player.getLocation());
+            stateOf(sender).arena().setPos1(player.getLocation());
         } else {
-            manager.arena().setPos2(player.getLocation());
+            stateOf(sender).arena().setPos2(player.getLocation());
         }
-        manager.saveAll();
+        stateOf(sender).saveAll();
         Chat.send(sender, "&a已记录 " + (first ? "pos1" : "pos2") + "：" + describe(player.getLocation())
                 + " &7（只取 XZ，Y 轴自动取区域内最高/最低方块）");
-        if (manager.arena().hasBox()) {
+        if (stateOf(sender).arena().hasBox()) {
             Chat.send(sender, "&a手动区域已就绪（XZ 范围 + 地面高度）。接着执行 &f/oneshot genspawns "
-                    + manager.maxPlayers() + " &a和 &f/oneshot setlobby&a。");
+                    + stateOf(sender).maxPlayers() + " &a和 &f/oneshot setlobby&a。");
         } else {
             Chat.send(sender, "&7再站到对角执行 &f/oneshot " + (first ? "pos2" : "pos1") + "&7。");
         }
@@ -243,15 +258,15 @@ public final class OneShotCommand implements CommandExecutor, TabCompleter {
 
     private void list(CommandSender sender) {
         Chat.send(sender, "&6===== One Shot =====");
-        Chat.send(sender, "&7状态：&e" + manager.state() + " &7等待 &e" + manager.waitingCount()
-                + " &7存活 &e" + manager.playingCount());
-        Chat.send(sender, "&7场地：&f" + (manager.arena().isReady() ? "已配置" : "未配置（缺 "
-                + manager.arena().missing() + "）")
-                + " &7| 模式 &e" + (manager.arena().hasBox() ? "手动 pos1/pos2" : "自动圆形")
-                + " &7| 半径 &e" + manager.arena().getRadius()
-                + " &7| 台高 &e" + manager.arena().getHeight()
-                + " &7| 出生点 &e" + manager.arena().getSpawns().size());
-        Chat.send(sender, "&7时长 &e" + manager.gameSeconds() + "s &7| 一箭秒杀 &7| 击杀补箭 &7| 摔死人头算最后攻击者");
+        Chat.send(sender, "&7状态：&e" + stateOf(sender).state() + " &7等待 &e" + stateOf(sender).waitingCount()
+                + " &7存活 &e" + stateOf(sender).playingCount());
+        Chat.send(sender, "&7场地：&f" + (stateOf(sender).arena().isReady() ? "已配置" : "未配置（缺 "
+                + stateOf(sender).arena().missing() + "）")
+                + " &7| 模式 &e" + (stateOf(sender).arena().hasBox() ? "手动 pos1/pos2" : "自动圆形")
+                + " &7| 半径 &e" + stateOf(sender).arena().getRadius()
+                + " &7| 台高 &e" + stateOf(sender).arena().getHeight()
+                + " &7| 出生点 &e" + stateOf(sender).arena().getSpawns().size());
+        Chat.send(sender, "&7时长 &e" + stateOf(sender).gameSeconds() + "s &7| 一箭秒杀 &7| 击杀补箭 &7| 摔死人头算最后攻击者");
     }
 
     private void stats(CommandSender sender, String[] args) {
@@ -263,7 +278,7 @@ public final class OneShotCommand implements CommandExecutor, TabCompleter {
             if (!admin(sender)) {
                 return;
             }
-            manager.resetStats();
+            stateOf(sender).resetStats();
             Chat.send(sender, "&a已清空全部前三名与积分记录。");
             return;
         }
@@ -276,10 +291,10 @@ public final class OneShotCommand implements CommandExecutor, TabCompleter {
             }
         }
         Chat.send(sender, "&6" + target.getName() + " 的 " + OneShotManager.GAME + " 战绩："
-                + "&e积分 &f" + manager.getPoints(target.getUniqueId())
-                + " &7| &e第一 &f" + manager.getStat("firsts", target.getUniqueId())
-                + " &6第二 &f" + manager.getStat("seconds", target.getUniqueId())
-                + " &6第三 &f" + manager.getStat("thirds", target.getUniqueId()));
+                + "&e积分 &f" + stateOf(sender).getPoints(target.getUniqueId())
+                + " &7| &e第一 &f" + stateOf(sender).getStat("firsts", target.getUniqueId())
+                + " &6第二 &f" + stateOf(sender).getStat("seconds", target.getUniqueId())
+                + " &6第三 &f" + stateOf(sender).getStat("thirds", target.getUniqueId()));
     }
 
     private void help(CommandSender sender) {
@@ -299,7 +314,7 @@ public final class OneShotCommand implements CommandExecutor, TabCompleter {
 
     private boolean admin(CommandSender sender) {
         if (sender instanceof Player player) {
-            if (!manager.isAdmin(player)) {
+            if (!stateOf(sender).isAdmin(player)) {
                 Chat.send(sender, "&c你没有权限执行该指令。");
                 return false;
             }
@@ -329,7 +344,7 @@ public final class OneShotCommand implements CommandExecutor, TabCompleter {
         List<String> out = new ArrayList<>();
         if (args.length == 1) {
             List<String> subs = new ArrayList<>(List.of("join", "leave", "list", "stats", "help"));
-            boolean admin = !(sender instanceof Player player) || manager.isAdmin(player);
+            boolean admin = !(sender instanceof Player player) || stateOf(sender).isAdmin(player);
             if (admin) {
                 subs.addAll(List.of("start", "stop", "build", "pos1", "pos2", "setlobby",
                         "addspawn", "clearspawns", "genspawns", "save", "reload"));

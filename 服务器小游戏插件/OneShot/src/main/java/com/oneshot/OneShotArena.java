@@ -17,6 +17,60 @@ import java.util.Random;
 public final class OneShotArena {
 
     private final JavaPlugin plugin;
+
+    /**
+     * D22：这个场地实例**钉死**的房间世界（每个房间一份实例）。
+     *
+     * <p>{@link com.hub.room.RoomBinding} 是"按游戏一个槽"，两房间同时跑时后一个覆盖前一个 ——
+     * 甲房的实例会读到乙房的世界（人被传错房间）。钉死之后读取只认自己的世界。
+     */
+    private World roomWorld;
+
+    public void bindWorld(World world) {
+        this.roomWorld = world;
+    }
+
+    public World boundWorld() {
+        return roomWorld;
+    }
+
+    /**
+     * 读坐标时的世界解析：**钉死了就只认自己的房间世界**，没钉才退回按上下文的换绑。
+     *
+     * <p>钉死之后**不能**再回落 {@link com.hub.room.RoomBinding}：它先看"派对委派"、再看
+     * "该游戏唯一的房间"，两者都是**按游戏一个槽**；两房间同时跑时会给出另一个房间的世界，
+     * 于是同一份代码里"世界"和"坐标"对不上（抛 {@code Location cannot be in a different world}）。
+     */
+    private Location apply(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld != null) {
+            if (roomWorld.equals(loc.getWorld())) {
+                return loc;
+            }
+            return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+        }
+        return com.hub.room.RoomBinding.apply("oneshot", loc);
+    }
+
+    /**
+     * **把解析出来的坐标重新钉回自己的房间世界**（{@code load()} 用）。
+     *
+     * <p>`tpl:` 的解析看"当前房间上下文"，而 `/hub join` 会让 HubCore 给所有子游戏发一次 reload；
+     * 如果那次上下文指向**别的**房间，解析结果就会落到别人的世界里。钉回去之后，
+     * 房间实例无论如何重载都只认自己的世界。
+     */
+    private Location pin(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld == null || roomWorld.equals(loc.getWorld())) {
+            return loc;
+        }
+        return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+    }
+
     private Location center;
     private int radius = 20;
     private int height = 3;
@@ -35,18 +89,19 @@ public final class OneShotArena {
 
     public void load() {
         FileConfiguration cfg = plugin.getConfig();
-        center = parse(cfg.getString("arena.center", ""));
+        // D22：解析出来的坐标**钉回本房间的世界**（`tpl:` 解析看上下文，可能指到别人的房间）
+        center = pin(parse(cfg.getString("arena.center", "")));
         radius = clampRadius(cfg.getInt("arena.radius", 20));
         height = clamp(cfg.getInt("arena.height", 3));
         depth = clamp(cfg.getInt("arena.depth", 3));
-        pos1 = parse(cfg.getString("arena.pos1", ""));
-        pos2 = parse(cfg.getString("arena.pos2", ""));
+        pos1 = pin(parse(cfg.getString("arena.pos1", "")));
+        pos2 = pin(parse(cfg.getString("arena.pos2", "")));
         boxMinY = cfg.getInt("arena.box-min-y", Integer.MIN_VALUE);
         boxMaxY = cfg.getInt("arena.box-max-y", Integer.MIN_VALUE);
-        lobby = parse(cfg.getString("arena.lobby", ""));
+        lobby = pin(parse(cfg.getString("arena.lobby", "")));
         spawns.clear();
         for (String raw : cfg.getStringList("arena.spawns")) {
-            Location loc = parse(raw);
+            Location loc = pin(parse(raw));
             if (loc != null) {
                 spawns.add(loc);
             }
@@ -57,20 +112,14 @@ public final class OneShotArena {
         plugin.reloadConfig();
         FileConfiguration cfg = plugin.getConfig();
         // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
-        if (center != null) {
-            cfg.set("arena.center", encode(center));
-        }
+        write(cfg, "arena.center", center);
         cfg.set("arena.radius", radius);
         cfg.set("arena.height", height);
         cfg.set("arena.depth", depth);
         // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
-        if (pos1 != null) {
-            cfg.set("arena.pos1", encode(pos1));
-        }
+        write(cfg, "arena.pos1", pos1);
         // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
-        if (pos2 != null) {
-            cfg.set("arena.pos2", encode(pos2));
-        }
+        write(cfg, "arena.pos2", pos2);
         if (hasBox()) {
             ensureBounds();
             cfg.set("arena.box-min-y", boxMinY);
@@ -80,12 +129,13 @@ public final class OneShotArena {
             cfg.set("arena.box-max-y", null);
         }
         // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
-        if (lobby != null) {
-            cfg.set("arena.lobby", encode(lobby));
-        }
+        write(cfg, "arena.lobby", lobby);
         List<String> encoded = new ArrayList<>();
         for (Location spawn : spawns) {
-            encoded.add(encode(spawn));
+            String token = encode(spawn);
+            if (token != null) {
+                encoded.add(token);
+            }
         }
         if (!encoded.isEmpty()) {
             cfg.set("arena.spawns", encoded);
@@ -437,15 +487,25 @@ public final class OneShotArena {
     }
 
     public Location center() {
-        return com.hub.room.RoomBinding.apply("oneshot", center);
+        return apply(center);
     }
 
-    /** 场地所在世界：手动区域取 pos1 的世界，自动圆形取圆心世界。 */
+    /**
+     * 场地所在世界：手动区域取 pos1 的世界，自动圆形取圆心世界。
+     *
+     * <p>**必须和 {@link #center()} / {@link #getPos1()} 走同一套解析**，否则会出现
+     * "世界是 A 房、坐标是 B 房"的组合（{@code different world} 就是这么来的）。
+     */
     public World world() {
-        if (hasBox()) {
-            return pos1.getWorld();
+        if (roomWorld != null) {
+            return roomWorld;
         }
-        return center == null ? null : center.getWorld();
+        if (hasBox()) {
+            Location resolved = apply(pos1);
+            return resolved == null ? null : resolved.getWorld();
+        }
+        Location resolved = apply(center);
+        return resolved == null ? null : resolved.getWorld();
     }
 
     public void setCenter(Location center) {
@@ -463,11 +523,11 @@ public final class OneShotArena {
     }
 
     public Location getPos1() {
-        return com.hub.room.RoomBinding.apply("oneshot", pos1);
+        return apply(pos1);
     }
 
     public Location getPos2() {
-        return com.hub.room.RoomBinding.apply("oneshot", pos2);
+        return apply(pos2);
     }
 
     /** 切回自动建场（圆形）时清掉手动区域。 */
@@ -479,7 +539,7 @@ public final class OneShotArena {
 
     public Location spectatorSpot() {
         Location spot = spectatorSpot0();
-        return com.hub.room.RoomBinding.apply("oneshot", spot);
+        return apply(spot);
     }
 
     private Location spectatorSpot0() {
@@ -492,7 +552,7 @@ public final class OneShotArena {
     }
 
     public Location getLobby() {
-        return com.hub.room.RoomBinding.apply("oneshot", lobby);
+        return apply(lobby);
     }
 
     public void setLobby(Location lobby) {
@@ -559,13 +619,31 @@ public final class OneShotArena {
         return Math.max(0, Math.min(32, value));
     }
 
+    /**
+     * 坐标 → 存档 token；**写不了时返回 null**（调用方跳过，保留磁盘上的原值）。
+     *
+     * <p>原来这里直接写 {@code world.getName()}（解析不出来还是空串），房间世界里设场地就会把
+     * {@code room_xxx_1} 钉进配置，房间一销毁这份配置就永远"未配置"（同款真实事故）。
+     */
     private static String encode(Location loc) {
         if (loc == null || loc.getWorld() == null) {
-            return "";
+            return null;
+        }
+        String token = com.hub.world.Worlds.tokenOf(loc.getWorld());
+        if (token == null || token.isBlank() || token.startsWith("room_")) {
+            return null;
         }
         return String.format(Locale.ROOT, "%s,%.2f,%.2f,%.2f,%.1f,%.1f",
-                com.hub.world.Worlds.tokenOf(loc.getWorld()), loc.getX(), loc.getY(), loc.getZ(),
+                token, loc.getX(), loc.getY(), loc.getZ(),
                 loc.getYaw(), loc.getPitch());
+    }
+
+    /** 写一个坐标；**写不了就什么都不做**（保留磁盘上的原值）。 */
+    private static void write(FileConfiguration cfg, String path, Location loc) {
+        String token = encode(loc);
+        if (token != null) {
+            cfg.set(path, token);
+        }
     }
 
     private static Location parse(String raw) {
