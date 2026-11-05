@@ -2,6 +2,7 @@ package com.buildbattle.gtb.command;
 
 import com.buildbattle.gtb.GuessBuildPlugin;
 import com.buildbattle.gtb.arena.Arena;
+import com.buildbattle.gtb.game.GameManager;
 import com.buildbattle.gtb.util.Chat;
 import com.buildbattle.gtb.words.WordManager;
 import org.bukkit.Bukkit;
@@ -35,26 +36,42 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
         this.plugin = plugin;
     }
 
+    /**
+     * 取"这次操作该用哪一份运行时状态"（D22）。
+     *
+     * <p>玩家：他在哪个房间就用那一份（{@code GTBRooms.forPlayer} 走的是玩家→房间记录）；
+     * 控制台：当前房间上下文 → 最近有人加入的房间 → 默认实例。
+     */
+    private GameManager stateOf(CommandSender sender) {
+        if (sender instanceof Player p) {
+            // forPlayer 走"玩家 → 房间"记录；没记录的玩家拿到默认实例（不猜"最近的房间"）
+            return plugin.rooms().forPlayer(p);
+        }
+        return plugin.rooms().current();
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("该命令仅限游戏内玩家使用。");
+            // 控制台只支持"不需要玩家上下文"的几条：派对就是用 dispatchCommand(控制台, "gtb start") 开局的
+            console(sender, args.length == 0 ? "help" : args[0].toLowerCase(Locale.ROOT));
             return true;
         }
         String sub = args.length == 0 ? "help" : args[0].toLowerCase(Locale.ROOT);
         switch (sub) {
             case "join" -> {
+                // D22：键由房间上下文决定；指定场地名只决定"进哪张图"
                 if (args.length > 1) {
-                    plugin.getGame().join(player, args[1]);
+                    plugin.rooms().join(player, args[1]);
                 } else {
-                    plugin.getGame().join(player);
+                    plugin.rooms().join(player, null);
                 }
             }
-            case "leave" -> plugin.getGame().leave(player, false);
+            case "leave" -> plugin.rooms().leave(player, false);
             case "start" -> {
                 // D21：开始权在主持人手上；主持人不能突破 min-players（管理员可以）
-                var game = plugin.getGame();
-                boolean isAdminS = player != null && player.hasPermission("gtb.admin");
+                GameManager game = stateOf(sender);
+                boolean isAdminS = player.hasPermission("gtb.admin");
                 if (isAdminS) {
                     game.start(player);
                 } else if (game.isHost(player)) {
@@ -70,7 +87,7 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
             }
             case "stop" -> {
                 if (checkAdmin(player, true)) {
-                    plugin.getGame().stop(player);
+                    stateOf(sender).stop(player);
                 }
             }
             case "reload" -> {
@@ -81,7 +98,7 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
             }
             case "lobby" -> {
                 if (checkAdmin(player, true)) {
-                    plugin.getGame().setLobbyPoint(player.getLocation());
+                    stateOf(sender).setLobbyPoint(player.getLocation());
                     var loc = player.getLocation();
                     Chat.send(player, "&a等待点已设置：&e" + loc.getWorld().getName() + " "
                             + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ()
@@ -108,6 +125,61 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
+    /**
+     * 控制台入口（D22）。
+     *
+     * <p>为什么必须有：派对开局是 {@code Bukkit.dispatchCommand(控制台, "gtb start")}，
+     * 原来这里第一行就把控制台挡掉了（"该命令仅限游戏内玩家使用"）—— 被包装成派对子游戏后
+     * **一关都开不起来**。控制台只放行不需要玩家上下文的那几条。
+     */
+    private void console(CommandSender sender, String sub) {
+        switch (sub) {
+            case "start" -> {
+                int n = plugin.rooms().startAllWaiting();
+                log(sender, "gtb start：已尝试开局 " + n + " 间。");
+            }
+            case "stop" -> {
+                int n = plugin.rooms().stopAll();
+                log(sender, "gtb stop：已结束 " + n + " 局。");
+            }
+            case "reload" -> {
+                plugin.reloadAll();
+                log(sender, "配置、词库、场地已重载。");
+            }
+            case "list" -> {
+                java.util.List<Arena> all = plugin.getArenas().getAll();
+                log(sender, "===== 场地列表（共 " + all.size() + " 个，生效 "
+                        + plugin.getArenas().getActiveName() + "） =====");
+                for (Arena a : all) {
+                    log(sender, "  " + a.getName() + (a.isReady()
+                            ? " - 已设置（" + a.getWorld().getName() + " " + a.volume() + " 格）"
+                            : " - 未设置"));
+                }
+                for (GameManager m : plugin.rooms().allManagers()) {
+                    if (!m.roomScoped()) {
+                        continue;
+                    }
+                    log(sender, "  房间实例 gtb/" + m.roomKey() + " 场地 " + m.arenaLabel()
+                            + " 状态 " + m.getPhase() + " " + m.getPlayerCount() + " 人");
+                }
+            }
+            case "info" -> {
+                for (GameManager m : plugin.rooms().allManagers()) {
+                    log(sender, "gtb/" + m.roomKey() + " 场地 " + m.arenaLabel()
+                            + " 状态 " + m.getPhase() + " " + m.getPlayerCount() + " 人");
+                }
+            }
+            default -> log(sender, "控制台只支持 start / stop / reload / list / info（其它命令需要玩家身份）。");
+        }
+    }
+
+    /** 控制台输出的统一出口（前缀与游戏内一致；去掉 & 颜色代码，控制台不认）。 */
+    private void log(CommandSender sender, String msg) {
+        if (sender != null) {
+            sender.sendMessage("[建筑猜猜乐] " + (msg == null ? "" : msg.replaceAll("&[0-9a-fk-orA-FK-OR]", "")));
+        }
+    }
+
     // ---------- 战绩 ----------
 
     /** /gtb stats [玩家]：查看第一名次数；/gtb stats reset：OP 清空记录。 */
@@ -117,7 +189,7 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
                 Chat.send(p, "&c只有管理员（OP）可以清空记录。");
                 return;
             }
-            plugin.getGame().resetFirsts();
+            plugin.rooms().defaultManager().resetFirsts();
             Chat.send(p, "&a已清空全部第一名记录。");
             return;
         }
@@ -130,7 +202,7 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
             }
         }
         Chat.send(p, "&6" + target.getName() + " 的建筑猜猜乐战绩：&e获得第一名 &f"
-                + plugin.getGame().getFirsts(target.getUniqueId()) + " &6次");
+                + plugin.rooms().defaultManager().getFirsts(target.getUniqueId()) + " &6次");
     }
 
     // ---------- 子命令 ----------
@@ -179,7 +251,7 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
                 Chat.send(p, "&c已取消选区。");
             }
             case "clear" -> {
-                if (plugin.getGame().getPhase() == com.buildbattle.gtb.game.GameManager.Phase.PLAYING) {
+                if (plugin.rooms().anyPlaying()) {
                     Chat.send(p, "&c游戏进行中，无法删除场地。");
                     return;
                 }
@@ -235,7 +307,7 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
             Chat.send(p, "&c用法：/gtb remove <场地名>");
             return;
         }
-        if (plugin.getGame().getPhase() == com.buildbattle.gtb.game.GameManager.Phase.PLAYING) {
+        if (plugin.rooms().anyPlaying()) {
             Chat.send(p, "&c游戏进行中，无法删除场地。");
             return;
         }
@@ -302,7 +374,7 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
                     Chat.send(p, "&c用法：/gtb arena remove <名称>");
                     return;
                 }
-                if (plugin.getGame().getPhase() == com.buildbattle.gtb.game.GameManager.Phase.PLAYING) {
+                if (plugin.rooms().anyPlaying()) {
                     Chat.send(p, "&c游戏进行中，无法删除场地。");
                     return;
                 }
@@ -318,7 +390,7 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
                     Chat.send(p, "&c用法：/gtb arena rename <旧名称> <新名称>");
                     return;
                 }
-                if (plugin.getGame().getPhase() == com.buildbattle.gtb.game.GameManager.Phase.PLAYING) {
+                if (plugin.rooms().anyPlaying()) {
                     Chat.send(p, "&c游戏进行中，无法重命名场地。");
                     return;
                 }
@@ -353,7 +425,7 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
                     Chat.send(p, "&c用法：/gtb arena select <名称>");
                     return;
                 }
-                if (plugin.getGame().getPhase() == com.buildbattle.gtb.game.GameManager.Phase.PLAYING) {
+                if (plugin.rooms().anyPlaying()) {
                     Chat.send(p, "&c游戏进行中，无法切换生效场地。");
                     return;
                 }
@@ -472,7 +544,8 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
             Chat.send(p, "&c用法：/gtb theme <1|2|3|4|5|6|题目名>");
             return;
         }
-        if (!plugin.getGame().selectTheme(p, args[1]) && plugin.getGame().getPhase() != com.buildbattle.gtb.game.GameManager.Phase.PLAYING) {
+        GameManager game = stateOf(p);
+        if (!game.selectTheme(p, args[1]) && game.getPhase() != GameManager.Phase.PLAYING) {
             Chat.send(p, "&c当前不是选择题目的阶段。");
         }
     }
@@ -493,16 +566,16 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
                 return;
             }
         }
-        var game = plugin.getGame();
+        GameManager game = stateOf(p);
         if (!game.isInGame(p.getUniqueId()) || !game.isBuilder(p.getUniqueId())) {
             Chat.send(p, "&c只有当前建造者能更换地板！");
             return;
         }
         if (args.length < 2) {
-            plugin.getArena().openFloorMenu(p);
+            game.arena().openFloorMenu(p);
             return;
         }
-        plugin.getArena().applyFloorSelection(p, args[1]);
+        game.arena().applyFloorSelection(p, args[1]);
     }
 
     /** /gtb blacklist add|remove|list <玩家> | word add|remove|list <词>：管理自创词黑名单（管理员）。 */
@@ -514,7 +587,7 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
             Chat.send(p, "&c用法：/gtb blacklist add <玩家> | /gtb blacklist remove <玩家> | /gtb blacklist list | /gtb blacklist word add|remove|list [词]");
             return;
         }
-        var game = plugin.getGame();
+        GameManager game = stateOf(p);
         if (args[1].equalsIgnoreCase("word")) {
             // ---- 词黑名单（评分过低被拉黑的自创词） ----
             var wm = plugin.getWordManager();
@@ -606,14 +679,17 @@ public class GTBCommand implements CommandExecutor, TabCompleter {
     }
 
     private void info(Player p) {
-        Arena arena = plugin.getArena();
-        String activeName = plugin.getArenas().getActiveName();
+        GameManager game = stateOf(p);
+        Arena arena = game.arena();
+        String activeName = arena.getName();
         int arenaCount = plugin.getArenas().getAll().size();
         Chat.send(p, "&6===== 建筑猜猜乐 · 信息 =====");
         Chat.sendRaw(p, "&7插件版本: &f" + plugin.getPluginMeta().getVersion());
-        Chat.sendRaw(p, "&7当前状态: &f" + (plugin.getGame().getPhase() == com.buildbattle.gtb.game.GameManager.Phase.PLAYING
-                ? "&a进行中（" + plugin.getGame().getPlayerCount() + " 人）"
-                : "&e等待开始（" + plugin.getGame().getPlayerCount() + " 人）"));
+        Chat.sendRaw(p, "&7运行时状态: &f" + game.roomKey()
+                + (game.roomScoped() ? "（房间实例）" : "（默认实例）"));
+        Chat.sendRaw(p, "&7当前状态: &f" + (game.getPhase() == GameManager.Phase.PLAYING
+                ? "&a进行中（" + game.getPlayerCount() + " 人）"
+                : "&e等待开始（" + game.getPlayerCount() + " 人）"));
         Chat.sendRaw(p, "&7场地: &f" + (arena.isReady()
                 ? "&a「" + activeName + "」已设置（" + arena.getWorld().getName() + " " + arena.volume() + " 格，共 "
                 + arenaCount + " 个场地）"

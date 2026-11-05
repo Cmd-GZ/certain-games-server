@@ -31,14 +31,32 @@ public final class Chat {
         return com.hub.util.Chat.noItalic(component);
     }
 
-    /** 带插件前缀发消息给玩家。 */
+    /**
+     * 带插件前缀发消息给玩家。
+     *
+     * <p><b>null 安全</b>：控制台 {@code gtb start} / 倒计时回调里没有"发命令的人"，
+     * 这些路径只关心副作用（开局/拒绝），不该因为没人可发消息而 NPE。
+     */
     public static void send(Player player, String msg) {
+        if (player == null) {
+            org.bukkit.Bukkit.getLogger().info("[GuessTheBuild] " + stripPrefix(msg));
+            return;
+        }
         com.hub.util.Chat.send(player, PREFIX_TEXT + msg);
     }
 
-    /** 不带前缀发消息给玩家。 */
+    /** 不带前缀发消息给玩家（null 时写控制台日志）。 */
     public static void sendRaw(Player player, String msg) {
+        if (player == null) {
+            org.bukkit.Bukkit.getLogger().info("[GuessTheBuild] " + stripPrefix(msg));
+            return;
+        }
         com.hub.util.Chat.send(player, msg);
+    }
+
+    /** 日志用的纯文本（去掉 & 颜色代码）。 */
+    private static String stripPrefix(String msg) {
+        return msg == null ? "" : msg.replaceAll("&[0-9a-fk-orA-FK-OR]", "");
     }
 
     /** 带插件前缀广播给全服（玩家名自动带头衔）。 */

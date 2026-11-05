@@ -49,6 +49,23 @@ public class Arena {
     private final GuessBuildPlugin plugin;
     private String name;
 
+    /**
+     * D22：这个场地实例**钉死**的房间世界（每个房间一份实例）。
+     *
+     * <p>{@link com.hub.room.RoomBinding} 是"按游戏一个槽"，两个房间同时跑时后一个覆盖前一个 ——
+     * 甲房的实例会读到乙房的世界（人被传错房间，或 {@code Location cannot be in a different world}）。
+     * 钉死之后读取只认自己的世界。
+     */
+    private World roomWorld;
+    /**
+     * 快照文件是否允许写盘。
+     *
+     * <p>{@code arena-<名称>.snap} 是**每张图一份**的共享文件（内容是世界无关的
+     * {@code 坐标 → BlockData}），房间里重选区时如果照写就会把别的房间/定义实例的快照覆盖掉。
+     * 房间实例一律 {@code false}（只读共享），写盘只留给定义实例（R2 单一写者）。
+     */
+    private boolean snapshotWritable = true;
+
     private World world;
     private Location min;
     private Location max;
@@ -77,6 +94,60 @@ public class Arena {
         this.name = name;
     }
 
+    // ---------- D22：房间世界绑定 ----------
+
+    /** 把场地实例钉到"这一局实际跑的世界"（房间实例用；定义实例不绑）。 */
+    public void bindWorld(World world) {
+        this.roomWorld = world;
+    }
+
+    /** 钉住的世界；没钉返回 null。 */
+    public World boundWorld() {
+        return roomWorld;
+    }
+
+    /** 房间实例 = 只读共享快照文件，不写盘（别把别人的 {@code arena-<名称>.snap} 写坏）。 */
+    public void setSnapshotWritable(boolean writable) {
+        this.snapshotWritable = writable;
+    }
+
+    public boolean snapshotWritable() {
+        return snapshotWritable;
+    }
+
+    /**
+     * 读坐标时的世界解析：**钉死了就只认自己的房间世界**，没钉才退回按上下文的换绑。
+     *
+     * <p>钉死之后**不能**再回落 {@link com.hub.room.RoomBinding}：它先看"派对委派"、再看
+     * "该游戏唯一的房间"，两者都是**按游戏一个槽**；两房间同时跑时会给出另一个房间的世界，
+     * 于是同一份代码里"世界"和"坐标"对不上（抛 {@code Location cannot be in a different world}）。
+     */
+    private Location apply(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld != null) {
+            if (roomWorld.equals(loc.getWorld())) {
+                return loc;
+            }
+            return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+        }
+        return com.hub.room.RoomBinding.apply("gtb", loc);
+    }
+
+    /**
+     * **把解析出来的坐标重新钉回自己的房间世界**（{@link #loadFromConfig} 用）。
+     *
+     * <p>{@code tpl:} 的解析看"当前房间上下文"：多世界房间（派对图 = 迷你小游戏世界 + 各游戏自己的模板）里
+     * 它解析到的是**第一个世界**，不一定是这张图所在的那个实例。
+     */
+    private Location pin(Location loc) {
+        if (loc == null || roomWorld == null || roomWorld.equals(loc.getWorld())) {
+            return loc;
+        }
+        return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+    }
+
     // ---------- 配置读写 ----------
 
     /** 从配置段加载场地（world/pos1/pos2/spawn + 快照文件）。 */
@@ -91,13 +162,14 @@ public class Arena {
         String worldName = cs.getString("world");
         // R2：world 段可能是 tpl: 令牌
         world = (worldName == null || worldName.isEmpty()) ? null : com.hub.world.Worlds.resolve(worldName);
-        if (world == null) {
+        if (world == null && roomWorld == null) {
             min = max = spawn = null;
             return;
         }
-        min = readLocation(cs, "pos1");
-        max = readLocation(cs, "pos2");
-        spawn = readLocation(cs, "spawn");
+        // D22：解析结果**钉回本房间世界**（`tpl:` 解析看上下文，多世界房间里可能指到别人的世界）
+        min = pin(readLocation(cs, "pos1"));
+        max = pin(readLocation(cs, "pos2"));
+        spawn = pin(readLocation(cs, "spawn"));
         File snap = new File(plugin.getDataFolder(), "arena-" + name + ".snap");
         if (snap.exists()) {
             loadSnapshotFile(snap);
@@ -108,16 +180,18 @@ public class Arena {
     }
 
     private Location readLocation(ConfigurationSection cs, String key) {
+        // D22：坐标的世界用**本实例的世界**（房间实例 = 钉死的房间世界；定义实例 = 解析出来的模板世界）
+        World base = roomWorld != null ? roomWorld : world;
         List<Integer> ints = cs.getIntegerList(key);
         if (ints.size() >= 3) {
-            return new Location(world, ints.get(0), ints.get(1), ints.get(2));
+            return new Location(base, ints.get(0), ints.get(1), ints.get(2));
         }
         List<String> list = cs.getStringList(key);
         if (list == null || list.size() < 3) {
             return null;
         }
         try {
-            return new Location(world,
+            return new Location(base,
                     Double.parseDouble(list.get(0)),
                     Double.parseDouble(list.get(1)),
                     Double.parseDouble(list.get(2)));
@@ -151,14 +225,41 @@ public class Arena {
         this.floor = null;
 
         captureSnapshot();
+        persistCoordinates();
+        return true;
+    }
 
+    /**
+     * 把坐标写回配置 + 快照文件。
+     *
+     * <p><b>R2 单一写者</b>：房间实例（{@link #snapshotWritable} = false）**什么都不写** ——
+     * 配置段与 {@code arena-<名称>.snap} 都归定义实例，房间只是跑在它的一份拷贝上。
+     *
+     * <p><b>只写 {@code tpl:} 令牌</b>：房间世界里选区时 {@code Worlds.tokenOf} 会还原成
+     * {@code tpl:<模板键>}；反查不到模板（房间已销毁 / 手建的 room_ 世界）就**整项跳过**，
+     * 绝不把 {@code room_xxx_1} 写进磁盘（R2 违规，删房后该场地永久"未就绪"）。
+     */
+    private void persistCoordinates() {
+        if (!snapshotWritable) {
+            plugin.getLogger().info("[GuessTheBuild] 房间实例的场地「" + name
+                    + "」只在本局生效：不写配置、不写快照文件（R2 单一写者）。");
+            return;
+        }
+        // 先读回磁盘，只改本场这一段，避免把别的进程/实例刚写的键覆盖掉
+        plugin.reloadConfig();
         String prefix = "arenas." + name + ".";
-        plugin.getConfig().set(prefix + "world", com.hub.world.Worlds.tokenOf(w));
-        plugin.getConfig().set(prefix + "pos1", List.of(x1, y1, z1));
-        plugin.getConfig().set(prefix + "pos2", List.of(x2, y2, z2));
-        plugin.getConfig().set(prefix + "spawn",
-                List.of(spawn.getBlockX(), spawn.getBlockY(), spawn.getBlockZ()));
-        plugin.getConfig().set(prefix + "floor", null);
+        String token = (world == null) ? null : com.hub.world.Worlds.tokenOf(world);
+        if (token == null || token.isBlank() || token.startsWith("room_")) {
+            plugin.getLogger().warning("[GuessTheBuild] 跳过写场地「" + name + "」的世界段：世界 "
+                    + (world == null ? "（空）" : world.getName()) + " 反查不到模板（保留磁盘原值）。");
+        } else {
+            plugin.getConfig().set(prefix + "world", token);
+            plugin.getConfig().set(prefix + "pos1", List.of(min.getBlockX(), min.getBlockY(), min.getBlockZ()));
+            plugin.getConfig().set(prefix + "pos2", List.of(max.getBlockX(), max.getBlockY(), max.getBlockZ()));
+            plugin.getConfig().set(prefix + "spawn",
+                    List.of(spawn.getBlockX(), spawn.getBlockY(), spawn.getBlockZ()));
+            plugin.getConfig().set(prefix + "floor", null);
+        }
         plugin.saveConfig();
 
         try {
@@ -166,17 +267,20 @@ public class Arena {
         } catch (IOException e) {
             plugin.getLogger().warning("保存场地快照失败: " + e.getMessage());
         }
-        return true;
     }
 
     // ---------- 快照 ----------
 
     private void captureSnapshot() {
         snapshot.clear();
+        if (min == null || max == null || min.getWorld() == null) {
+            return;
+        }
+        World w = min.getWorld();
         for (int x = min.getBlockX(); x <= max.getBlockX(); x++) {
             for (int y = min.getBlockY(); y <= max.getBlockY(); y++) {
                 for (int z = min.getBlockZ(); z <= max.getBlockZ(); z++) {
-                    BlockData data = world.getBlockAt(x, y, z).getBlockData();
+                    BlockData data = w.getBlockAt(x, y, z).getBlockData();
                     if (!data.getMaterial().isAir()) {
                         snapshot.put(new BlockPos(x, y, z), data);
                     }
@@ -186,6 +290,9 @@ public class Arena {
     }
 
     private void saveSnapshotFile() throws IOException {
+        if (!snapshotWritable) {
+            return;   // 房间实例：快照文件是共享只读的
+        }
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<BlockPos, BlockData> e : snapshot.entrySet()) {
             BlockPos p = e.getKey();
@@ -240,21 +347,24 @@ public class Arena {
             return;
         }
 
+        Location lo = getMin();
+        Location hi = getMax();
+        World w = lo.getWorld();
         int buildHeight = plugin.getConfig().getInt("game.max-build-height", 40);
-        int clearTop = max.getBlockY() + Math.max(4, buildHeight);
+        int clearTop = hi.getBlockY() + Math.max(4, buildHeight);
         BlockData air = Material.AIR.createBlockData();
         int changed = 0;
-        for (int x = min.getBlockX(); x <= max.getBlockX(); x++) {
-            for (int z = min.getBlockZ(); z <= max.getBlockZ(); z++) {
-                for (int y = min.getBlockY(); y <= clearTop; y++) {
+        for (int x = lo.getBlockX(); x <= hi.getBlockX(); x++) {
+            for (int z = lo.getBlockZ(); z <= hi.getBlockZ(); z++) {
+                for (int y = lo.getBlockY(); y <= clearTop; y++) {
                     BlockData target = snapshot.get(new BlockPos(x, y, z));
                     if (target == null) {
-                        if (world.getBlockAt(x, y, z).getType().isAir()) {
+                        if (w.getBlockAt(x, y, z).getType().isAir()) {
                             continue; // 本该是空气且现在就是空气 → 跳过（绝大多数格子走这里）
                         }
                         target = air; // 建造者新放的方块 → 清掉
                     }
-                    world.getBlockAt(x, y, z).setBlockData(target, false);
+                    w.getBlockAt(x, y, z).setBlockData(target, false);
                     changed++;
                 }
             }
@@ -273,47 +383,35 @@ public class Arena {
     // ---------- 查询 ----------
 
     public boolean isReady() {
-        return world != null && min != null && max != null && spawn != null
+        Location lo = getMin();
+        Location hi = getMax();
+        return getWorld() != null && lo != null && hi != null && getSpawn() != null
                 && volume() >= 16;
     }
 
     public long volume() {
-        if (min == null || max == null) {
+        Location lo = getMin();
+        Location hi = getMax();
+        if (lo == null || hi == null) {
             return 0;
         }
-        return (long) (max.getBlockX() - min.getBlockX() + 1)
-                * (max.getBlockY() - min.getBlockY() + 1)
-                * (max.getBlockZ() - min.getBlockZ() + 1);
+        return (long) (hi.getBlockX() - lo.getBlockX() + 1)
+                * (long) (hi.getBlockY() - lo.getBlockY() + 1)
+                * (long) (hi.getBlockZ() - lo.getBlockZ() + 1);
     }
 
     /**
-     * 房间化（R1.5）：把场地换绑到"这一局实际跑的世界"（坐标不变，只换世界实例）。
+     * 场地世界：**必须与坐标 getter 同源**，否则会出现"世界是 A 房、坐标是 B 房"
+     * （{@code Location cannot be in a different world} 就是这么来的）。
      *
-     * <p>取世界走 {@code RoomBinding}（**父级委派优先**，其次房间上下文/唯一房间）；
-     * 拿不到就不动，保持静态配置的行为。
+     * <p>钉死了房间世界就只认它；没钉（定义实例）才退回按上下文的换绑。
      */
-    public void bindRoomWorld() {
-        World target = com.hub.room.RoomBinding.worldFor("gtb");
-        if (target == null || target.equals(world)) {
-            return;
-        }
-        org.bukkit.Bukkit.getLogger().info("[GuessTheBuild] 场地已换绑到房间世界："
-                + target.getName());
-        world = target;
-        min = move(min, target);
-        max = move(max, target);
-        spawn = move(spawn, target);
-    }
-
-    private static Location move(Location loc, World w) {
-        if (loc == null) {
-            return null;
-        }
-        return new Location(w, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
-    }
-
     public World getWorld() {
-        return world;
+        if (roomWorld != null) {
+            return roomWorld;
+        }
+        Location resolved = apply(min);
+        return resolved != null ? resolved.getWorld() : world;
     }
 
     /** 快照里的方块数量（保存场地时记录；0 表示没有快照文件）。 */
@@ -326,16 +424,19 @@ public class Arena {
         return snapshot.get(new BlockPos(x, y, z));
     }
 
+    /** 场地边界角 1（世界 = {@link #getWorld()}，与坐标同源）。 */
     public Location getMin() {
-        return min;
+        return apply(min);
     }
 
+    /** 场地边界角 2。 */
     public Location getMax() {
-        return max;
+        return apply(max);
     }
 
+    /** 等待/观战出生点。 */
     public Location getSpawn() {
-        return spawn;
+        return apply(spawn);
     }
 
     /** 建造者开始位置：场地水平中心、地板上方 1 格（用于开局与越界拉回，不再使用大厅）。 */
@@ -345,10 +446,12 @@ public class Arena {
     }
 
     public Location getBuildStart() {
-        return new Location(world,
-                (min.getX() + max.getX()) / 2.0 + 0.5,
-                max.getY() + 1.0,
-                (min.getZ() + max.getZ()) / 2.0 + 0.5);
+        Location lo = getMin();
+        Location hi = getMax();
+        return new Location(getWorld(),
+                (lo.getX() + hi.getX()) / 2.0 + 0.5,
+                hi.getY() + 1.0,
+                (lo.getZ() + hi.getZ()) / 2.0 + 0.5);
     }
 
     /**
@@ -360,46 +463,58 @@ public class Arena {
         if (!isReady()) {
             return;
         }
+        Location lo = getMin();
+        Location hi = getMax();
+        World w = getWorld();
         int buildHeight = plugin.getConfig().getInt("game.max-build-height", 40);
-        int floorY = min.getBlockY();
+        int floorY = lo.getBlockY();
         int top = floorY + buildHeight + 2;
-        int x1 = min.getBlockX() - 1;
-        int x2 = max.getBlockX() + 1;
-        int z1 = min.getBlockZ() - 1;
-        int z2 = max.getBlockZ() + 1;
+        int x1 = lo.getBlockX() - 1;
+        int x2 = hi.getBlockX() + 1;
+        int z1 = lo.getBlockZ() - 1;
+        int z2 = hi.getBlockZ() + 1;
         BlockData wall = Material.BARRIER.createBlockData();
         for (int y = floorY + 1; y <= top; y++) {
             for (int z = z1; z <= z2; z++) {
-                world.getBlockAt(x1, y, z).setBlockData(wall, false);
-                world.getBlockAt(x2, y, z).setBlockData(wall, false);
+                w.getBlockAt(x1, y, z).setBlockData(wall, false);
+                w.getBlockAt(x2, y, z).setBlockData(wall, false);
             }
             for (int x = x1; x <= x2; x++) {
-                world.getBlockAt(x, y, z1).setBlockData(wall, false);
-                world.getBlockAt(x, y, z2).setBlockData(wall, false);
+                w.getBlockAt(x, y, z1).setBlockData(wall, false);
+                w.getBlockAt(x, y, z2).setBlockData(wall, false);
             }
         }
     }
 
     public double getCenterX() {
-        return (min.getX() + max.getX()) / 2.0;
+        Location lo = getMin();
+        Location hi = getMax();
+        return lo == null || hi == null ? 0 : (lo.getX() + hi.getX()) / 2.0;
     }
 
     public double getCenterZ() {
-        return (min.getZ() + max.getZ()) / 2.0;
+        Location lo = getMin();
+        Location hi = getMax();
+        return lo == null || hi == null ? 0 : (lo.getZ() + hi.getZ()) / 2.0;
     }
 
     /** 场地在水平方向上的最大半径（用于计算观战点距离）。 */
     public double getRadiusXZ() {
-        return Math.max(max.getX() - min.getX(), max.getZ() - min.getZ()) / 2.0;
+        Location lo = getMin();
+        Location hi = getMax();
+        return lo == null || hi == null ? 0
+                : Math.max(hi.getX() - lo.getX(), hi.getZ() - lo.getZ()) / 2.0;
     }
 
     /** 判断位置是否在场地水平范围内（可带余量）。 */
     public boolean containsXZ(Location loc, int margin) {
-        if (min == null || max == null) {
+        Location lo = getMin();
+        Location hi = getMax();
+        if (lo == null || hi == null || loc == null) {
             return false;
         }
-        return loc.getX() >= min.getX() - margin && loc.getX() <= max.getX() + margin
-                && loc.getZ() >= min.getZ() - margin && loc.getZ() <= max.getZ() + margin;
+        return loc.getX() >= lo.getX() - margin && loc.getX() <= hi.getX() + margin
+                && loc.getZ() >= lo.getZ() - margin && loc.getZ() <= hi.getZ() + margin;
     }
 
     // ---------- 地板商店 ----------
@@ -503,11 +618,14 @@ public class Arena {
             floorTask = null;
         }
         final BlockData data = m.createBlockData();
-        final int y = min.getBlockY();
-        final int x0 = min.getBlockX();
-        final int x1 = max.getBlockX();
-        final int z0 = min.getBlockZ();
-        final int z1 = max.getBlockZ();
+        final Location lo = getMin();
+        final Location hi = getMax();
+        final World w = getWorld();
+        final int y = lo.getBlockY();
+        final int x0 = lo.getBlockX();
+        final int x1 = hi.getBlockX();
+        final int z0 = lo.getBlockZ();
+        final int z1 = hi.getBlockZ();
         final int[] cursor = {x0, z0};
         floorTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             int done = 0;
@@ -521,7 +639,7 @@ public class Arena {
                     }
                     return;
                 }
-                org.bukkit.block.Block b = world.getBlockAt(x, y, z);
+                org.bukkit.block.Block b = w.getBlockAt(x, y, z);
                 if (b.getType() != m) {
                     b.setBlockData(data, false);   // 只在不一样时才写
                 }

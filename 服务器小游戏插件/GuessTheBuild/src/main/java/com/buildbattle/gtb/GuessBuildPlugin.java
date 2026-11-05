@@ -4,6 +4,7 @@ import com.buildbattle.gtb.arena.Arena;
 import com.buildbattle.gtb.arena.ArenaManager;
 import com.buildbattle.gtb.arena.WandSession;
 import com.buildbattle.gtb.command.GTBCommand;
+import com.buildbattle.gtb.game.GTBRooms;
 import com.buildbattle.gtb.game.GameManager;
 import com.buildbattle.gtb.util.Chat;
 import com.buildbattle.gtb.words.WordManager;
@@ -29,9 +30,14 @@ public final class GuessBuildPlugin extends JavaPlugin {
 
     private static GuessBuildPlugin instance;
 
+    /** 默认那一份（没有房间上下文时的老路径；也是配置/快照的唯一写者）。 */
     private GameManager game;
+    /** D22：房间路由表（每房间一份 {@link GameManager}）。 */
+    private GTBRooms rooms;
     private ArenaManager arenas;
     private WordManager wordManager;
+    /** 开局 title 倒计时：**插件级一份**（构造它会注册监听器，每房间各造一个就是泄漏）。 */
+    private com.hub.util.StartCountdown startCountdown;
     private Villager floorNpc;
     private Location joinSignLoc;
     private Location floorSignLoc;
@@ -80,13 +86,18 @@ public final class GuessBuildPlugin extends JavaPlugin {
         saveDefaultConfig();
         setupMode = new SetupMode(this, "gtb-setup-tool");
 
+        // 倒计时先建：房间实例回收（shutdown）时会取消自己那把 key
+        startCountdown = new com.hub.util.StartCountdown(this);
         wordManager = new WordManager(this);
         arenas = new ArenaManager(this);
         arenas.loadAll();
         // 补齐生效场地屏障墙（延迟 10 tick 避免启动卡顿；场地未配置时无动作）
         Bukkit.getScheduler().runTaskLater(this, getArena()::ensureBarrierWalls, 10L);
 
-        game = new GameManager(this);
+        // D22：默认实例 + 房间路由表（房间实例在有人进房间时才建）
+        rooms = new GTBRooms(this);
+        game = rooms.defaultManager();
+        game.publishRegion();
 
         GTBCommand command = new GTBCommand(this);
         var gtb = getCommand("gtb");
@@ -103,8 +114,8 @@ public final class GuessBuildPlugin extends JavaPlugin {
                     sender.sendMessage("\u4ec5\u73a9\u5bb6\u53ef\u7528\u3002");
                     return true;
                 }
-                if (game.isInGame(p.getUniqueId())) {
-                    game.leave(p, false);
+                if (rooms.forPlayer(p).isInGame(p.getUniqueId())) {
+                    rooms.leave(p, false);
                 } else {
                     Chat.send(p, "&c\u4f60\u5f53\u524d\u4e0d\u5728\u6e38\u620f\u4e2d\u3002");
                 }
@@ -125,7 +136,8 @@ public final class GuessBuildPlugin extends JavaPlugin {
         // 启动后上报场地给 GameHub 中央菜单（延迟等待 GameHub 就绪；场地未配置则不上报）
         Bukkit.getScheduler().runTaskLater(this, () -> game.reportArenaToHub(), 40L);
         // 玩家执行 /hub 或右键回主城道具时，GameHub 回调这里把玩家踢出游戏（防递归）
-        com.hub.api.HubAPI.registerLobbyHandler(p -> game.leave(p, false));
+        // D22：按玩家记录路由到他自己那一份（两房间同时跑时不能落到别人的实例上）
+        com.hub.api.HubAPI.registerLobbyHandler(p -> rooms.leave(p, false));
 
         getLogger().info("建筑猜猜乐 v" + getPluginMeta().getVersion() + " 已启用，使用 /gtb help 查看帮助。");
     }
@@ -136,7 +148,9 @@ public final class GuessBuildPlugin extends JavaPlugin {
         if (setupMode != null) {
             setupMode.exitAll();
         }
-        if (game != null) {
+        if (rooms != null) {
+            rooms.shutdownAll();
+        } else if (game != null) {
             game.restoreAllOnDisable();
         }
         getLogger().info("建筑猜猜乐 已禁用。");
@@ -147,8 +161,9 @@ public final class GuessBuildPlugin extends JavaPlugin {
         reloadConfig();
         wordManager.reload();
         arenas.loadAll();
+        rooms.reloadAll();   // D22：默认实例 + 各房间实例的场地都按新配置重建
         initFloorNpc();
-        getLogger().info("配置、词库、场地已重载。");
+        getLogger().info("配置、词库、场地已重载（房间实例：空闲的立刻生效，对局中的下一局生效）。");
     }
 
     public static GuessBuildPlugin getInstance() {
@@ -157,6 +172,16 @@ public final class GuessBuildPlugin extends JavaPlugin {
 
     public GameManager getGame() {
         return game;
+    }
+
+    /** D22：房间路由表（每房间一份运行时状态）。 */
+    public GTBRooms rooms() {
+        return rooms;
+    }
+
+    /** 开局 title 倒计时（插件级一份，各房间用自己的房间键）。 */
+    public com.hub.util.StartCountdown startCountdown() {
+        return startCountdown;
     }
 
     /** 当前生效场地（未配置时返回兜底空场地，不会为 null）。 */
@@ -245,6 +270,7 @@ public final class GuessBuildPlugin extends JavaPlugin {
         Chat.send(p, "&a场地「&e" + arenaName + "&a」已保存！快照已记录，每轮结束会自动还原。");
         spawnFloorNpc(); // 场地变了，把地板商店 NPC 移到新场地角落
         game.reportArenaToHub(); // 刷新中央菜单场地列表
+        rooms.reloadAll();       // 房间实例跟着重建场地（空闲的立刻生效）
     }
 
     private static String coord(Location loc) {

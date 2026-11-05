@@ -52,6 +52,9 @@ import java.util.UUID;
  */
 public class GameManager {
 
+    /** 没有房间上下文时的键（老路径：静态场地 / 直接 {@code /gtb join}）。 */
+    public static final String DEFAULT_KEY = "main";
+
     public enum Phase {
         WAITING, PLAYING
     }
@@ -59,6 +62,21 @@ public class GameManager {
     private static final String NORMALIZE_REGEX = "[\\s\\p{Punct}。，、；：？！“”‘’「」『』（）【】《》〈〉…—·～]+";
 
     private final GuessBuildPlugin plugin;
+
+    /**
+     * D22：这个实例负责的**房间键**（有房间时 = 房间 id；没有房间时 = {@link #DEFAULT_KEY}）。
+     *
+     * <p>每个房间一份实例 = 一份运行时状态，所以两场派对不会互相踩。
+     * 会话键、{@code StartCountdown} 键、区域声明名都用它。
+     */
+    private final String roomKey;
+    /**
+     * D22：这个实例自己的场地（配置副本 + 只读共享快照）。
+     *
+     * <p>房间实例持有它自己的那一份（世界已钉死）；**默认实例为 null**，读取时跟随
+     * 共享 {@code ArenaManager} 的生效场地（老行为：{@code /gtb arena select} 切图）。
+     */
+    private final Arena ownArena;
 
     private final List<UUID> players = new ArrayList<>();
     private final Map<UUID, String> names = new HashMap<>();
@@ -74,12 +92,13 @@ public class GameManager {
     private boolean ending;
     /** 等待室自动开局倒计时（公共库 MiniGameLib；同时只有一个场地在跑）。 */
     private final WaitCountdown wait;
-    /** 会话（D22）：单图/单场游戏用一个键。 */
+    /** 会话（D22）：按**房间键**索引（每个房间实例一个会话）。 */
     private final java.util.Map<String, GTBSession> sessions = new java.util.LinkedHashMap<>();
+    /** 会话层的会话键注释见 {@link #roomKey}。 */
     private GTBSession session;
 
     private GTBSession ensureSession() {
-        String key = "main";
+        String key = roomKey;   // D22：每房间一个会话（否则两个房间共用同一份会话）
         GTBSession g = sessions.get(key);
         if (g == null || g.state().isFinal()) {
             g = new GTBSession(this, key);
@@ -165,6 +184,9 @@ public class GameManager {
     private long roundEndMs = 0;
     private BukkitTask endTask = null;
     private BukkitTask hintTask = null;
+    /** 本实例的两个常驻任务（每秒 tick / 每 5 tick 行动栏）：房间实例回收时必须取消，否则泄漏。 */
+    private BukkitTask tickTask = null;
+    private BukkitTask actionBarTask = null;
 
     /** 开局五选一：本轮候选题目（具体词），建造者从中选一个。 */
     private boolean selectingTheme = false;
@@ -179,16 +201,82 @@ public class GameManager {
     }
 
 
+    /** 默认实例：没有房间上下文时的老路径（场地跟随共享 ArenaManager 的生效场地）。 */
     public GameManager(GuessBuildPlugin plugin) {
+        this(plugin, DEFAULT_KEY, null);
+    }
+
+    /**
+     * @param roomKey  D22：房间键（房间 id）；默认实例传 {@link #DEFAULT_KEY}
+     * @param ownArena D22：这个房间自己的场地（已 {@code bindWorld}）；默认实例传 {@code null}
+     */
+    public GameManager(GuessBuildPlugin plugin, String roomKey, Arena ownArena) {
         this.plugin = plugin;
+        this.roomKey = roomKey == null || roomKey.isBlank() ? DEFAULT_KEY : roomKey;
+        this.ownArena = ownArena;
         this.wait = new WaitCountdown(plugin, new WaitHost());
-        startCountdown();
-        // 战绩数据
-        // 战绩数据（唯一文件 plugins/MiniGameLib/players.yml，命名空间 gtb）
-        data = PlayerStats.load("gtb", new File(plugin.getDataFolder(), "data.yml"));
-        Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 20L);
+        // 战绩数据（唯一文件 plugins/MiniGameLib/players.yml，命名空间 gtb）：
+        // **只由默认实例加载**，房间实例读它（多份拷贝会互相覆盖同一段，R2）
+        if (ownArena == null) {
+            data = PlayerStats.load("gtb", new File(plugin.getDataFolder(), "data.yml"));
+        }
+        tickTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 20L);
         // ActionBar 常驻显示（每 5 tick 刷新，避免闪烁）：建造者看题目，猜测者看字数/提示
-        Bukkit.getScheduler().runTaskTimer(plugin, this::updateActionBar, 5L, 5L);
+        actionBarTask = Bukkit.getScheduler().runTaskTimer(plugin, this::updateActionBar, 5L, 5L);
+    }
+
+    // ---------- D22：本实例的键 / 场地 / 状态 ----------
+
+    /** 本实例的房间键（会话、倒计时、区域声明都用它）。 */
+    public String roomKey() {
+        return roomKey;
+    }
+
+    /** 本实例使用的场地：房间实例 = 自己那份；默认实例 = 共享 ArenaManager 的生效场地。 */
+    public Arena arena() {
+        return ownArena != null ? ownArena : plugin.getArenas().getActive();
+    }
+
+    /** 中央菜单/派对里显示的场地名：**仍然是地图名**（派对靠它选图、填进 {@code gtb join {arena}}）。 */
+    public String arenaLabel() {
+        return arena().getName();
+    }
+
+    /** D22：这个实例是"某个房间的一份运行时状态"，还是"没有房间时的默认实例"。 */
+    public boolean roomScoped() {
+        return ownArena != null;
+    }
+
+    /** 没有玩家、也没有结算在进行 —— 房间实例可以回收了。 */
+    public boolean idle() {
+        return !ending && phase == Phase.WAITING && players.isEmpty();
+    }
+
+    /**
+     * 声明本实例的地盘（I2）：**名用房间键**，同一张图两个房间各一块、不互相覆盖。
+     *
+     * <p>默认实例（没钉死房间世界）在房间上下文里不声明，坐标被 {@code tpl:} 兜底解析进房间世界时也不声明 ——
+     * 否则会和房间实例那块**自重叠**（HillKing 的真实事故：doctor 报几十行"同一游戏的场地重叠"）。
+     */
+    public void publishRegion() {
+        Arena a = arena();
+        if (a == null || !a.isReady()) {
+            return;
+        }
+        if (roomScoped()) {
+            com.hub.region.Regions.box("gtb", roomKey, a.getMin(), a.getMax());
+            return;
+        }
+        if (com.hub.room.RoomContext.currentRoomId() != null) {
+            return;
+        }
+        org.bukkit.World world = a.getWorld();
+        if (world != null && com.hub.room.RoomManager.templateKeyOfRoomWorld(world.getName()) != null) {
+            plugin.getLogger().info("[GuessTheBuild] 默认实例的场地 " + a.getName() + " 坐标落在房间世界 "
+                    + world.getName() + "，跳过地盘声明（由该房间自己的实例声明）。");
+            return;
+        }
+        com.hub.region.Regions.box("gtb", a.getName(), a.getMin(), a.getMax());
     }
 
     // ---------- 公共查询 ----------
@@ -211,9 +299,30 @@ public class GameManager {
 
     // ---------- 加入 / 离开 / 开始 ----------
 
-    /** 上报所有已设置场地到 GameHub 中央菜单：生效场地游戏进行中=红（显示轮次），其余=绿可加入。 */
+    /**
+     * 上报场地状态到 GameHub 中央菜单。
+     *
+     * <p>房间实例**只上报自己这张图**（它有自己的对局状态）；默认实例保留老行为：
+     * 遍历全部场地，生效场地游戏进行中=红（显示轮次），其余=绿可加入。
+     *
+     * <p>⚠️ 已知限制（与 TntRun/ColorParty/TNTBattle 同）：中央菜单的场地名**仍是地图名**，
+     * 两房间同图时菜单里的状态会互相覆盖（派对是靠"游戏注册的场地名"选图的，换房间键会让
+     * {@code gtb join {arena}} 找不到图）。房间隔离靠 {@link com.hub.room.RoomContext}，不靠这个名字。
+     */
     private void reportArena() {
         boolean playing = phase == Phase.PLAYING;
+        if (roomScoped()) {
+            Arena a = arena();
+            if (!a.isReady()) {
+                return;
+            }
+            HubAPI.setArena("猜猜乐", a.getName(),
+                    playing ? GameState.PLAYING : GameState.WAITING,
+                    playing ? players.size() : 0,
+                    playing && round > 0 ? "第 " + round + "/" + totalRounds + " 轮" : null);
+            HubAPI.setArenaSpectator("猜猜乐", a.getName(), a.getSpawn());
+            return;
+        }
         String active = plugin.getArenas().getActiveName();
         for (Arena a : plugin.getArenas().getAll()) {
             if (!a.isReady()) {
@@ -233,62 +342,66 @@ public class GameManager {
         reportArena();
     }
 
-    /** 房间化：把当前生效场地的世界换绑到"这一局实际跑的世界"（委派/房间上下文）。 */
-    private void bindArenaRoom() {
-        var mgr = plugin.getArenas();
-        var active = mgr.getActiveName();
-        if (active == null) {
-            return;
-        }
-        var a = mgr.getArena(active);
-        if (a != null) {
-            a.bindRoomWorld();
-        }
+    /**
+     * 加入游戏（默认实例的老入口；房间实例请走 {@code GTBRooms.join}）。
+     *
+     * @return true = 真的进去了（D23：会话挂上 + 入队成功）
+     */
+    public synchronized boolean join(Player p) {
+        return join(p, null);
     }
 
-    public synchronized void join(Player p) {
-        bindArenaRoom();
-        join(p, null);
-    }
-
-    /** 加入游戏；arenaName 非空时指定本局场地（存在且已设置才可，等待阶段可切换）。
-     *  等待阶段加入：正常等待开局，参与建造轮换；游戏进行中加入：仅作为猜测者，本局不参与建造。 */
-    public synchronized void join(Player p, String arenaName) {
+    /**
+     * 加入游戏；arenaName 非空时指定本局场地（存在且已设置才可，等待阶段可切换）。
+     * 等待阶段加入：正常等待开局，参与建造轮换；游戏进行中加入：仅作为猜测者，本局不参与建造。
+     *
+     * <p><b>D23</b>：会话先挂、再入队 —— 失败直接 return，不留"队列里有他、归属链上没他"的半加入状态。
+     * <p><b>D22</b>：房间实例的场地在创建时就定了，**不切共享的 {@code active-arena}**（那会让别的房间也换图）。
+     */
+    public synchronized boolean join(Player p, String arenaName) {
         UUID id = p.getUniqueId();
         if (players.contains(id)) {
             Chat.send(p, "&c你已经在游戏中了。");
-            return;
+            return false;
         }
         int max = plugin.getConfig().getInt("game.max-players", 16);
         if (players.size() >= max) {
             Chat.send(p, "&c游戏已满员（&e" + max + "&c 人），无法加入。");
-            return;
+            return false;
         }
         boolean midGame = phase != Phase.WAITING;
         // 指定场地：等待阶段可校验并切换；游戏进行中不切换（直接加入当前场地）
         if (arenaName != null && !arenaName.isEmpty()) {
-            var mgr = plugin.getArenas();
-            var a = mgr.getArena(arenaName);
-            if (a == null || !a.isReady()) {
-                Chat.send(p, "&c场地 &e" + arenaName + "&c 不存在或尚未设置（/gtb list 查看）。");
-                return;
-            }
-            if (midGame) {
-                if (!arenaName.equals(mgr.getActiveName())) {
-                    Chat.send(p, "&7游戏已在进行，直接加入当前场地 &e" + mgr.getActiveName() + "&7。");
+            String own = arena().getName();
+            if (roomScoped()) {
+                // 房间实例：场地已经由房间决定，别人指定不了另一张图
+                if (!arenaName.equals(own)) {
+                    Chat.send(p, "&7本房间的场地是 &e" + own + "&7，直接在该场地进行。");
                 }
-            } else if (!arenaName.equals(mgr.getActiveName())) {
-                mgr.setActive(arenaName);
-                broadcast("&e" + p.getName() + "&f 指定了场地，本局将在 &b" + arenaName + "&f 进行。");
+            } else {
+                var mgr = plugin.getArenas();
+                var a = mgr.getArena(arenaName);
+                if (a == null || !a.isReady()) {
+                    Chat.send(p, "&c场地 &e" + arenaName + "&c 不存在或尚未设置（/gtb list 查看）。");
+                    return false;
+                }
+                if (midGame) {
+                    if (!arenaName.equals(mgr.getActiveName())) {
+                        Chat.send(p, "&7游戏已在进行，直接加入当前场地 &e" + mgr.getActiveName() + "&7。");
+                    }
+                } else if (!arenaName.equals(mgr.getActiveName())) {
+                    mgr.setActive(arenaName);
+                    broadcast("&e" + p.getName() + "&f 指定了场地，本局将在 &b" + arenaName + "&f 进行。");
+                }
             }
         }
-        // I1：先挂会话再入队；冲突就拒绝
+        // I1（D23）：先挂会话再入队；冲突就拒绝
         GTBSession sess = ensureSession();
         if (!sess.join(p)) {
             if (sess.players().isEmpty()) {
-                sessions.remove("main");
+                sessions.remove(roomKey);
             }
-            return;
+            return false;
         }
         players.add(id);
         joinTick.put(id, (long) Bukkit.getCurrentTick());
@@ -302,7 +415,7 @@ public class GameManager {
             midGameJoins.add(id);
             HubAPI.setPlaying(id, "猜猜乐"); // 已在对局中：tab 显示 [已加入]
             p.getInventory().clear(); // 清空主城物品，不发等待道具
-            Arena arena = plugin.getArena();
+            Arena arena = arena();
             if (arena.isReady()) {
                 Player b = Bukkit.getPlayer(builder);
                 Location watch = b != null && b.isOnline() ? b.getLocation()
@@ -330,6 +443,7 @@ public class GameManager {
         }
         updateScoreboard();
         reportArena();
+        return true;
     }
 
     public synchronized void leave(Player p, boolean quit) {
@@ -558,13 +672,14 @@ public class GameManager {
         wait.cancel();
     }
 
-    private StartCountdown startCountdown;
-
+    /**
+     * 开局 title 倒计时（公共库 {@link StartCountdown}）。
+     *
+     * <p>**插件级一份**（构造它会注册一个监听器，每房间各造一个就是监听器泄漏），
+     * 各房间用 {@link #roomKey()} 当 key，互不取消（D22）。
+     */
     private StartCountdown startCountdown() {
-        if (startCountdown == null) {
-            startCountdown = new StartCountdown(plugin);
-        }
-        return startCountdown;
+        return plugin.startCountdown();
     }
 
     public synchronized void start(Player requester) {
@@ -578,7 +693,7 @@ public class GameManager {
             Chat.send(requester, "&c人数不足，至少需要 &e" + min + "&c 人（当前 &e" + players.size() + "&c）。");
             return;
         }
-        if (!plugin.getArena().isReady()) {
+        if (!arena().isReady()) {
             Chat.send(requester, "&c场地尚未设置！请管理员先在场地两个角点击木棍，再用 &e/gtb setup save&c 保存。");
             return;
         }
@@ -586,7 +701,7 @@ public class GameManager {
             Chat.send(requester, "&c词库为空，请管理员在 config.yml 中添加词语。");
             return;
         }
-        if (startCountdown().begin("gtb", new ArrayList<>(players), () -> start(requester))) {
+        if (startCountdown().begin(roomKey, new ArrayList<>(players), () -> start(requester))) {
             return;
         }
         int configured = plugin.getConfig().getInt("game.rounds", 0);
@@ -726,7 +841,7 @@ public class GameManager {
         cancelEndTask();
         cancelHintTask();
 
-        Arena arena = plugin.getArena();
+        Arena arena = arena();
         // 先还原场地（分批次），还原完成后才把玩家传送到场地——
         // 若还原未完成就传送，第一轮地板还是空气，建造者会掉下虚空
         arena.restore(this::teleportPlayersToArena);
@@ -757,7 +872,7 @@ public class GameManager {
         if (phase != Phase.PLAYING || builder == null) {
             return;
         }
-        Arena arena = plugin.getArena();
+        Arena arena = arena();
         if (!arena.isReady()) {
             return;
         }
@@ -978,7 +1093,7 @@ public class GameManager {
         int evalSec = Math.max(3, plugin.getConfig().getInt("game.evaluate-seconds", 10));
         evalScores.clear();
         broadcast("&6建造完成！评价时间 &e" + evalSec + "&6 秒——在聊天框输入 &e0~10&6 打分（每人一次）！");
-        var arena = plugin.getArena();
+        var arena = arena();
         for (UUID u : players) {
             Player p = Bukkit.getPlayer(u);
             if (p == null || !p.isOnline()) {
@@ -1010,7 +1125,7 @@ public class GameManager {
     /** 一轮收尾：清空建造者与场地，进入下一轮；轮次已满或建造轮换队列已空则结束游戏。 */
     private void nextRoundOrEnd() {
         builder = null;
-        plugin.getArena().restore(null);
+        arena().restore(null);
         killArenaEntities();
         updateScoreboard();
         if (round >= totalRounds || buildRotation.isEmpty()) {
@@ -1108,7 +1223,7 @@ public class GameManager {
 
     /** 评价结束后清理场地：清除除玩家与地板商店 NPC 外的所有实体（动物/怪物/掉落物/投掷物/炎筒等）。 */
     private void killArenaEntities() {
-        var arena = plugin.getArena();
+        var arena = arena();
         if (!arena.isReady()) {
             return;
         }
@@ -1171,6 +1286,11 @@ public class GameManager {
         } finally {
             ending = false;
         }
+        // D22：一局打完、人都走了 → 这个房间的运行时状态可以回收了
+        //（party 流程里玩家是被 teleportToLobby 带走的，那时 players 已清空，`leave` 查不到归属）
+        if (roomScoped() && plugin.rooms() != null) {
+            plugin.rooms().retireIfIdle(this);
+        }
     }
 
     private synchronized void endGame0() {
@@ -1231,10 +1351,11 @@ public class GameManager {
             if (sorted.size() >= 3 && sorted.get(2).getValue() > 0) thirds.add(sorted.get(2).getKey());
             Top3.broadcast(msg -> broadcastRaw(msg), id -> name(id) + " &7(" + scores.getOrDefault(id, 0) + " 分)",
                     firsts, seconds, thirds);
-            if (data != null) {
-                Top3.award(data, firsts, seconds, thirds);
+            YamlConfiguration d = stats();
+            if (d != null) {
+                Top3.award(d, firsts, seconds, thirds);
                 try {
-                    PlayerStats.save("gtb", data);
+                    PlayerStats.save("gtb", d);
                 } catch (java.io.IOException ex) {
                     // 保存失败不阻塞结算，但要留痕（R3 失败可见）
                     com.hub.diagnostics.Failures.recordAndWarn("GuessTheBuild.保存战绩", ex);
@@ -1291,6 +1412,75 @@ public class GameManager {
         }
         cancelEndTask();
         cancelHintTask();
+    }
+
+    /**
+     * 回收本实例（房间空闲/房间销毁/关服）：取消全部计时任务并清空状态，**不播报、不传送**。
+     *
+     * <p>为什么必须显式收：房间实例是**运行时对象**，构造时挂了两个常驻任务（每秒 tick、每 5 tick 行动栏）
+     * 和一个等待倒计时；不取消就随"开一局建一个实例"无限增长。
+     */
+    public synchronized void shutdown() {
+        cancelEndTask();
+        cancelHintTask();
+        if (evalTask != null) {
+            evalTask.cancel();
+            evalTask = null;
+        }
+        if (tickTask != null) {
+            tickTask.cancel();
+            tickTask = null;
+        }
+        if (actionBarTask != null) {
+            actionBarTask.cancel();
+            actionBarTask = null;
+        }
+        wait.cancel();
+        plugin.startCountdown().cancel(roomKey);
+        evaluating = false;
+        phase = Phase.WAITING;
+        round = 0;
+        totalRounds = 0;
+        builder = null;
+        currentWord = null;
+        wordLen = 0;
+        roundStartMs = 0;
+        roundEndMs = 0;
+        selectingTheme = false;
+        themeCandidates = List.of();
+        awaitingCustomWord = false;
+        pendingCustomWord = null;
+        customRound = false;
+        lastCustomWord = null;
+        hintSent = false;
+        shortenStage = 0;
+        players.clear();
+        names.clear();
+        states.clear();
+        scores.clear();
+        lastGuess.clear();
+        guessedRound.clear();
+        midGameJoins.clear();
+        buildRotation.clear();
+        evalScores.clear();
+        buildScores.clear();
+        joinTick.clear();
+        joinSeed.clear();
+        usedWords.clear();
+        sessions.clear();
+    }
+
+    /**
+     * 重载：把本实例的场地重新读一遍配置（房间实例从定义实例的配置段重建一份拷贝，世界绑定保持不变）。
+     *
+     * <p>游戏进行中不重载（下一局生效），与原来的提示一致。
+     */
+    public void reloadArena() {
+        if (phase != Phase.WAITING) {
+            return;
+        }
+        Arena a = arena();
+        a.loadFromConfig(plugin.getConfig().getConfigurationSection("arenas." + a.getName()));
     }
 
     // ---------- 猜词 ----------
@@ -1606,7 +1796,7 @@ public class GameManager {
 
     /** 每 1 秒强制玩家处于正确模式/位置，防止用命令逃出游戏或乱跑。 */
     private void enforceStates() {
-        Arena arena = plugin.getArena();
+        Arena arena = arena();
         int buildHeight = plugin.getConfig().getInt("game.max-build-height", 40);
         int margin = plugin.getConfig().getInt("game.build-margin", 5);
 
@@ -1686,14 +1876,29 @@ public class GameManager {
 
     // ---------- 战绩（第一名次数） ----------
 
+    /**
+     * 战绩数据（唯一文件 {@code plugins/MiniGameLib/players.yml} 的 gtb 段）。
+     *
+     * <p><b>R2 单一写者</b>：只有默认实例持有这份 {@link YamlConfiguration}；房间实例读它，
+     * 否则两局同时结算时后写的会覆盖先写的（各自一份内存拷贝 + 整段回写）。
+     */
+    private YamlConfiguration stats() {
+        GameManager owner = plugin.getGame();
+        if (owner != null && owner != this) {
+            return owner.stats();
+        }
+        return data;
+    }
+
     /** 玩家获得一次第一（每局最高分 +1）。 */
     public void recordFirst(UUID id) {
-        if (data == null) {
+        YamlConfiguration d = stats();
+        if (d == null) {
             return;
         }
-        data.set("firsts." + id, getFirsts(id) + 1);
+        d.set("firsts." + id, getFirsts(id) + 1);
         try {
-            PlayerStats.save("gtb", data);
+            PlayerStats.save("gtb", d);
         } catch (java.io.IOException ex) {
             plugin.getLogger().warning("保存战绩失败：" + ex.getMessage());
         }
@@ -1701,15 +1906,17 @@ public class GameManager {
 
     /** 玩家获得第一名的次数。 */
     public int getFirsts(UUID id) {
-        return data == null ? 0 : data.getInt("firsts." + id, 0);
+        YamlConfiguration d = stats();
+        return d == null ? 0 : d.getInt("firsts." + id, 0);
     }
 
     /** OP 清空全部第一名记录。 */
     public void resetFirsts() {
-        if (data != null) {
-            data.set("firsts", null);
+        YamlConfiguration d = stats();
+        if (d != null) {
+            d.set("firsts", null);
             try {
-                PlayerStats.save("gtb", data);
+                PlayerStats.save("gtb", d);
             } catch (java.io.IOException ex) {
                 plugin.getLogger().warning("保存战绩失败：" + ex.getMessage());
             }

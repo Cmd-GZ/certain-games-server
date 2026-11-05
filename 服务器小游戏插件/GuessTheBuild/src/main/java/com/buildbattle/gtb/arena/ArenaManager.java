@@ -148,6 +148,32 @@ public class ArenaManager {
         return arenas.get(name);
     }
 
+    // ---------- D22：房间实例的场地 ----------
+
+    /**
+     * 为**房间实例**造一份场地：名字相同、坐标与快照来自配置，但
+     * ① 世界由调用方 {@code bindWorld(房间世界)} 钉死；② 快照文件**只读共享**、不写盘。
+     *
+     * <p>为什么不让房间直接用 {@link #getActive()}：那份场地是**定义实例**（全服一份、写配置的唯一写者）。
+     * 两个房间共用一个对象的话，世界绑定与地板任务会互相覆盖 —— 正是"串房"的来源。
+     */
+    public Arena newRoomArena(String name) {
+        Arena a = new Arena(plugin, name == null ? "" : name);
+        a.setSnapshotWritable(false);
+        return a;
+    }
+
+    /** 房间该用哪张图：指名有效就用它，否则退回当前生效场地（兜底：第一个场地）。 */
+    public String resolveArenaName(String requested) {
+        if (requested != null && !requested.isBlank() && arenas.containsKey(requested)) {
+            return requested;
+        }
+        if (activeName != null && arenas.containsKey(activeName)) {
+            return activeName;
+        }
+        return firstReadyName();
+    }
+
     public List<Arena> getAll() {
         return new ArrayList<>(arenas.values());
     }

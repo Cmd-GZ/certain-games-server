@@ -35,7 +35,12 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 
-/** 建筑猜猜乐的对局会话（D22：会话层按场地键索引）。 */
+/**
+ * 建筑猜猜乐的对局会话（D22：会话层按**房间键**索引）。
+ *
+ * <p>处理器一律用**自己那个 manager** 判状态（{@code manager}），绝不再去 {@code plugin.getGame()} 拿
+ * "全局那一份" —— 两个房间同时跑时那会读到别人的题目/建造者/玩家表。
+ */
 final class GTBSession extends GameSession {
 
     private final GameManager manager;
@@ -65,7 +70,7 @@ final class GTBSession extends GameSession {
     @Override
     protected void onGameEvent(org.bukkit.event.Event event) {
         if (event instanceof AsyncChatEvent e) {
-        var game = manager.plugin().getGame();
+        var game = manager;
         Player p = e.getPlayer();
         UUID id = p.getUniqueId();
         if (!game.isInGame(id)) {
@@ -93,7 +98,7 @@ final class GTBSession extends GameSession {
         if (e.isCancelled()) {
             return;
         }
-        var game = manager.plugin().getGame();
+        var game = manager;
         Player p = e.getPlayer();
         UUID id = p.getUniqueId();
         if (!game.isInGame(id)) {
@@ -118,7 +123,7 @@ final class GTBSession extends GameSession {
         if ((e.getAction() == org.bukkit.event.block.Action.RIGHT_CLICK_AIR
                 || e.getAction() == org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK)
                 && e.getItem() != null) {
-            if (manager.plugin().getGame().handleWaitingItem(e.getPlayer(), e.getItem())) {
+            if (manager.handleWaitingItem(e.getPlayer(), e.getItem())) {
                 e.setCancelled(true);
                 return;
             }
@@ -134,7 +139,7 @@ final class GTBSession extends GameSession {
                 && e.getClickedBlock().getState() instanceof Sign
                 && sameBlock(e.getClickedBlock().getLocation(), manager.plugin().getJoinSignLoc())) {
             e.setCancelled(true); // 阻止打开告示牌编辑界面
-            manager.plugin().getGame().join(e.getPlayer());
+            manager.join(e.getPlayer());
             return;
         }
         // 地板商店告示牌：右键打开地板商店（不会被杀死）
@@ -142,12 +147,12 @@ final class GTBSession extends GameSession {
                 && e.getClickedBlock().getState() instanceof Sign
                 && sameBlock(e.getClickedBlock().getLocation(), manager.plugin().getFloorSignLoc())) {
             e.setCancelled(true);
-            manager.plugin().getArena().openFloorMenu(e.getPlayer());
+            manager.arena().openFloorMenu(e.getPlayer());
             return;
         }
         // 等待界面道具：床=退出；开始工具三级确认（纸→绿宝石→钻石→开始）
         if (e.getAction() == Action.RIGHT_CLICK_AIR || e.getAction() == Action.RIGHT_CLICK_BLOCK) {
-            if (manager.plugin().getGame().handleWaitingItem(e.getPlayer(), e.getItem())) {
+            if (manager.handleWaitingItem(e.getPlayer(), e.getItem())) {
                 e.setCancelled(true); // 阻止放置/交互方块
             }
         }
@@ -158,14 +163,14 @@ final class GTBSession extends GameSession {
                 && e.getSign() != null
                 && sameBlock(e.getSign().getLocation(), manager.plugin().getJoinSignLoc())) {
             e.setCancelled(true);
-            manager.plugin().getGame().join(e.getPlayer());
+            manager.join(e.getPlayer());
             return;
         }
         if (manager.plugin().getFloorSignLoc() != null
                 && e.getSign() != null
                 && sameBlock(e.getSign().getLocation(), manager.plugin().getFloorSignLoc())) {
             e.setCancelled(true);
-            manager.plugin().getArena().openFloorMenu(e.getPlayer());
+            manager.arena().openFloorMenu(e.getPlayer());
         }
                 return;
         }
@@ -175,7 +180,7 @@ final class GTBSession extends GameSession {
             return;
         }
         Block block = e.getBlock();
-        var game = manager.plugin().getGame();
+        var game = manager;
         UUID id = e.getPlayer().getUniqueId();
         if (!game.isInGame(id)) {
             if (inArena(block)) {
@@ -205,10 +210,10 @@ final class GTBSession extends GameSession {
         if (!(e.getHitEntity() instanceof Player victim)) {
             return;
         }
-        if (!manager.plugin().getGame().isEvaluating()) {
+        if (!manager.isEvaluating()) {
             return;
         }
-        if (!manager.plugin().getGame().isBuilder(victim.getUniqueId())) {
+        if (!manager.isBuilder(victim.getUniqueId())) {
             return;
         }
         victim.playHurtAnimation(0f); // 受击动画（红屏），零伤害的投掷物不会自动触发
@@ -227,22 +232,22 @@ final class GTBSession extends GameSession {
         if (!(e.getDamager() instanceof org.bukkit.entity.Projectile)) {
             return;
         }
-        if (!manager.plugin().getGame().isEvaluating()) {
+        if (!manager.isEvaluating()) {
             return;
         }
-        if (manager.plugin().getGame().isBuilder(victim.getUniqueId())) {
+        if (manager.isBuilder(victim.getUniqueId())) {
             e.setCancelled(false);
         }
                 return;
         }
         if (event instanceof PlayerEggThrowEvent e) {
-        if (manager.plugin().getGame().isEvaluating()) {
+        if (manager.isEvaluating()) {
             e.getPlayer().getInventory().setItemInMainHand(new org.bukkit.inventory.ItemStack(org.bukkit.Material.EGG, 16));
         }
                 return;
         }
         if (event instanceof ProjectileLaunchEvent e) {
-        if (e.getEntity().getShooter() instanceof Player p && manager.plugin().getGame().isEvaluating()) {
+        if (e.getEntity().getShooter() instanceof Player p && manager.isEvaluating()) {
             if (e.getEntity() instanceof Snowball) {
                 p.getInventory().setItemInMainHand(new org.bukkit.inventory.ItemStack(org.bukkit.Material.SNOWBALL, 16));
             }
@@ -250,7 +255,7 @@ final class GTBSession extends GameSession {
                 return;
         }
         if (event instanceof PlayerInteractEvent e) {
-        if (!manager.plugin().getGame().isEvaluating()) {
+        if (!manager.isEvaluating()) {
             return;
         }
         if (e.getAction() != Action.RIGHT_CLICK_AIR && e.getAction() != Action.RIGHT_CLICK_BLOCK) {
@@ -266,7 +271,7 @@ final class GTBSession extends GameSession {
         if (!(e.getEntity() instanceof Player p)) {
             return;
         }
-        if (!manager.plugin().getGame().isInGame(p.getUniqueId())) {
+        if (!manager.isInGame(p.getUniqueId())) {
             return;
         }
         switch (e.getCause()) {
@@ -277,7 +282,7 @@ final class GTBSession extends GameSession {
             case ENTITY_EXPLOSION, BLOCK_EXPLOSION -> {
                 // 评价阶段观众会往建造者身上扔 TNT：挡掉爆炸伤害，避免被炸死
                 // （击退和鸡蛋/雪球的受击动画不走伤害事件，不受影响）
-                if (manager.plugin().getGame().isEvaluating()) {
+                if (manager.isEvaluating()) {
                     e.setCancelled(true);
                 }
             }
@@ -288,7 +293,7 @@ final class GTBSession extends GameSession {
         }
         if (event instanceof PlayerDeathEvent e) {
         Player p = e.getPlayer();
-        if (!manager.plugin().getGame().isInGame(p.getUniqueId())) {
+        if (!manager.isInGame(p.getUniqueId())) {
             return;
         }
         e.setCancelled(true);
@@ -297,8 +302,8 @@ final class GTBSession extends GameSession {
         p.setFireTicks(0);
         p.getActivePotionEffects().forEach(effect -> p.removePotionEffect(effect.getType()));
         // 建造者回场地中央，其他人留在原地（掉虚空由 enforceStates 拉回）
-        if (manager.plugin().getGame().isBuilder(p.getUniqueId())) {
-            var arena = manager.plugin().getArena();
+        if (manager.isBuilder(p.getUniqueId())) {
+            var arena = manager.arena();
             if (arena.isReady()) {
                 p.teleport(arena.getBuildStart().add(0, 2, 0));
             }
@@ -306,7 +311,7 @@ final class GTBSession extends GameSession {
         Chat.send(p, "&a你复活了！（小游戏中不会死亡）");
         // 双保险：无论死亡过程中 tab 状态是否被意外清掉，复活后立即重设为"在游戏中"，
         // 下一轮 tab 刷新（≤1s）就会恢复显示 [已加入·猜猜乐] / [等待中·猜猜乐]
-        if (manager.plugin().getGame().getPhase() == com.buildbattle.gtb.game.GameManager.Phase.PLAYING) {
+        if (manager.getPhase() == com.buildbattle.gtb.game.GameManager.Phase.PLAYING) {
             com.hub.api.HubAPI.setPlaying(p.getUniqueId(), "猜猜乐");
         } else {
             com.hub.api.HubAPI.setGame(p.getUniqueId(), "猜猜乐");
@@ -315,7 +320,7 @@ final class GTBSession extends GameSession {
         }
         if (event instanceof PlayerRespawnEvent e) {
         UUID id = e.getPlayer().getUniqueId();
-        if (!manager.plugin().getGame().isInGame(id)) {
+        if (!manager.isInGame(id)) {
             return;
         }
         Bukkit.getScheduler().runTaskLater(manager.plugin(), () -> {
@@ -323,7 +328,7 @@ final class GTBSession extends GameSession {
             if (pp == null || !pp.isOnline()) {
                 return;
             }
-            var game = manager.plugin().getGame();
+            var game = manager;
             if (!game.isInGame(id)) {
                 return;
             }
@@ -333,7 +338,7 @@ final class GTBSession extends GameSession {
             } else {
                 com.hub.api.HubAPI.setGame(id, "猜猜乐");
             }
-            var arena = manager.plugin().getArena();
+            var arena = manager.arena();
             pp.setInvulnerable(true);
             if (game.isBuilder(id)) {
                 pp.setGameMode(GameMode.CREATIVE);
@@ -358,13 +363,13 @@ final class GTBSession extends GameSession {
             return;
         }
         e.setCancelled(true); // 阻止打开村民交易界面
-        var game = manager.plugin().getGame();
+        var game = manager;
         UUID id = e.getPlayer().getUniqueId();
         if (!game.isInGame(id) || !game.isBuilder(id)) {
             Chat.send(e.getPlayer(), "&c只有当前建造者能更换地板！");
             return;
         }
-        manager.plugin().getArena().openFloorMenu(e.getPlayer());
+        manager.arena().openFloorMenu(e.getPlayer());
                 return;
         }
         if (event instanceof InventoryClickEvent e) {
@@ -380,7 +385,7 @@ final class GTBSession extends GameSession {
                 || e.getClickedInventory() != e.getView().getTopInventory()) {
             return;
         }
-        var game = manager.plugin().getGame();
+        var game = manager;
         UUID id = p.getUniqueId();
         if (!game.isInGame(id) || !game.isBuilder(id)) {
             Chat.send(p, "&c只有当前建造者能更换地板！");
@@ -388,17 +393,17 @@ final class GTBSession extends GameSession {
             return;
         }
         p.closeInventory();
-        manager.plugin().getArena().applyFloorSelection(p, String.valueOf(e.getSlot() + 1));
+        manager.arena().applyFloorSelection(p, String.valueOf(e.getSlot() + 1));
                 return;
         }
         if (event instanceof PlayerQuitEvent e) {
         UUID id = e.getPlayer().getUniqueId();
-        manager.plugin().getGame().leave(e.getPlayer(), true);
+        manager.leave(e.getPlayer(), true);
         manager.plugin().getWandSessions().remove(id);
                 return;
         }
         if (event instanceof PlayerDropItemEvent e) {
-        if (manager.plugin().getGame().isInGame(e.getPlayer().getUniqueId())) {
+        if (manager.isInGame(e.getPlayer().getUniqueId())) {
             e.setCancelled(true);
         }
         // 建场工具不允许丢弃（公共库按 PDC 标记识别）
@@ -408,7 +413,7 @@ final class GTBSession extends GameSession {
                 return;
         }
         if (event instanceof FoodLevelChangeEvent e) {
-        if (e.getEntity() instanceof Player p && manager.plugin().getGame().isInGame(p.getUniqueId())) {
+        if (e.getEntity() instanceof Player p && manager.isInGame(p.getUniqueId())) {
             e.setCancelled(true);
         }
                 return;
@@ -418,7 +423,7 @@ final class GTBSession extends GameSession {
     // ---- 原 GameListener 的私有 helper ----
 
     private boolean inArenaWorld(org.bukkit.Location loc) {
-        var arena = manager.plugin().getArena();
+        var arena = manager.arena();
         if (arena == null || !arena.isReady() || arena.getMin() == null || loc == null) {
             return false;
         }
@@ -426,15 +431,15 @@ final class GTBSession extends GameSession {
     }
 
     private boolean allowEvalExplosion(org.bukkit.Location loc) {
-        if (!manager.plugin().getGame().isEvaluating()) {
+        if (!manager.isEvaluating()) {
             return false;
         }
-        var arena = manager.plugin().getArena();
+        var arena = manager.arena();
         return arena.isReady() && arena.containsXZ(loc, 0);
     }
 
     private void filterEvalBlocks(java.util.List<org.bukkit.block.Block> blocks) {
-        var arena = manager.plugin().getArena();
+        var arena = manager.arena();
         if (!arena.isReady()) {
             blocks.clear();
             return;
@@ -465,7 +470,7 @@ final class GTBSession extends GameSession {
     }
 
     private boolean inArena(Block block) {
-        var arena = manager.plugin().getArena();
+        var arena = manager.arena();
         if (!arena.isReady()) {
             return false;
         }
@@ -477,7 +482,7 @@ final class GTBSession extends GameSession {
     }
 
     private boolean isFloorBlock(Block block) {
-        var arena = manager.plugin().getArena();
+        var arena = manager.arena();
         if (!arena.isReady()) {
             return false;
         }
