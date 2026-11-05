@@ -54,17 +54,54 @@ public final class LiveSidebar {
     private final Plugin plugin;
     private final Map<String, Board> boards = new HashMap<>();
 
+    /**
+     * 每个插件**只注册一次**退出监听，所有 `LiveSidebar` 实例共享它。
+     *
+     * <p>为什么改（2026-11-05）：多房间化之后很多游戏"每房间一份 manager"，而 manager 构造时会
+     * `new LiveSidebar(plugin)` —— 以前**每个实例都注册一个 PlayerQuitEvent 监听器**，
+     * 房间一多监听器就线性增长、且回收时没人注销（典型泄漏）。而且每个退出事件要遍历
+     * 自己的 boards，等于 O(实例数)。现在监听器全局一个，遍历该插件名下所有实例。
+     */
+    private static final java.util.Map<Plugin, java.util.Set<LiveSidebar>> ALL = new java.util.HashMap<>();
+    private static final java.util.Set<Plugin> HOOKED = new java.util.HashSet<>();
+
     public LiveSidebar(Plugin plugin) {
         this.plugin = plugin;
-        Bukkit.getPluginManager().registerEvents(new Listener() {
-            @EventHandler
-            public void onQuit(PlayerQuitEvent event) {
-                UUID id = event.getPlayer().getUniqueId();
-                for (Board board : boards.values()) {
-                    board.players.remove(id);
-                }
+        synchronized (ALL) {
+            ALL.computeIfAbsent(plugin, k -> new java.util.LinkedHashSet<>()).add(this);
+            if (HOOKED.add(plugin)) {
+                Bukkit.getPluginManager().registerEvents(new Listener() {
+                    @EventHandler
+                    public void onQuit(PlayerQuitEvent event) {
+                        UUID id = event.getPlayer().getUniqueId();
+                        java.util.Set<LiveSidebar> mine;
+                        synchronized (ALL) {
+                            mine = ALL.get(plugin);
+                            if (mine == null) {
+                                return;
+                            }
+                            mine = new java.util.LinkedHashSet<>(mine);
+                        }
+                        for (LiveSidebar side : mine) {
+                            for (Board board : side.boards.values()) {
+                                board.players.remove(id);
+                            }
+                        }
+                    }
+                }, plugin);
             }
-        }, plugin);
+        }
+    }
+
+    /** 房间销毁时调用：把自己从共享监听里摘掉（否则实例会一直留着）。 */
+    public void dispose() {
+        synchronized (ALL) {
+            java.util.Set<LiveSidebar> mine = ALL.get(plugin);
+            if (mine != null) {
+                mine.remove(this);
+            }
+        }
+        boards.clear();
     }
 
     /** 刷新（或创建）一块侧边栏，并把 players 全部切到这块板子。 */
