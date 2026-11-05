@@ -287,9 +287,11 @@ public class BuildRunCommand implements CommandExecutor, TabCompleter {
                         return true;
                     }
                 }
+                // **控制台也要能开局**（派对/脚本走 `dispatchCommand(控制台, "br start <场地>")`）。
+                // 以前这里直接拒绝，结果"这一关永远开不起来"，而且日志只说明"需要玩家执行"（2026-11-05）。
                 Player op = sender instanceof Player p ? p : null;
-                if (op == null) {
-                    Chat.send(sender, "&c该命令需要玩家执行。");
+                if (op == null && (name == null || name.isBlank())) {
+                    Chat.send(sender, "&c控制台开局需要指定场地：/br start <场名>");
                     return true;
                 }
                 m.start(op, name);

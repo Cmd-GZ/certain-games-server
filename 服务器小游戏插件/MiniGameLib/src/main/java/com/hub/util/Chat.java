@@ -36,6 +36,10 @@ public final class Chat {
     /** 发消息给玩家/控制台。 */
     public static void send(CommandSender target, String msg) {
         if (target == null) {
+            // **控制台驱动**（派对/脚本/定时任务）时也要留痕：否则失败完全静默（R3 失败可见）。
+            // 真实教训：`<game> start` 从控制台触发时各种"人数不足/场地未就绪"只发给 null 收件人，
+            // 结果排了半天才发现游戏压根没开局（2026-11-05）。
+            Bukkit.getLogger().info("[控制台消息] " + strip(msg));
             return;
         }
         target.sendMessage(color(msg));
@@ -50,7 +54,18 @@ public final class Chat {
     public static void sendTitled(Player player, String msg) {
         if (player != null) {
             player.sendMessage(Titles.decorate(color(msg)));
+        } else {
+            // 同上：没有收件人时打到控制台，避免"静默失败"（R3）
+            Bukkit.getLogger().info("[控制台消息] " + strip(msg));
         }
+    }
+
+    /** 去掉颜色/格式代码，便于写进控制台日志。 */
+    private static String strip(String msg) {
+        if (msg == null) {
+            return "";
+        }
+        return org.bukkit.ChatColor.stripColor(org.bukkit.ChatColor.translateAlternateColorCodes('&', msg));
     }
 
     /** 广播给全服，并给消息里出现的在线玩家名加上头衔（没装头衔插件时与 broadcast 一致）。 */

@@ -781,6 +781,46 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
         }, 60L);
     }
 
+    /**
+     * **控制台开局**（派对/脚本）：`/duel start [场名]`。
+     *
+     * <p>控制台没有"玩家所在的场"，所以按 ① 房间上下文 ② 场地名 ③ 有玩家的那一间 依次找；
+     * 找不到就明确报错（R3：控制台里看得到，别静默）。
+     */
+    public void handleStartConsole(String arenaName) {
+        DuelArena target = null;
+        String ctx = com.hub.room.RoomContext.currentRoomId();
+        if (ctx != null) {
+            target = liveArenas.get(ctx);
+        }
+        if (target == null && arenaName != null) {
+            for (DuelArena live : liveArenas.values()) {
+                if (arenaName.equals(live.getName()) && !live.getQueue().isEmpty()) {
+                    target = live;
+                    break;
+                }
+            }
+        }
+        if (target == null) {
+            for (DuelArena live : liveArenas.values()) {
+                if (!live.getQueue().isEmpty() && live.getState() == DuelArena.State.WAITING) {
+                    target = live;
+                    break;
+                }
+            }
+        }
+        if (target == null) {
+            org.bukkit.Bukkit.getLogger().info("[控制台消息] 没有可开局的决斗场（场地=" + arenaName + "）");
+            return;
+        }
+        if (target.getQueue().size() < 2) {
+            org.bukkit.Bukkit.getLogger().info("[控制台消息] 决斗场 " + target.getName()
+                    + " 人数不足（需要 2 人，现在 " + target.getQueue().size() + " 人）");
+            return;
+        }
+        startFight(target);
+    }
+
     /** 玩家右键开始纸。 */
     public void handleStartPaper(Player p) {
         String arenaName = playerArena.get(p.getUniqueId());

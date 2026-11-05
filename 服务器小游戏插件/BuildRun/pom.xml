@@ -6,7 +6,7 @@
 
     <groupId>com.buildrun</groupId>
     <artifactId>build-run</artifactId>
-    <version>1.7.0</version>
+    <version>1.8.0</version>
     <packaging>jar</packaging>
 
     <name>BuildRun</name>
@@ -39,7 +39,7 @@
         <dependency>
             <groupId>com.hub</groupId>
             <artifactId>minigame-lib</artifactId>
-            <version>1.40.0</version>
+            <version>1.41.0</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
