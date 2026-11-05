@@ -52,7 +52,7 @@ public final class ArrowRainManager {
     private ArrowRainSession session;
 
     private ArrowRainSession ensureSession() {
-        String key = "main";
+        String key = roomKey;   // D22：每房间一个会话（否则两场派对共用同一份会话）
         ArrowRainSession s = sessions.get(key);
         if (s == null || s.state().isFinal()) {
             s = new ArrowRainSession(this, key);
@@ -75,6 +75,13 @@ public final class ArrowRainManager {
     }
 
     private final ArrowRainPlugin plugin;
+    /**
+     * D22：这个实例负责的**房间键**（有房间时 = 房间 id；没有房间时 = {@link #ARENA}）。
+     * 每个房间一份实例 = 一份运行时状态，所以两场派对不会互相踩。
+     */
+    private final String roomKey;
+    /** 侧边栏的键：每房间一份，否则两个房间互相覆盖。 */
+    private final String sidebarKey;
     private final ArrowRainArena arena;
     private final LiveSidebar liveSidebar;
     private final WaitCountdown countdown;
@@ -108,7 +115,13 @@ public final class ArrowRainManager {
     private boolean soloTest;
 
     public ArrowRainManager(ArrowRainPlugin plugin) {
+        this(plugin, ARENA);
+    }
+
+    public ArrowRainManager(ArrowRainPlugin plugin, String roomKey) {
         this.plugin = plugin;
+        this.roomKey = roomKey == null || roomKey.isBlank() ? ARENA : roomKey;
+        this.sidebarKey = "arrowrain:" + this.roomKey;
         this.arena = new ArrowRainArena(plugin);
         this.liveSidebar = new LiveSidebar(plugin);
         this.returnKey = new NamespacedKey(plugin, "return_item");
@@ -331,7 +344,7 @@ public final class ArrowRainManager {
         removeArrows();
         removeCovers();
         restoreWorldPvp();
-        liveSidebar.hideAll();
+        liveSidebar.hide(sidebarKey);
         waiting.clear();
         playing.clear();
         eliminated.clear();
@@ -383,31 +396,32 @@ public final class ArrowRainManager {
         plugin.getLogger().info("[ArrowRain] 场地已按房间重新解析（就绪=" + arena().ready() + "）");
     }
 
-    public void join(Player player) {
+    public boolean join(Player player) {
         refreshArenaForRoom();
         UUID id = player.getUniqueId();
         if (state != State.WAITING) {
             Chat.send(player, "&c对局正在进行中，请等这一局结束后再加入。");
-            return;
+            return false;
         }
         if (waiting.contains(id)) {
             Chat.send(player, "&e你已经在等待队列中。");
-            return;
+            return false;
         }
         if (waiting.size() >= maxPlayers()) {
             Chat.send(player, "&c等待队列已满（" + maxPlayers() + " 人）。");
-            return;
+            return false;
         }
         if (!arena.ready()) {
             Chat.send(player, "&c场地还没配置完整（缺 " + arena.missing() + "），请联系管理员。");
-            return;
+            return false;
         }
+        // I1（D23）：先挂会话再入队；冲突就拒绝（避免半加入）
         ArrowRainSession sess = ensureSession();
         if (!sess.join(player)) {
             if (sess.players().isEmpty()) {
-                sessions.remove("main");
+                sessions.remove(roomKey);
             }
-            return;
+            return false;
         }
         waiting.add(id);
         joinTick.put(id, (long) Bukkit.getCurrentTick());
@@ -422,6 +436,7 @@ public final class ArrowRainManager {
         Chat.send(player, "&7人数达到 &f" + minPlayers() + " &7后自动倒计时开始。");
         countdown.update();
         reportArena();
+        return true;
     }
 
     public void leave(Player player, boolean silent) {
@@ -502,7 +517,7 @@ public final class ArrowRainManager {
             broadcastWaiting("&c至少需要 " + need + " 名玩家才能开始。");
             return;
         }
-        if (startCountdown().begin("main", new ArrayList<>(waiting), () -> startGame(force))) {
+        if (startCountdown().begin(roomKey, new ArrayList<>(waiting), () -> startGame(force))) {
             return;
         }
         countdown.cancel();
@@ -1032,7 +1047,7 @@ public final class ArrowRainManager {
         rainArrows.clear();
         soloTest = false;
         state = State.WAITING;
-        liveSidebar.hide("arrowrain");
+        liveSidebar.hide(sidebarKey);
         countdown.update();
         reportArena();
     }
@@ -1241,14 +1256,14 @@ public final class ArrowRainManager {
         }
         Set<UUID> viewers = allPlayers();
         if (viewers.isEmpty()) {
-            liveSidebar.hide("arrowrain");
+            liveSidebar.hide(sidebarKey);
             return;
         }
         List<LiveSidebar.Line> lines = new ArrayList<>();
         lines.add(new LiveSidebar.Line("§6剩余时间", Math.max(0, secondsLeft)));
         lines.add(new LiveSidebar.Line("§e回合", Math.max(1, round)));
         lines.add(new LiveSidebar.Line("§f存活", playing.size()));
-        liveSidebar.update("arrowrain",
+        liveSidebar.update(sidebarKey,
                 plugin.getConfig().getString("sidebar.title", "&e&l万箭齐发 · 存活"),
                 new ArrayList<>(viewers), lines);
     }
@@ -1256,9 +1271,9 @@ public final class ArrowRainManager {
     private void reportArena() {
         boolean running = state != State.WAITING;
         String extra = running ? "剩余 " + secondsLeft + "s · " + playing.size() + " 人" : null;
-        HubAPI.setArena(GAME, ARENA, running ? GameState.PLAYING : GameState.WAITING,
+        HubAPI.setArena(GAME, arenaLabel(), running ? GameState.PLAYING : GameState.WAITING,
                 waiting.size() + playing.size() + eliminated.size(), extra);
-        HubAPI.setArenaSpectator(GAME, ARENA, arena.spectatorSpot());
+        HubAPI.setArenaSpectator(GAME, arenaLabel(), arena.spectatorSpot());
     }
 
     public List<String> debugLines() {
@@ -1273,5 +1288,21 @@ public final class ArrowRainManager {
 
     public String roundText() {
         return Math.max(1, round) + " / " + Math.max(0, secondsLeft) + "s";
+    }
+
+    /** D22：本实例负责的房间键。 */
+    public String roomKey() {
+        return roomKey;
+    }
+
+    /** 菜单/日志里用的场地名：默认实例仍叫「主场地」，房间实例用房间 id。 */
+    public String arenaLabel() {
+        return roomKey;
+    }
+
+    /** 这个实例是不是已经空着（外层据此回收房间实例）。 */
+    public boolean idle() {
+        return state == State.WAITING
+                && waiting.isEmpty() && playing.isEmpty() && eliminated.isEmpty() && winners.isEmpty();
     }
 }

@@ -21,11 +21,17 @@ public final class ArrowRainCommand implements CommandExecutor, TabCompleter {
             "start", "stop", "reload", "debug");
 
     private final ArrowRainPlugin plugin;
-    private final ArrowRainManager manager;
+    /** D22：按房间分桶的状态；每个入口按发送者/玩家路由到他自己那一份。 */
+    private final ArrowRainRooms rooms;
 
-    public ArrowRainCommand(ArrowRainPlugin plugin, ArrowRainManager manager) {
+    public ArrowRainCommand(ArrowRainPlugin plugin, ArrowRainRooms rooms) {
         this.plugin = plugin;
-        this.manager = manager;
+        this.rooms = rooms;
+    }
+
+    /** 这个发送者应该操作的房间状态：玩家 → 他自己那一份；控制台 → 当前房间上下文/最近有人加入的那一份。 */
+    private ArrowRainManager stateOf(CommandSender sender) {
+        return sender instanceof Player p ? rooms.forPlayer(p) : rooms.current();
     }
 
     @Override
@@ -39,13 +45,13 @@ public final class ArrowRainCommand implements CommandExecutor, TabCompleter {
             case "join" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.join(player);
+                    rooms.join(player);
                 }
             }
             case "leave" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.leave(player, false);
+                    rooms.leave(player, false);
                 }
             }
             case "list" -> list(sender);
@@ -84,16 +90,16 @@ public final class ArrowRainCommand implements CommandExecutor, TabCompleter {
     }
 
     private void list(CommandSender sender) {
-        ArrowRainArena arena = manager.arena();
+        ArrowRainArena arena = stateOf(sender).arena();
         Chat.send(sender, "&6===== " + ArrowRainManager.GAME + " =====");
-        Chat.send(sender, "&7状态: " + switch (manager.state()) {
+        Chat.send(sender, "&7状态: " + switch (stateOf(sender).state()) {
             case WAITING -> "&e等待中";
             case RUNNING -> "&c游戏中";
             case ENDING -> "&c结算中";
-        } + " &7| 存活 &f" + manager.aliveCount()
-                + " &7| 回合/时间 &f" + manager.roundText()
-                + " &7| 掩体 &f" + manager.coverCount()
-                + " &7| PvP 从第 &f" + manager.pvpStartRound() + " &7回合");
+        } + " &7| 存活 &f" + stateOf(sender).aliveCount()
+                + " &7| 回合/时间 &f" + stateOf(sender).roundText()
+                + " &7| 掩体 &f" + stateOf(sender).coverCount()
+                + " &7| PvP 从第 &f" + stateOf(sender).pvpStartRound() + " &7回合");
         Chat.send(sender, "&7场地: &f" + arena.sizeText()
                 + " &7| 等待点 " + (arena.lobby() == null ? "&c未设置" : "&a已设置")
                 + " &7| 出生点 &f" + arena.spawns().size() + " &7个");
@@ -113,13 +119,13 @@ public final class ArrowRainCommand implements CommandExecutor, TabCompleter {
         if (player == null) {
             return;
         }
-        manager.arena().setCorner(index, player.getLocation());
-        manager.arena().save();
+        stateOf(sender).arena().setCorner(index, player.getLocation());
+        stateOf(sender).arena().save();
         Chat.send(player, "&a已设置区域角" + index + "：&f" + player.getWorld().getName() + " "
                 + player.getLocation().getBlockX() + ", " + player.getLocation().getBlockZ()
-                + " &7（地面 Y " + manager.arena().groundY() + "）");
-        if (manager.arena().regionConfigured()) {
-            Chat.send(player, "&7区域大小: &f" + manager.arena().sizeText());
+                + " &7（地面 Y " + stateOf(sender).arena().groundY() + "）");
+        if (stateOf(sender).arena().regionConfigured()) {
+            Chat.send(player, "&7区域大小: &f" + stateOf(sender).arena().sizeText());
         }
     }
 
@@ -131,8 +137,8 @@ public final class ArrowRainCommand implements CommandExecutor, TabCompleter {
         if (player == null) {
             return;
         }
-        manager.arena().setSpawn(player.getLocation());
-        manager.arena().save();
+        stateOf(sender).arena().setSpawn(player.getLocation());
+        stateOf(sender).arena().save();
         Chat.send(player, "&a已把当前位置设为唯一起点（已保存）。要多个起点请用 /arrowrain addspawn。");
     }
 
@@ -144,17 +150,17 @@ public final class ArrowRainCommand implements CommandExecutor, TabCompleter {
         if (player == null) {
             return;
         }
-        manager.arena().addSpawn(player.getLocation());
-        manager.arena().save();
-        Chat.send(player, "&a已添加出生点，共 &f" + manager.arena().spawns().size() + " &a个（已保存）。");
+        stateOf(sender).arena().addSpawn(player.getLocation());
+        stateOf(sender).arena().save();
+        Chat.send(player, "&a已添加出生点，共 &f" + stateOf(sender).arena().spawns().size() + " &a个（已保存）。");
     }
 
     private void clearSpawns(CommandSender sender) {
         if (!admin(sender)) {
             return;
         }
-        manager.arena().clearSpawns();
-        manager.arena().save();
+        stateOf(sender).arena().clearSpawns();
+        stateOf(sender).arena().save();
         Chat.send(sender, "&a已清空全部出生点（已保存）。");
     }
 
@@ -166,8 +172,8 @@ public final class ArrowRainCommand implements CommandExecutor, TabCompleter {
         if (player == null) {
             return;
         }
-        manager.arena().setLobby(player.getLocation());
-        manager.arena().save();
+        stateOf(sender).arena().setLobby(player.getLocation());
+        stateOf(sender).arena().save();
         Chat.send(player, "&a已设置等待点（已保存）。");
     }
 
@@ -189,8 +195,8 @@ public final class ArrowRainCommand implements CommandExecutor, TabCompleter {
             Chat.send(sender, "&c用法: /arrowrain setground <Y>");
             return;
         }
-        manager.arena().setGround(y);
-        manager.arena().save();
+        stateOf(sender).arena().setGround(y);
+        stateOf(sender).arena().save();
         Chat.send(sender, "&a地面高度已设为 &fY " + y + "&a（玩家站立时的脚部高度）。");
     }
 
@@ -199,7 +205,7 @@ public final class ArrowRainCommand implements CommandExecutor, TabCompleter {
             return;
         }
         if (args.length < 2) {
-            Chat.send(sender, "&c用法: /arrowrain setpvpround <回合数>（当前 " + manager.pvpStartRound() + "）");
+            Chat.send(sender, "&c用法: /arrowrain setpvpround <回合数>（当前 " + stateOf(sender).pvpStartRound() + "）");
             return;
         }
         int round;
@@ -218,34 +224,43 @@ public final class ArrowRainCommand implements CommandExecutor, TabCompleter {
         if (!admin(sender)) {
             return;
         }
-        if (!manager.arena().ready()) {
-            Chat.send(sender, "&c还缺 " + manager.arena().missing() + "，无法保存为可开局场地。");
+        if (!stateOf(sender).arena().ready()) {
+            Chat.send(sender, "&c还缺 " + stateOf(sender).arena().missing() + "，无法保存为可开局场地。");
             return;
         }
-        manager.arena().save();
+        stateOf(sender).arena().save();
         Chat.send(sender, "&a场地已保存。");
     }
 
     private void start(CommandSender sender) {
+        // 控制台开局（派对就是这么开的：dispatchCommand(控制台, "arrowrain start")）：
+        // 控制台没有房间上下文，两场派对同时开局时"只开最近加入的那一间"会让另一间永远停在等待。
+        if (!(sender instanceof Player)) {
+            int started = rooms.startAllWaiting();
+            if (started == 0) {
+                Chat.send(sender, "&e没有正在等待开局的房间。");
+            }
+            return;
+        }
         // D21：开始权在主持人手上；但主持人**不享受管理员特权**（人数不够不能开）
         boolean isAdmin = !(sender instanceof org.bukkit.entity.Player sp) || sp.hasPermission("arrowrain.admin");
         if (!isAdmin) {
-            if (!manager.isHost(sender)) {
+            if (!stateOf(sender).isHost(sender)) {
                 Chat.send(sender, "&c只有本局**主持人**或管理员可以开始。");
                 return;
             }
-            if (manager.waitingCount() < manager.minPlayersPublic()) {
-                Chat.send(sender, "&c人数还没达到 &f" + manager.minPlayersPublic()
+            if (stateOf(sender).waitingCount() < stateOf(sender).minPlayersPublic()) {
+                Chat.send(sender, "&c人数还没达到 &f" + stateOf(sender).minPlayersPublic()
                         + " 人&c，主持人也不能开始。");
                 return;
             }
         }
-        if (manager.state() != ArrowRainManager.State.WAITING) {
+        if (stateOf(sender).state() != ArrowRainManager.State.WAITING) {
             Chat.send(sender, "&e对局已经在进行中。");
-        } else if (!manager.arena().ready()) {
-            Chat.send(sender, "&c场地未配置完整（缺 " + manager.arena().missing() + "）。");
+        } else if (!stateOf(sender).arena().ready()) {
+            Chat.send(sender, "&c场地未配置完整（缺 " + stateOf(sender).arena().missing() + "）。");
         } else {
-            manager.startGame(true);
+            stateOf(sender).startGame(true);
         }
     }
 
@@ -253,11 +268,11 @@ public final class ArrowRainCommand implements CommandExecutor, TabCompleter {
         if (!admin(sender)) {
             return;
         }
-        if (manager.state() == ArrowRainManager.State.WAITING) {
+        if (stateOf(sender).state() == ArrowRainManager.State.WAITING) {
             Chat.send(sender, "&7当前没有进行中的对局。");
             return;
         }
-        manager.abortGame();
+        stateOf(sender).abortGame();
         Chat.send(sender, "&a已结束本局。");
     }
 
@@ -265,12 +280,12 @@ public final class ArrowRainCommand implements CommandExecutor, TabCompleter {
         if (!admin(sender)) {
             return;
         }
-        if (manager.state() != ArrowRainManager.State.WAITING) {
+        if (stateOf(sender).state() != ArrowRainManager.State.WAITING) {
             Chat.send(sender, "&c对局进行中，不能重载配置。");
             return;
         }
         plugin.reloadConfig();
-        manager.reload();
+        stateOf(sender).reload();
         Chat.send(sender, "&a配置已重新载入。");
     }
 
@@ -278,7 +293,7 @@ public final class ArrowRainCommand implements CommandExecutor, TabCompleter {
         if (!admin(sender)) {
             return;
         }
-        for (String line : manager.debugLines()) {
+        for (String line : stateOf(sender).debugLines()) {
             Chat.send(sender, "&7" + line);
         }
     }
