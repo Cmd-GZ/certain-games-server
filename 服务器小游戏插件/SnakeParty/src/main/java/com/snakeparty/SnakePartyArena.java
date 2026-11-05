@@ -38,17 +38,43 @@ public final class SnakePartyArena {
     }
 
     /**
-     * 读坐标时的世界解析：钉死的房间世界优先，没钉才退回按上下文的换绑。
+     * 读坐标时的世界解析：**钉死了就只认自己的房间世界**，没钉才退回按上下文的换绑。
      * 存储值（配置里的坐标）永远不动 —— 见 {@code RoomBinding} 的说明。
+     *
+     * <p>钉死之后**不能**再回落 {@link com.hub.room.RoomBinding}：它先看"派对委派"、再看
+     * "该游戏唯一的房间"，两者都是**按游戏一个槽**；两个房间同时跑时它会给出**另一个房间**
+     * 的世界，于是同一份代码里 {@code arena.world()}（自己的世界）和 {@code arena.center()}
+     * （别人的世界）对不上，{@code World#getNearbyEntities(loc, …)} 直接抛
+     * {@code IllegalArgumentException: Location cannot be in a different world}。
      */
     private Location apply(Location loc) {
         if (loc == null) {
             return null;
         }
-        if (roomWorld != null && !roomWorld.equals(loc.getWorld())) {
+        if (roomWorld != null) {
+            if (roomWorld.equals(loc.getWorld())) {
+                return loc;
+            }
             return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
         }
         return com.hub.room.RoomBinding.apply("snakeparty", loc);
+    }
+
+    /**
+     * **把解析出来的坐标重新钉回自己的房间世界**（{@code load()} 用）。
+     *
+     * <p>{@code tpl:} 的解析看"当前房间上下文"，而 {@code /hub join} 会让 HubCore 给所有子游戏
+     * 发一次 reload；如果那次上下文指向**别的**房间，解析结果就会落到别人的世界里。钉回去之后，
+     * 房间实例无论如何重载都只认自己的世界。
+     */
+    private Location pin(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld == null || roomWorld.equals(loc.getWorld())) {
+            return loc;
+        }
+        return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
     }
 
     /** 供区域声明用（{@code docs/框架不变量.md} I2）。 */
@@ -67,15 +93,16 @@ public final class SnakePartyArena {
 
     public void load() {
         FileConfiguration cfg = plugin.getConfig();
-        center = parse(cfg.getString("arena.center"));
+        // 解析完一律 pin 回**自己钉死的房间世界**（没钉世界的默认实例行为不变）
+        center = pin(parse(cfg.getString("arena.center")));
         radius = Math.max(4, Math.min(64, cfg.getInt("arena.radius", 16)));
         Material floor = Material.matchMaterial(cfg.getString("arena.floor-material", "STONE"), false);
         floorMaterial = floor != null && floor.isBlock() ? floor : Material.STONE;
         floorLayers = Math.max(1, Math.min(5, cfg.getInt("arena.floor-layers", 2)));
-        lobby = parse(cfg.getString("arena.lobby"));
+        lobby = pin(parse(cfg.getString("arena.lobby")));
         spawns.clear();
         for (String raw : cfg.getStringList("arena.spawns")) {
-            Location loc = parse(raw);
+            Location loc = pin(parse(raw));
             if (loc != null) {
                 spawns.add(loc);
             }
@@ -250,8 +277,17 @@ public final class SnakePartyArena {
         return apply(center == null ? null : center.clone().add(0, 8, 0));
     }
 
+    /**
+     * 场地所在世界：**必须和 {@link #center()} / {@link #getCenter()} 走同一套解析**，
+     * 否则会出现"世界是 A 房、坐标是 B 房"的组合（{@code World#getNearbyEntities} 直接抛
+     * {@code Location cannot be in a different world}）。
+     */
     public World world() {
-        return center == null ? null : center.getWorld();
+        if (roomWorld != null) {
+            return roomWorld;
+        }
+        Location resolved = com.hub.room.RoomBinding.apply("snakeparty", center);
+        return resolved == null ? null : resolved.getWorld();
     }
 
     public int getRadius() {
