@@ -787,13 +787,21 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
             return false;
         }
         playerArena.put(id, arenaName);
+        // **房间实例才是"本局状态"的家**：以前只把玩家加到模板 `a` 上，
+        // 于是 `liveArena(key)` 那份房间实例永远 0 人 → 控制台/派对开局时报"人数不足"，一局都开不起来。
+        // 模板那份也照旧记（老代码仍在读它），但**房间实例必须同步**。
         a.getPlayers().add(id);
         a.recordJoin(id);   // D21：记加入 tick + 随机名次
+        if (stateArena != a) {
+            stateArena.getPlayers().add(id);
+            stateArena.recordJoin(id);
+        }
         p.getInventory().clear();
         p.setGameMode(GameMode.SURVIVAL);
         p.setHealth(20);
         p.setFoodLevel(20);
-        Location lobby = a.getLobbyPoint() != null ? a.getLobbyPoint() : a.getCenter();
+        Location lobby = stateArena.getLobbyPoint() != null
+                ? stateArena.getLobbyPoint() : stateArena.getCenter();
         p.teleport(lobby);
         HubAPI.setGame(id, GAME_NAME);
         giveLeaveBed(p);
