@@ -117,6 +117,40 @@ public class MurderMysteryManager {
         return copy;
     }
 
+    /** 控制台开局用：房间上下文优先，其次按场地名；都没有就退回现有那一间。 */
+    private MurderMysteryArena liveArenaByName(String arenaName) {
+        String ctx = com.hub.room.RoomContext.currentRoomId();
+        if (ctx != null) {
+            MurderMysteryArena live = liveArenas.get(ctx);
+            if (live != null) {
+                return live;
+            }
+        }
+        // 控制台没有房间上下文时，**优先挑"真的有玩家在等"的那一间**：
+        // 同一个场地名可能有多份房间实例，光按名字挑会挑到空的那份（实测：报"人数不足 当前 0"）。
+        MurderMysteryArena best = null;
+        for (MurderMysteryArena live : liveArenas.values()) {
+            boolean nameOk = arenaName == null || arenaName.equals(live.getName());
+            if (!nameOk || live.getPlayers().isEmpty()) {
+                continue;
+            }
+            if (best == null || live.getPlayers().size() > best.getPlayers().size()) {
+                best = live;
+            }
+        }
+        if (best != null) {
+            return best;
+        }
+        if (arenaName != null) {
+            for (MurderMysteryArena live : liveArenas.values()) {
+                if (arenaName.equals(live.getName())) {
+                    return live;
+                }
+            }
+        }
+        return liveArenas.isEmpty() ? null : liveArenas.values().iterator().next();
+    }
+
     /** 控制台开局用：房间上下文优先，否则退回最近用到的那一间（无玩家时没有 keyOf 可用）。 */
     private MurderMysteryArena liveArenaInRoom() {
         String ctx = com.hub.room.RoomContext.currentRoomId();
@@ -1143,9 +1177,11 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     public boolean start(Player op, String arenaName) {
         MurderMysteryArena a = op != null ? liveArena(keyOf(op.getUniqueId()))
-                : liveArenaInRoom();   // 控制台开局时 op==null（以前这里直接 NPE）
+                : liveArenaByName(arenaName);   // 控制台开局：按场地名找这一间的活实例
         if (a == null) {
-            msg(op, "&c场不存在。");
+            msg(op, "&c场不存在（场地=" + arenaName + "，已知=" + liveArenas.values().stream()
+                    .map(MurderMysteryArena::getName).toList()
+                    + "，房间上下文=" + com.hub.room.RoomContext.currentRoomId() + "）");
             return false;
         }
         int min = minPlayers();
@@ -4202,6 +4238,11 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     private void msg(Player p, String msg) {
         Chat.sendTitled(p, msg);
+        if (p == null) {
+            // **控制台驱动**（派对/脚本）时也要留痕：否则失败完全静默（R3）
+            plugin.getLogger().info("[控制台] " + org.bukkit.ChatColor.stripColor(
+                    org.bukkit.ChatColor.translateAlternateColorCodes('&', msg)));
+        }
     }
 
     private String nameOf(UUID id) {

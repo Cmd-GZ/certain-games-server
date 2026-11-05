@@ -103,7 +103,17 @@ public class MurderMysteryCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
             case "start" -> {
-                if (!(sender instanceof Player p)) return true;
+                if (!(sender instanceof Player p)) {
+                    // **控制台开局**（2026-11-05）：以前这里直接 return → 派对/脚本都无法从控制台开局。
+                    // 控制台必须带场地名：/mm start <场地>
+                    String arenaName = args.length >= 2 ? args[1] : null;
+                    if (arenaName == null) {
+                        sender.sendMessage("[MurderMystery] 控制台用法：/mm start <场地>");
+                        return true;
+                    }
+                    m.start(null, arenaName);
+                    return true;
+                }
                 // D21：开始权在主持人手上；主持人**不享受管理员特权**（人数不够不能开）
                 if (!admin) {
                     String tryArena = editing.getOrDefault(p.getUniqueId(), null);

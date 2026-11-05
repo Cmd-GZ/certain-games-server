@@ -9,7 +9,10 @@
 #   tools/verify-round.sh <gameKey> <地图名> [玩家数=2] [最长等待秒=240]
 # 例：
 #   tools/verify-round.sh anvilbattle 铁砧掘战 2 180
-#   tools/verify-round.sh murdermystery 圣诞工厂 3 240
+#   tools/verify-round.sh murdermystery 圣诞工厂 4 240 "mm start 圣诞工厂"
+#
+# 第 5 个参数 = 控制台开局命令。D21 规定"队列里有 OP 就暂停倒计时"，而假玩家都是 OP，
+# 所以**不在派对 games 里的游戏**必须由脚本手动开局（例如 `mm start <场地>`）。
 #
 # 环境：默认用隔离副本 .server/run_alt（端口 25561），不会动交付副本。
 set -uo pipefail
@@ -21,6 +24,7 @@ GAME="${1:?用法: tools/verify-round.sh <gameKey> <地图名> [玩家数] [最�
 MAP="${2:?缺少地图名}"
 PLAYERS="${3:-2}"
 MAXWAIT="${4:-240}"
+STARTCMD="${5:-}"
 
 # 房间标签必须小写（大写会生成非法房间 id）
 LABEL="vr${GAME//[^a-z0-9]/}$(date +%H%M%S)"
@@ -77,6 +81,13 @@ fi
 # ② 控制台命令：建房 + 反复打 doctor（doctor 会打印 [对局] 段，用来观测状态）
 {
     echo "hub create $GAME $MAP $LABEL"
+    # 等玩家进房：bot 在 t+18s 才发 join，控制台命令是逐条喂的，所以这里先空转 30 次 doctor
+    for _ in $(seq 1 30); do echo "hub doctor"; done
+    if [ -n "$STARTCMD" ]; then
+        echo "$STARTCMD"                                       # 手动开局（OP 在队列时 D21 会暂停倒计时）
+        for _ in $(seq 1 5); do echo "hub doctor"; done
+        echo "$STARTCMD"                                       # 再补一次（第一次可能场地还没就绪）
+    fi
     for _ in $(seq 1 $((MAXWAIT / 2))); do echo "hub doctor"; done
 } > "$CMDS"
 
