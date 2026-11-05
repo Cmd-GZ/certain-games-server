@@ -122,6 +122,13 @@ public final class JumpFillRooms {
             if (live != null) {
                 return live;
             }
+            // 有房间上下文但本游戏还没为它建状态（框架按房间 dispatch `<game> reload` 时就是这个情况）：
+            // **现场建**，别退化到默认实例 —— 默认实例没有钉死房间世界，`tpl:` 会解析到别人房间的世界，
+            // 于是它在房间世界里又声明一块同名地盘（实测 HillKing 出现 `hillking @room_x` 与
+            // `hillking/room_x @room_x` 自重叠的 doctor 告警）。
+            if (RoomManager.room(ctx) != null) {
+                return liveArena(ctx);
+            }
         }
         return lastJoined();
     }
