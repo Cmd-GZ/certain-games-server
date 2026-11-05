@@ -73,12 +73,12 @@ public final class AnimalSlaughterArena {
 
     public void load() {
         FileConfiguration cfg = plugin.getConfig();
-        center = parse(cfg.getString("arena.center"));
+        center = pin(parse(cfg.getString("arena.center")));
         radius = Math.max(4, Math.min(64, cfg.getInt("arena.radius", 16)));
-        lobby = parse(cfg.getString("arena.lobby"));
+        lobby = pin(parse(cfg.getString("arena.lobby")));
         spawns.clear();
         for (String raw : cfg.getStringList("arena.spawns")) {
-            Location loc = parse(raw);
+            Location loc = pin(parse(raw));
             if (loc != null) {
                 spawns.add(loc);
             }
@@ -110,6 +110,24 @@ public final class AnimalSlaughterArena {
             cfg.set("arena.spawns", encoded);
         }
         plugin.saveConfig();
+    }
+
+    /**
+     * **把解析出来的坐标重新钉回自己的房间世界**。
+     *
+     * <p>为什么需要：`tpl:` 的解析看的是"当前房间上下文"。`/hub join` 会让 HubCore 给所有
+     * 子游戏发一次 `reload`，如果那次上下文指向**别的**房间（实测两派对同时加入时就是这样），
+     * 于是 `arena.load()` 会把坐标解析进另一个房间的世界。钉回去之后，
+     * 房间实例无论如何重载都只认自己的世界。
+     */
+    private Location pin(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld == null || roomWorld.equals(loc.getWorld())) {
+            return loc;
+        }
+        return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
     }
 
     public boolean hasCircle() {

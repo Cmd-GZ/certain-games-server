@@ -24,9 +24,9 @@ public final class AnimalSlaughterCommand implements CommandExecutor, TabComplet
         this.rooms = rooms;
     }
 
-    /** 这个发送者应该操作的房间状态：玩家 → 他自己那一份；控制台 → 最近有人加入的那一份。 */
+    /** 这个发送者应该操作的房间状态：玩家 → 他自己那一份；控制台 → 当前房间上下文/最近有人加入的那一份。 */
     private AnimalSlaughterManager stateOf(CommandSender sender) {
-        return sender instanceof Player p ? rooms.forPlayer(p) : rooms.lastJoined();
+        return sender instanceof Player p ? rooms.forPlayer(p) : rooms.current();
     }
 
     @Override
@@ -53,6 +53,16 @@ public final class AnimalSlaughterCommand implements CommandExecutor, TabComplet
             case "list" -> list(sender);
             case "stats" -> stats(sender, args);
             case "start" -> {
+                // 控制台开局（派对就是这么开的：dispatchCommand(控制台, "animal start")）：
+                // 控制台没有房间上下文，两场派对同时开局时"只开最近加入的那一间"会让另一间永远停在等待。
+                // 所以这里把**每个有待开队列的房间**都开起来。
+                if (!(sender instanceof Player)) {
+                    int started = rooms.startAllWaiting();
+                    if (started == 0) {
+                        Chat.send(sender, "&e没有正在等待开局的房间。");
+                    }
+                    return true;
+                }
                 // D21：开始权在主持人手上；主持人**不享受管理员特权**（人数不够不能开）
                 boolean isAdminS = !(sender instanceof Player sp) || manager.isAdmin(sp);
                 if (!isAdminS) {

@@ -5,6 +5,7 @@ import com.hub.room.RoomManager;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -108,6 +109,45 @@ public final class AnimalSlaughterRooms {
     /** 控制台/无玩家上下文：最近一个有人加入的房间；都没有时是默认实例。 */
     public AnimalSlaughterManager lastJoined() {
         return lastJoinedKey == null ? defaultManager : liveArena(lastJoinedKey);
+    }
+
+    /**
+     * 控制台入口的优先顺序：**当前房间上下文**（{@code /hub join} 时框架压了栈，
+     * 例如 HubCore 顺手发的那几条 {@code /animal reload}）→ 最近有人加入的房间 → 默认实例。
+     */
+    public AnimalSlaughterManager current() {
+        String ctx = RoomContext.currentRoomId();
+        if (ctx != null) {
+            AnimalSlaughterManager live = liveArenas.get(ctx);
+            if (live != null) {
+                return live;
+            }
+        }
+        return lastJoined();
+    }
+
+    /**
+     * 控制台 {@code /animal start}：把**每个有待开队列的房间实例**都开起来。
+     *
+     * <p>为什么要这样：派对是用 {@code dispatchCommand(控制台, "animal start")} 开局的，
+     * 控制台**没有房间上下文**；两场派对同时开局时若只开"最近加入的那一间"，
+     * 两场会都去开同一间、另一间永远停在等待。
+     *
+     * @return 真的开了几间
+     */
+    public int startAllWaiting() {
+        int started = 0;
+        for (AnimalSlaughterManager manager : new ArrayList<>(liveArenas.values())) {
+            if (manager.state() == AnimalSlaughterManager.State.WAITING && manager.waitingCount() > 0) {
+                manager.startGame(true);
+                started++;
+            }
+        }
+        if (defaultManager.state() == AnimalSlaughterManager.State.WAITING && defaultManager.waitingCount() > 0) {
+            defaultManager.startGame(true);
+            started++;
+        }
+        return started;
     }
 
     /** 玩家加入：先按房间算出键、拿到那一份状态，再让它自己走原逻辑。 */
