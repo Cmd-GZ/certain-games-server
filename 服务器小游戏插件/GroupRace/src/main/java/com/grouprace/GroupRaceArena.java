@@ -33,15 +33,54 @@ public final class GroupRaceArena {
         return roomWorld;
     }
 
-    /** 读坐标的世界解析：钉死的房间世界优先，没钉才退回按上下文的换绑。 */
+    /**
+     * 读坐标时的世界解析：**钉死了就只认自己的房间世界**，没钉才退回按上下文的换绑。
+     *
+     * <p>钉死之后**不能**再回落 {@link com.hub.room.RoomBinding}：它先看"派对委派"、再看
+     * "该游戏唯一的房间"，两者都是**按游戏一个槽**；两个房间同时跑时它会给出**另一个房间**
+     * 的世界，于是同一份代码里"世界"和"坐标"对不上（AnimalSlaughter 1.5.0 实测会抛
+     * {@code Location cannot be in a different world}）。
+     */
     private Location apply(Location loc) {
         if (loc == null) {
             return null;
         }
-        if (roomWorld != null && !roomWorld.equals(loc.getWorld())) {
+        if (roomWorld != null) {
+            if (roomWorld.equals(loc.getWorld())) {
+                return loc;
+            }
             return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
         }
         return com.hub.room.RoomBinding.apply("grouprace", loc);
+    }
+
+    /**
+     * **把解析出来的坐标重新钉回自己的房间世界**（{@code load()} 用）。
+     *
+     * <p>{@code tpl:} 的解析看"当前房间上下文"，而 {@code /hub join} 会让 HubCore 给所有子游戏
+     * 发一次 reload；如果那次上下文指向**别的**房间，解析结果就会落到别人的世界里
+     * （圆环还会被铺到别人的房间去）。钉回去之后，房间实例无论如何重载都只认自己的世界。
+     */
+    private Location pin(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld == null || roomWorld.equals(loc.getWorld())) {
+            return loc;
+        }
+        return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+    }
+
+    /** 圆环里的坐标是自己解析世界的（见 {@link GroupRaceRing}），这里照样钉回自己的房间世界。 */
+    private GroupRaceRing pin(GroupRaceRing ring) {
+        if (ring == null || roomWorld == null) {
+            return ring;
+        }
+        Location center = pin(ring.center());
+        if (center == null) {
+            return ring;
+        }
+        return new GroupRaceRing(ring.index(), center, ring.normal(), ring.radius(), ring.finish());
     }
 
     private Location lobby;
@@ -56,14 +95,15 @@ public final class GroupRaceArena {
 
     public void load() {
         FileConfiguration cfg = plugin.getConfig();
-        lobby = readLocation(cfg, "arena.lobby");
-        start = readLocation(cfg, "arena.start");
-        pos1 = readLocation(cfg, "arena.pos1");
-        pos2 = readLocation(cfg, "arena.pos2");
+        // 解析完一律 pin 回**自己钉死的房间世界**（没钉世界的默认实例行为不变）
+        lobby = pin(readLocation(cfg, "arena.lobby"));
+        start = pin(readLocation(cfg, "arena.start"));
+        pos1 = pin(readLocation(cfg, "arena.pos1"));
+        pos2 = pin(readLocation(cfg, "arena.pos2"));
         rings.clear();
         int index = 0;
         for (Map<?, ?> map : cfg.getMapList("rings")) {
-            GroupRaceRing ring = GroupRaceRing.fromMap(index, map);
+            GroupRaceRing ring = pin(GroupRaceRing.fromMap(index, map));
             if (ring != null) {
                 rings.add(ring);
                 index++;
@@ -95,10 +135,22 @@ public final class GroupRaceArena {
             cfg.set("arena.pos2", pos2Token);
         }
         List<Map<String, Object>> list = new ArrayList<>();
+        // R2：圆环的世界 token 反查不到模板（是 room_ 开头 / 空）时**整段不写**，保留磁盘上的原值；
+        // 不能只跳过坏的那几个环 —— 环的序号会因此改变（终点环就认不出来了）。
+        boolean ringsEncodable = true;
         for (GroupRaceRing ring : rings) {
-            list.add(ring.toMap());
+            Map<String, Object> map = ring.toMap();
+            Object worldToken = map.get("world");
+            String token = worldToken == null ? "" : String.valueOf(worldToken);
+            if (token.isBlank() || token.startsWith("room_")) {
+                ringsEncodable = false;
+                break;
+            }
+            list.add(map);
         }
-        cfg.set("rings", list);
+        if (ringsEncodable) {
+            cfg.set("rings", list);
+        }
         plugin.saveConfig();
     }
 
@@ -143,11 +195,25 @@ public final class GroupRaceArena {
         return missing.isEmpty() ? "无" : String.join("、", missing);
     }
 
+    /**
+     * 赛道所在世界：**必须和 {@link #getPos1()} / {@link #getLobby()} 走同一套解析**，
+     * 否则会出现"世界是 A 房、坐标是 B 房"的组合（{@code World#getNearbyEntities} 直接抛
+     * {@code Location cannot be in a different world}）。
+     */
+    public World world() {
+        if (roomWorld != null) {
+            return roomWorld;
+        }
+        Location resolved = com.hub.room.RoomBinding.apply("grouprace", pos1 == null ? lobby : pos1);
+        return resolved == null ? null : resolved.getWorld();
+    }
+
     public boolean inside(Location loc) {
-        if (loc == null || pos1 == null || pos2 == null || pos1.getWorld() == null) {
+        if (loc == null || pos1 == null || pos2 == null) {
             return false;
         }
-        if (loc.getWorld() == null || !loc.getWorld().equals(pos1.getWorld())) {
+        World world = world();
+        if (world == null || loc.getWorld() == null || !loc.getWorld().equals(world)) {
             return false;
         }
         double minX = Math.min(pos1.getX(), pos2.getX());
@@ -161,10 +227,12 @@ public final class GroupRaceArena {
 
     /** 起跑位置：以 start 为中心，沿垂直方向散开；并朝向第一个圆环。 */
     public Location startLocation(int index, int total, double spread) {
-        if (start == null) {
-            return lobby == null ? null : lobby.clone();
+        Location base = apply(start);
+        if (base == null) {
+            Location fallback = apply(lobby);
+            return fallback == null ? null : fallback.clone();
         }
-        Location location = start.clone();
+        Location location = base.clone();
         Vector forward = location.getDirection().setY(0.0);
         if (forward.lengthSquared() < 0.001) {
             forward = new Vector(0.0, 0.0, 1.0);
