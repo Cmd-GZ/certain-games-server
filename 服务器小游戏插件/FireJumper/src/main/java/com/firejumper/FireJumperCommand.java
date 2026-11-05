@@ -21,15 +21,22 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
             "start", "stop", "reload", "debug");
 
     private final FireJumperPlugin plugin;
-    private final FireJumperManager manager;
+    /** D22：按房间分桶的状态；每个入口按发送者/玩家路由到他自己那一份。 */
+    private final FireJumperRooms rooms;
 
-    public FireJumperCommand(FireJumperPlugin plugin, FireJumperManager manager) {
+    public FireJumperCommand(FireJumperPlugin plugin, FireJumperRooms rooms) {
         this.plugin = plugin;
-        this.manager = manager;
+        this.rooms = rooms;
+    }
+
+    /** 这个发送者应该操作的房间状态：玩家 → 他自己那一份；控制台 → 当前房间上下文/最近有人加入的那一份。 */
+    private FireJumperManager stateOf(CommandSender sender) {
+        return sender instanceof Player p ? rooms.forPlayer(p) : rooms.current();
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        FireJumperManager manager = stateOf(sender);
         if (args.length == 0 || args[0].equalsIgnoreCase("help")) {
             help(sender);
             return true;
@@ -39,13 +46,13 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
             case "join" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.join(player);
+                    rooms.join(player);
                 }
             }
             case "leave" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.leave(player, false);
+                    rooms.leave(player, false);
                 }
             }
             case "list" -> list(sender);
@@ -71,6 +78,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private Player player(CommandSender sender) {
+        FireJumperManager manager = stateOf(sender);
         if (sender instanceof Player player) {
             return player;
         }
@@ -79,6 +87,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private boolean admin(CommandSender sender) {
+        FireJumperManager manager = stateOf(sender);
         if (!sender.hasPermission("firejumper.admin")) {
             Chat.send(sender, "&c你没有权限执行该指令。");
             return false;
@@ -87,6 +96,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void list(CommandSender sender) {
+        FireJumperManager manager = stateOf(sender);
         FireJumperArena arena = manager.arena();
         Chat.send(sender, "&6===== " + FireJumperManager.GAME + " =====");
         Chat.send(sender, "&7状态: " + switch (manager.state()) {
@@ -112,6 +122,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void setCorner(CommandSender sender, int index) {
+        FireJumperManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -130,6 +141,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void setLobby(CommandSender sender) {
+        FireJumperManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -143,6 +155,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void setSpawn(CommandSender sender) {
+        FireJumperManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -156,6 +169,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void addSpawn(CommandSender sender) {
+        FireJumperManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -169,6 +183,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void clearSpawns(CommandSender sender) {
+        FireJumperManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -178,6 +193,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void setGround(CommandSender sender, String[] args) {
+        FireJumperManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -201,6 +217,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void setDirection(CommandSender sender, String[] args) {
+        FireJumperManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -218,6 +235,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void setLength(CommandSender sender, String[] args) {
+        FireJumperManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -231,6 +249,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void setRange(CommandSender sender, String[] args) {
+        FireJumperManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -244,6 +263,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void setLineHeight(CommandSender sender, String[] args) {
+        FireJumperManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -274,6 +294,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void save(CommandSender sender) {
+        FireJumperManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -286,6 +307,16 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void start(CommandSender sender) {
+        // 控制台开局（派对就是这么开的：dispatchCommand(控制台, "fj start")）：
+        // 控制台没有房间上下文，两场派对同时开局时"只开最近加入的那一间"会让另一间永远停在等待。
+        if (!(sender instanceof Player)) {
+            int started = rooms.startAllWaiting();
+            if (started == 0) {
+                Chat.send(sender, "&e没有正在等待开局的房间。");
+            }
+            return;
+        }
+        FireJumperManager manager = stateOf(sender);
         // D21：开始权在主持人手上；但主持人**不享受管理员特权**（人数不够不能开）
         boolean isAdmin = !(sender instanceof org.bukkit.entity.Player sp) || sp.hasPermission("firejumper.admin");
         if (!isAdmin) {
@@ -309,6 +340,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void stop(CommandSender sender) {
+        FireJumperManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -321,6 +353,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void reload(CommandSender sender) {
+        FireJumperManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -334,6 +367,7 @@ public final class FireJumperCommand implements CommandExecutor, TabCompleter {
     }
 
     private void debug(CommandSender sender) {
+        FireJumperManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
