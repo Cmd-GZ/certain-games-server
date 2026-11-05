@@ -1354,15 +1354,33 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         }
     }
 
-    /** 用上报的玩家反查：这一局属于哪一场派对。 */
+    /**
+     * 用上报的玩家反查：这一局属于哪一场派对。
+     *
+     * <p>顺序：① 房间上下文（派对自己上报时天然有）→ ② 上报玩家落在哪一场的
+     * `roundParticipants` 里 → ③ 只有一场在 ROUND 时就用它。
+     *
+     * <p>**都不确定时返回 null 而不是"随便挑一场"**：以前兜底挑第一场，
+     * 结果"无玩家的结算上报"（例如无人得分）被塞给了另一场派对（实测 2026-11-06）。
+     */
     private Party partyForReport(String gameKey, List<UUID>... groups) {
+        // ① 房间上下文
+        String ctx = com.hub.room.RoomContext.currentRoomId();
+        if (ctx != null) {
+            Party byCtx = parties.ofKey(ctx, k -> null);
+            if (byCtx != null && byCtx.state == State.ROUND) {
+                return byCtx;
+            }
+        }
         java.util.Set<UUID> ids = new java.util.LinkedHashSet<>();
         for (List<UUID> g : groups) {
             if (g != null) {
                 ids.addAll(g);
             }
         }
-        Party fallback = null;
+        // ② 按玩家反查
+        Party only = null;
+        int candidates = 0;
         for (Party p : parties.all().values()) {
             if (p == null || p.state != State.ROUND) {
                 continue;
@@ -1370,16 +1388,19 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
             if (gameKey != null && !gameKey.equals(p.currentGameKey)) {
                 continue;
             }
-            if (fallback == null) {
-                fallback = p;   // 上报里没有玩家（例如"无人得分"）时用它兜底
-            }
+            candidates++;
+            only = p;
             for (UUID id : ids) {
                 if (p.roundParticipants.contains(id)) {
                     return p;
                 }
             }
         }
-        return fallback;
+        // ③ 只有一场在跑 → 一定是它；多场且没有玩家信息 → 交给调用方丢弃
+        if (candidates == 1) {
+            return only;
+        }
+        return null;
     }
 
     /** 真正的结算逻辑（已经绑定了具体那一场）。 */
@@ -1396,11 +1417,13 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         List<UUID> f = new ArrayList<>(firsts);
         List<UUID> s2 = new ArrayList<>(seconds);
         List<UUID> t = new ArrayList<>(thirds);
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        // **延后 1 tick 也要绑定这一场**：任务跑在调度线程、没有房间上下文，
+        // 不绑的话 `party()` 会退回"最后 join 的那一场"→ 两场派对同时结算时只有一场真的推进。
+        Bukkit.getScheduler().runTask(plugin, () -> withParty(owner, () -> {
             if (party().state == State.ROUND && !party().roundResolved && gameKey.equals(party().currentGameKey)) {
                 finishRound(f, s2, t);
             }
-        });
+        }));
     }
 
     @Override
@@ -1538,12 +1561,19 @@ public final class ArcadePartyManager implements ArcadeBridge.Listener {
         broadcast("&6&l✦  ✦  ✦   颁 奖 典 礼   ✦  ✦  ✦");
         reportArena();
 
+        // **颁奖任务也要绑定本场**：它跑在调度线程，`party()` 会退回"最后 join 的那一场"，
+        // 两场派对同时颁奖时只有一场会真的走到 endParty（实测 2026-11-06）。
+        final Party podiumP = party();
         party().podiumTask = Bukkit.getScheduler().runTaskTimer(plugin, new Runnable() {
             private int tick;
             private int stage; // 0 = 还没揭晓第三名
 
             @Override
             public void run() {
+                withParty(podiumP, this::tickPodium);
+            }
+
+            private void tickPodium() {
                 tick++;
                 if (stage == 0 && tick >= 60) {
                     reveal(3);
