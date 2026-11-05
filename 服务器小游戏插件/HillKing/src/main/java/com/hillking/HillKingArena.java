@@ -17,6 +17,66 @@ import java.util.Random;
 public final class HillKingArena {
 
     private final JavaPlugin plugin;
+
+    /**
+     * D22：这个场地实例**钉死**的房间世界（每个房间一份实例）。
+     *
+     * <p>{@link com.hub.room.RoomBinding} 是"按游戏一个槽"，两房间同时跑时后一个覆盖前一个 ——
+     * 甲房的实例会读到乙房的世界（人被传错房间）。钉死之后读取只认自己的世界。
+     */
+    private org.bukkit.World roomWorld;
+    /** 区域声明的名字：默认实例用 ""，房间实例用房间 id（I2 要求一块地只归一个对局）。 */
+    private String regionKey = "";
+
+    public void bindWorld(org.bukkit.World world) {
+        this.roomWorld = world;
+    }
+
+    public org.bukkit.World boundWorld() {
+        return roomWorld;
+    }
+
+    public void bindRegionKey(String key) {
+        this.regionKey = key == null ? "" : key;
+    }
+
+    /**
+     * 读坐标时的世界解析：**钉死了就只认自己的房间世界**，没钉才退回按上下文的换绑。
+     *
+     * <p>钉死之后**不能**再回落 {@link com.hub.room.RoomBinding}：它先看"派对委派"、再看
+     * "该游戏唯一的房间"，两者都是**按游戏一个槽**；两房间同时跑时会给出另一个房间的世界，
+     * 于是同一份代码里"世界"和"坐标"对不上（抛 {@code Location cannot be in a different world}）。
+     */
+    private Location apply(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld != null) {
+            if (roomWorld.equals(loc.getWorld())) {
+                return loc;
+            }
+            return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+        }
+        return com.hub.room.RoomBinding.apply("hillking", loc);
+    }
+
+    /**
+     * **把解析出来的坐标重新钉回自己的房间世界**（{@code load()} 用）。
+     *
+     * <p>`tpl:` 的解析看"当前房间上下文"，而 `/hub join` 会让 HubCore 给所有子游戏发一次 reload；
+     * 如果那次上下文指向**别的**房间，解析结果就会落到别人的世界里。钉回去之后，
+     * 房间实例无论如何重载都只认自己的世界。
+     */
+    private Location pin(Location loc) {
+        if (loc == null) {
+            return null;
+        }
+        if (roomWorld == null || roomWorld.equals(loc.getWorld())) {
+            return loc;
+        }
+        return new Location(roomWorld, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+    }
+
     private Location center;
     private int radius = 12;
     private int height = 3;
@@ -79,14 +139,15 @@ public final class HillKingArena {
 
     public void load() {
         FileConfiguration cfg = plugin.getConfig();
-        center = parse(cfg.getString("arena.center", ""));
+        // D22：解析出来的坐标**钉回本房间的世界**（`tpl:` 解析看上下文，可能指到别人的房间）
+        center = pin(parse(cfg.getString("arena.center", "")));
         radius = clampRadius(cfg.getInt("arena.radius", 12));
         height = clampHeight(cfg.getInt("arena.height", 3));
         depth = clampDepth(cfg.getInt("arena.depth", 3));
-        lobby = parse(cfg.getString("arena.lobby", ""));
+        lobby = pin(parse(cfg.getString("arena.lobby", "")));
         spawns.clear();
         for (String raw : cfg.getStringList("arena.spawns")) {
-            Location loc = parse(raw);
+            Location loc = pin(parse(raw));
             if (loc != null) {
                 spawns.add(loc);
             }
@@ -110,7 +171,10 @@ public final class HillKingArena {
         }
         List<String> encoded = new ArrayList<>();
         for (Location spawn : spawns) {
-            encoded.add(encode(spawn));
+            String token = encode(spawn);
+            if (token != null) {
+                encoded.add(token);
+            }
         }
         if (!encoded.isEmpty()) {
             cfg.set("arena.spawns", encoded);
@@ -128,16 +192,30 @@ public final class HillKingArena {
      * 玩法判定仍走 {@link #containsXZ(Location)} 的圆形逻辑，两者互不影响。
      */
     public void publishRegion() {
-        try {
-            com.hub.region.RegionRegistry.unregisterGame("hillking");
-            if (!hasCircle()) {
-                return;         // 还没建场：不声明，也就不会和别人冲突
-            }
-            com.hub.region.RegionRegistry.register(
-                    com.hub.region.ArenaRegion.around("hillking", "", center, radius, 24));
-        } catch (RuntimeException ex) {
-            com.hub.diagnostics.Failures.recordAndWarn("HillKing.声明区域", ex);
+        // D22：**默认实例（没钉死房间世界）代表静态场地**。房间上下文里它绝不能声明地盘 ——
+        // 那时 `tpl:` 会被解析进**别人房间**的世界，于是同一个世界里出现
+        // `hillking` 与 `hillking/room_x` 两块同名地盘（实测 doctor 报"同游戏场地重叠"）。
+        if (roomWorld == null && com.hub.room.RoomContext.currentRoomId() != null) {
+            plugin.getLogger().info("[HillKing] 默认实例在房间上下文里，跳过本轮地盘声明"
+                    + "（房间 " + com.hub.room.RoomContext.currentRoomId() + " 由它自己的实例声明）");
+            return;
         }
+        // 同上：默认实例的坐标若被 `tpl:` 解析进了**房间世界**（`Worlds.resolve` 的"该模板恰好一个房间"兜底），
+        // 它也绝不能在那里声明 —— 会与房间实例自己的地盘重叠（实测 doctor 报"同游戏场地重叠"）。
+        if (roomWorld == null && center != null && center.getWorld() != null
+                && com.hub.room.RoomManager.templateKeyOfRoomWorld(center.getWorld().getName()) != null) {
+            plugin.getLogger().info("[HillKing] 默认实例的坐标落在房间世界 "
+                    + center.getWorld().getName() + "，跳过地盘声明（房间由它自己的实例声明）");
+            return;
+        }
+        // D22：**只有默认实例**负责清掉上一轮（两房间同时跑时按游戏清会误删别人的地盘）
+        if (regionKey.isEmpty()) {
+            com.hub.region.Regions.begin("hillking");
+        }
+        if (!hasCircle()) {
+            return;         // 还没建场：不声明，也就不会和别人冲突
+        }
+        com.hub.region.Regions.disc("hillking", regionKey, center, radius, 24);
     }
 
     public boolean hasCircle() {
@@ -199,9 +277,9 @@ public final class HillKingArena {
 
     public Location randomSpawn(Random random) {
         if (spawns.isEmpty()) {
-            return center == null ? lobby : center.clone();
+            return center == null ? getLobby() : center();
         }
-        return spawns.get(random.nextInt(spawns.size())).clone();
+        return apply(spawns.get(random.nextInt(spawns.size())).clone());
     }
 
     /** 在台面上均匀撒 count 个出生点（会先清空旧的）。 */
@@ -338,22 +416,35 @@ public final class HillKingArena {
         return widths;
     }
 
+    /**
+     * 场地所在世界：**必须和 {@link #center()} / {@link #getLobby()} / {@link #getSpawns()} 走同一套解析**，
+     * 否则会出现"世界是 A 房、坐标是 B 房"的组合（{@code different world} 就是这么来的）。
+     */
+    public org.bukkit.World world() {
+        if (roomWorld != null) {
+            return roomWorld;
+        }
+        Location resolved = com.hub.room.RoomBinding.apply("hillking", center);
+        return resolved == null ? null : resolved.getWorld();
+    }
+
     /** 台面中心（站台时脚踩的位置）。 */
     public Location center() {
-        return center == null ? null : center.clone();
+        return center == null ? null : apply(center.clone());
     }
 
     public void setCenter(Location center) {
         this.center = center == null ? null : center.clone();
     }
 
-    /** 观战/旁观落点：台面中心上方 6 格。 */
+    /** 观战/旁观落点：台面中心上方 6 格（与 {@link #center()} 同源）。 */
     public Location spectatorSpot() {
-        return center == null ? null : center.clone().add(0, 6, 0);
+        Location at = center();
+        return at == null ? null : at.add(0, 6, 0);
     }
 
     public Location getLobby() {
-        return lobby;
+        return lobby == null ? null : apply(lobby.clone());
     }
 
     public void setLobby(Location lobby) {
@@ -361,7 +452,14 @@ public final class HillKingArena {
     }
 
     public List<Location> getSpawns() {
-        return spawns;
+        List<Location> out = new ArrayList<>(spawns.size());
+        for (Location spawn : spawns) {
+            Location applied = apply(spawn.clone());
+            if (applied != null) {
+                out.add(applied);
+            }
+        }
+        return out;
     }
 
     public void addSpawn(Location loc) {
@@ -421,14 +519,22 @@ public final class HillKingArena {
         return Math.max(0, Math.min(32, value));
     }
 
+    /**
+     * 坐标 → 存档 token；**写不了时返回 null**（调用方跳过，保留磁盘上的原值）。
+     *
+     * <p>反方向也走框架：房间实例世界写回 {@code tpl:<模板键>}；**反查不到模板时返回 null** ——
+     * 否则房间一销毁，配置里就留下 {@code room_xxx_1}，下次开服该场地永远"未配置"。
+     */
     private static String encode(Location loc) {
         if (loc == null || loc.getWorld() == null) {
-            return "";
+            return null;
         }
-        // 反方向也走框架：如果是房间实例世界，写回 tpl:<模板键>（不写临时房间名，
-        // 否则房间一删配置就失效）
+        String token = com.hub.world.Worlds.tokenOf(loc.getWorld());
+        if (token == null || token.isBlank() || token.startsWith("room_")) {
+            return null;
+        }
         return String.format(Locale.ROOT, "%s,%.2f,%.2f,%.2f,%.1f,%.1f",
-                com.hub.world.Worlds.tokenOf(loc.getWorld()), loc.getX(), loc.getY(), loc.getZ(),
+                token, loc.getX(), loc.getY(), loc.getZ(),
                 loc.getYaw(), loc.getPitch());
     }
 

@@ -16,15 +16,22 @@ import java.util.Locale;
 public final class HillKingCommand implements CommandExecutor, TabCompleter {
 
     private final HillKingPlugin plugin;
-    private final HillKingManager manager;
+    /** D22：按房间分桶的状态；每个入口按发送者/玩家路由到他自己那一份。 */
+    private final HillKingRooms rooms;
 
-    public HillKingCommand(HillKingPlugin plugin, HillKingManager manager) {
+    public HillKingCommand(HillKingPlugin plugin, HillKingRooms rooms) {
         this.plugin = plugin;
-        this.manager = manager;
+        this.rooms = rooms;
+    }
+
+    /** 这个发送者应该操作的房间状态：玩家 → 他自己那一份；控制台 → 当前房间上下文/最近有人加入的那一份。 */
+    private HillKingManager stateOf(CommandSender sender) {
+        return sender instanceof Player p ? rooms.forPlayer(p) : rooms.current();
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        HillKingManager manager = stateOf(sender);
         if (args.length == 0 || args[0].equalsIgnoreCase("help")) {
             help(sender);
             return true;
@@ -34,18 +41,27 @@ public final class HillKingCommand implements CommandExecutor, TabCompleter {
             case "join" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.join(player);
+                    rooms.join(player);
                 }
             }
             case "leave" -> {
                 Player player = player(sender);
                 if (player != null) {
-                    manager.leave(player, false);
+                    rooms.leave(player, false);
                 }
             }
             case "list" -> list(sender);
             case "stats" -> stats(sender, args);
             case "start" -> {
+                // 控制台开局（派对就是这么开的：dispatchCommand(控制台, "hill start")）：
+                // 控制台没有房间上下文，两场派对同时开局时"只开最近加入的那一间"会让另一间永远停在等待。
+                if (!(sender instanceof Player)) {
+                    int started = rooms.startAllWaiting();
+                    if (started == 0) {
+                        Chat.send(sender, "&e没有正在等待开局的房间。");
+                    }
+                    return true;
+                }
                 // D21：开始权在主持人手上，但**主持人不享受管理员的特权**：
                 //   - 管理员可以强制开（人不够也开）；
                 //   - 主持人必须等人数达到 minPlayers 才能开，也不能在人数不足时启动倒计时。
@@ -164,6 +180,7 @@ public final class HillKingCommand implements CommandExecutor, TabCompleter {
 
     /** 一键建场：站在场地中心执行，建圆形红羊毛高台 + 自动生成出生点并保存。 */
     private void build(CommandSender sender, String[] args) {
+        HillKingManager manager = stateOf(sender);
         if (!admin(sender)) {
             return;
         }
@@ -219,6 +236,7 @@ public final class HillKingCommand implements CommandExecutor, TabCompleter {
     }
 
     private void list(CommandSender sender) {
+        HillKingManager manager = stateOf(sender);
         Chat.send(sender, "&6===== 高台之王 =====");
         Chat.send(sender, "&7状态：&e" + manager.state() + " &7等待 &e" + manager.waitingCount()
                 + " &7场内 &e" + manager.playingCount());
@@ -234,6 +252,7 @@ public final class HillKingCommand implements CommandExecutor, TabCompleter {
     }
 
     private void stats(CommandSender sender, String[] args) {
+        HillKingManager manager = stateOf(sender);
         if (!(sender instanceof Player player)) {
             Chat.send(sender, "&c该命令需要玩家执行。");
             return;
@@ -277,7 +296,7 @@ public final class HillKingCommand implements CommandExecutor, TabCompleter {
 
     private boolean admin(CommandSender sender) {
         if (sender instanceof Player player) {
-            if (!manager.isAdmin(player)) {
+            if (!stateOf(sender).isAdmin(player)) {
                 Chat.send(sender, "&c你没有权限执行该指令。");
                 return false;
             }
@@ -307,7 +326,7 @@ public final class HillKingCommand implements CommandExecutor, TabCompleter {
         List<String> out = new ArrayList<>();
         if (args.length == 1) {
             List<String> subs = new ArrayList<>(List.of("join", "leave", "list", "stats", "help"));
-            boolean admin = !(sender instanceof Player player) || manager.isAdmin(player);
+            boolean admin = !(sender instanceof Player player) || stateOf(sender).isAdmin(player);
             if (admin) {
                 subs.addAll(List.of("start", "stop", "build", "setlobby", "addspawn",
                         "clearspawns", "genspawns", "save", "reload"));

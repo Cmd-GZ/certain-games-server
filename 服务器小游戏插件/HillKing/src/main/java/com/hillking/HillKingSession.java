@@ -34,7 +34,8 @@ final class HillKingSession extends GameSession {
 
 
     HillKingSession(HillKingManager manager) {
-        super("hillking", "");
+        // D22：会话键 = 房间键（每房间一份 manager ⇒ 每房间一份会话）
+        super("hillking", manager.roomKey());
         this.manager = manager;
         // 本局禁止丢任何物品（重构前是 HillKingListener 里的一段 @EventHandler，逐字等价）
         rules().noItemDrop(true);

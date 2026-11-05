@@ -56,6 +56,13 @@ public final class HillKingManager {
     }
 
     private final HillKingPlugin plugin;
+    /**
+     * D22：这个实例负责的**房间键**（有房间时 = 房间 id；没有房间时 = {@link #ARENA}）。
+     * 每个房间一份实例 = 一份运行时状态，所以两场派对不会互相踩。
+     */
+    private final String roomKey;
+    /** 侧边栏的键：每房间一份，否则两个房间互相覆盖。 */
+    private final String sidebarKey;
     private final HillKingArena arena;
     private final NamespacedKey fishKey;
     private final NamespacedKey returnKey;
@@ -85,7 +92,13 @@ public final class HillKingManager {
     private boolean hasSavedPvp;
 
     public HillKingManager(HillKingPlugin plugin) {
+        this(plugin, ARENA);
+    }
+
+    public HillKingManager(HillKingPlugin plugin, String roomKey) {
         this.plugin = plugin;
+        this.roomKey = roomKey == null || roomKey.isBlank() ? ARENA : roomKey;
+        this.sidebarKey = "hillking:" + this.roomKey;
         this.arena = new HillKingArena(plugin);
         this.liveSidebar = new LiveSidebar(plugin);
         this.fishKey = new NamespacedKey(plugin, "fish");
@@ -295,12 +308,17 @@ public final class HillKingManager {
         if (!isWaitingState()) {
             return;
         }
+        // D22：默认实例（没钉死房间世界）代表静态场地 —— 别在房间上下文里重载，
+        // 那时 `tpl:` 会解析进别人的房间世界，把静态场地"搬"到别人房间里。
+        if (arena.boundWorld() == null && com.hub.room.RoomContext.currentRoomId() != null) {
+            return;
+        }
         arena.load();
     }
 
     public void shutdown() {
         cancelTasks();
-        liveSidebar.hideAll();
+        liveSidebar.hide(sidebarKey);
         restoreWorldPvp();
         if (startCountdown != null) {
             startCountdown.cancelAll();
@@ -322,6 +340,28 @@ public final class HillKingManager {
 
     public HillKingArena arena() {
         return arena;
+    }
+
+    /** 声明地盘（{@code docs/框架不变量.md} 的 I2）；名字用房间键，两房间不会互相清掉地盘。 */
+    public void publishRegions() {
+        if (arena != null) {
+            arena.publishRegion();
+        }
+    }
+
+    /** D22：本实例负责的房间键。 */
+    public String roomKey() {
+        return roomKey;
+    }
+
+    /** 菜单/日志里用的场地名：默认实例仍叫「主场地」，房间实例用房间 id。 */
+    public String arenaLabel() {
+        return roomKey;
+    }
+
+    /** 这个实例是不是已经空着（外层据此回收房间实例）。 */
+    public boolean idle() {
+        return waiting.isEmpty() && playing.isEmpty() && !isRunningState();
     }
 
     /** 兼容旧调用：把 session 状态映射回原来的两态枚举。 */
@@ -405,6 +445,11 @@ public final class HillKingManager {
      * 房间与对局 1:1（D25），所以换绑时机是"玩家进来 / 开局前"。
      */
     private void bindRoomIfAny() {
+        // D22：这个实例**已经钉死自己的房间世界**时什么都不做 ——
+        // RoomBinding 是"按游戏一个槽"，两房间同时跑会把它指向别的房间（different world 的来源）。
+        if (arena.boundWorld() != null) {
+            return;
+        }
         // ① 委派优先（RoomBinding 内部就是"先委派、再 activeFor"），② 再用房间上下文兜底
         World target = com.hub.room.RoomBinding.worldFor(GAME_KEY);
         String source = "父级委派";
@@ -444,7 +489,7 @@ public final class HillKingManager {
         plugin.getLogger().info("拒绝 " + player.getName() + " 加入：" + why);
     }
 
-    public void join(Player player) {
+    public boolean join(Player player) {
         UUID id = player.getUniqueId();
         bindRoomIfAny();
         // 上一局结束后会话停在 ENDED（终态），必须换新的，否则这里会被判成"对局进行中"而拒绝加入
@@ -452,24 +497,24 @@ public final class HillKingManager {
         if (!isWaitingState()) {
             rejectJoin(player, "会话状态不是 WAITING（" + (session == null ? "session=null" : session.describe()) + "）");
             Chat.send(player, "&c对局正在进行中，请等这一局结束后再加入。");
-            return;
+            return false;
         }
         if (waiting.contains(id)) {
             // 这不是异常：派对的 startRound 会为"重新 join 一次"再执行一遍关卡命令
             plugin.getLogger().info(player.getName() + " 已在等待队列里（重复 join，幂等忽略）");
             Chat.send(player, "&e你已经在等待队列中。");
-            return;
+            return false;
         }
         if (waiting.size() >= maxPlayers()) {
             rejectJoin(player, "等待队列已满（" + waiting.size() + "/" + maxPlayers() + "）");
             Chat.send(player, "&c等待队列已满（" + maxPlayers() + " 人）。");
-            return;
+            return false;
         }
         if (!arena.isReady()) {
             rejectJoin(player, "场地未配置完整（缺 " + arena.missing() + "，世界="
                     + worldNameOf(arena.center()) + "）");
             Chat.send(player, "&c场地还没配置完整（缺 " + arena.missing() + "），请联系管理员。");
-            return;
+            return false;
         }
         // I1 / D23：**先**挂会话归属链，成功了才写进本游戏队列。
         // 反过来的话，归属被拒时会留下"队列里有他、归属链上没他"的半加入状态（doctor 查不出来）。
@@ -477,7 +522,7 @@ public final class HillKingManager {
             rejectJoin(player, "会话归属链挂接失败（"
                     + (session == null ? "session=null" : session.describe()) + "）");
             Chat.send(player, "&c加入失败：你正在另一局游戏里，请先退出那一局。");
-            return;
+            return false;
         }
         waiting.add(id);
         joinTick.put(id, (long) Bukkit.getCurrentTick());
@@ -495,6 +540,7 @@ public final class HillKingManager {
         Chat.send(player, "&7人数达到 &f" + minPlayers() + " &7后自动倒计时开始。");
         updateCountdown();
         reportArena();
+        return true;
     }
 
     public void leave(Player player, boolean silent) {
@@ -607,7 +653,7 @@ public final class HillKingManager {
             }
         }
         if (!ready.isEmpty() && (ready.size() >= minPlayers() || force)) {
-            if (startCountdown().begin("main", new ArrayList<>(ready), () -> startGame(force))) {
+            if (startCountdown().begin(roomKey, new ArrayList<>(ready), () -> startGame(force))) {
                 return;
             }
         }
@@ -656,7 +702,7 @@ public final class HillKingManager {
             HubAPI.setPlaying(id, GAME);
             Chat.title(p, "&6&l" + GAME, "&f站在高台上得分，用咸鱼把对手拍下去", 2);
         }
-        HubAPI.setArenaSpectator(GAME, ARENA, arena.spectatorSpot());
+        HubAPI.setArenaSpectator(GAME, arenaLabel(), arena.spectatorSpot());
         broadcast("&6&l========== " + GAME + " 开始 ==========");
         broadcast("&f站在红色羊毛高台上每秒 +" + pointsPerSecond() + " 分，掉下台会立刻被送回台上。");
         broadcast("&7手持咸鱼左键拍人，把对手拍出高台！时间 &e" + gameSeconds() + " &7秒。");
@@ -707,10 +753,7 @@ public final class HillKingManager {
     private void destroyRoomAfterMatch() {
         // **只删属于自己的房间**：被派对委派时房间属于派对（room.game()=arcadeparty），
         // 由派对负责回收，我们不能越权删别人的房间（I2/D25）。
-        var room = com.hub.room.RoomContext.roomOf(GAME_KEY);
-        if (room == null) {
-            room = com.hub.room.RoomManager.activeFor(GAME_KEY);
-        }
+        var room = roomKey.equals(ARENA) ? null : com.hub.room.RoomManager.room(roomKey);
         if (room == null || !GAME_KEY.equals(room.game())) {
             return;
         }
@@ -739,7 +782,7 @@ public final class HillKingManager {
         // 游戏不再自己删：否则同一份"房间归属"有两个写者（R2），且子游戏会误删父级房间。
         String reason = endMessage;
         cancelTasks();
-        liveSidebar.hide("hillking");
+        liveSidebar.hide(sidebarKey);
         restoreWorldPvp();
         secondsLeft = 0;
 
@@ -888,7 +931,7 @@ public final class HillKingManager {
             return;
         }
         if (!sidebarEnabled()) {
-            liveSidebar.hide("hillking");
+            liveSidebar.hide(sidebarKey);
             return;
         }
         List<UUID> online = new ArrayList<>();
@@ -905,7 +948,7 @@ public final class HillKingManager {
         for (UUID id : online) {
             lines.add(new LiveSidebar.Line("§e" + nameOf(id), scoreOf(id)));
         }
-        liveSidebar.update("hillking", sidebarTitle(), online, lines);
+        liveSidebar.update(sidebarKey, sidebarTitle(), online, lines);
     }
 
     private void updateActionBar() {
@@ -1068,9 +1111,9 @@ public final class HillKingManager {
     private void reportArena() {
         boolean running = isRunningState();
         String extra = running ? "剩余 " + secondsLeft + "s · " + playing.size() + " 人" : null;
-        HubAPI.setArena(GAME, ARENA, running ? GameState.PLAYING : GameState.WAITING,
+        HubAPI.setArena(GAME, arenaLabel(), running ? GameState.PLAYING : GameState.WAITING,
                 waiting.size() + playing.size(), extra);
-        HubAPI.setArenaSpectator(GAME, ARENA, arena.spectatorSpot());
+        HubAPI.setArenaSpectator(GAME, arenaLabel(), arena.spectatorSpot());
     }
 
     private void broadcast(String message) {
