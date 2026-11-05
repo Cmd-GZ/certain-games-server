@@ -141,7 +141,7 @@ games:
     join-command: 'colorparty join {arena}'
     start-command: 'colorparty start {arena}'
   grouprace:
-    display: 群友竞速
+    display: 群友竞速赛
     enabled: true
     arena-aware: false
     max-players: 16
@@ -155,14 +155,14 @@ games:
     join-command: 'knockback join'
     start-command: 'knockback start'
   landclaim:
-    display: 占地风云1
+    display: battlefield 1 (占地1)
     enabled: true
     arena-aware: false
     max-players: 16
     join-command: 'land join'
     start-command: 'land start'
   jumpfill:
-    display: 花落水家
+    display: 跳水填格
     enabled: true
     arena-aware: false
     max-players: 16

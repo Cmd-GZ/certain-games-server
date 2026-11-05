@@ -544,6 +544,13 @@ publishRegions();   // 场地可能刚被改过，重新声明（I2）
 
     /** 开始新回合：分配 TNT。firstRound=true 时 Speed II。 */
     private void startRound(HotPotatoArena a, boolean firstRound) {
+        // I5：场地进入 RUNNING 时**把会话也推进到 RUNNING**（以前没人调 session.start()）
+        {
+            var sess_ = ensureSession(a.roomKey());
+            if (sess_ != null && sess_.state() == com.hub.session.SessionState.WAITING) {
+                sess_.start();
+            }
+        }
         a.getBombHolders().clear();
         int alive = a.getPlayers().size();
         int twoThreshold = plugin.getConfig().getInt("two-bomb-threshold", 5);

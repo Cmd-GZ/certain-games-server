@@ -712,6 +712,13 @@ public class GameManager {
         round = 0;
         scores.replaceAll((k, v) -> 0);
         phase = Phase.PLAYING;
+        // I5：会话也要进 RUNNING（以前没人调 start() → 永远停 WAITING，end() 会跳过 ENDING）
+        {
+            GTBSession sess_ = ensureSession();
+            if (sess_ != null && sess_.state() == com.hub.session.SessionState.WAITING) {
+                sess_.start();
+            }
+        }
         reportArena();
         broadcast("&a游戏开始！共 &e" + totalRounds + "&a 轮，每人都会当一次建造者。");
         // 通知 GameHub：所有玩家从"等待中"进入"对局中"（tab 前缀 [等待中] → [已加入]）

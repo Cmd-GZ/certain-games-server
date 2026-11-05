@@ -1,5 +1,5 @@
 name: DigToBottom
-version: '1.7.0'
+version: '1.8.0'
 main: com.digdown.DigToBottomPlugin
 api-version: '1.21'
 description: 一掘到底：每人一根随机方块柱子，挖到基岩最快者获胜

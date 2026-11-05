@@ -1095,6 +1095,15 @@ public class DigToBottomManager {
             return true;
         }
         a.setState(DigToBottomArena.State.RUNNING);
+        // I5：场地进入 RUNNING 时**把会话也推进到 RUNNING**。
+        // 以前没人调 session.start() → 会话永远停在 WAITING，end() 会跳过 ENDING 阶段，
+        // doctor 里也一直显示 [WAITING]（2026-11-05 审计发现，7 个游戏都有这个问题）。
+        {
+            var sess = sessions.get(a.roomKey());
+            if (sess != null && sess.state() == com.hub.session.SessionState.WAITING) {
+                sess.start();
+            }
+        }
         long round = a.nextRound();
         a.resetRoundState();
         wait(a).cancel();

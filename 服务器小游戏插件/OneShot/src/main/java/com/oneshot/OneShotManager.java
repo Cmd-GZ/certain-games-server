@@ -576,6 +576,13 @@ public final class OneShotManager {
         countdown.cancel();
         cancelTasks();
         state = State.RUNNING;
+        // I5：场地进入 RUNNING 时**把会话也推进到 RUNNING**（以前没人调 session.start()）
+        {
+            var sess_ = session;
+            if (sess_ != null && sess_.state() == com.hub.session.SessionState.WAITING) {
+                sess_.start();
+            }
+        }
         playing.clear();
         playing.addAll(ready);
         eliminated.clear();
