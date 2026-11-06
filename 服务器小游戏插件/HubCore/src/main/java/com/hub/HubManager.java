@@ -295,6 +295,37 @@ public class HubManager implements HubService {
         Chat.actionBar(p, "&7观战中：&b" + label + " &7｜ 输入 &e/hub &7或点聊天栏【退出观战】");
     }
 
+    /**
+     * **对局进行中直接进房 → 进观战**（2026-11-07 用户口径，取代上游的"观战插件"）。
+     *
+     * <p>为什么放在框架里：每个游戏自己判断"要不要中途放人进来"必然写歪（TNT 大战就是活例子），
+     * 统一规则更简单 —— **房间在对局中，后进来的人只能看**。
+     *
+     * @return true = 已按观战处理（调用方不要再派发游戏的 join 命令）
+     */
+    public boolean spectateRoom(Player p, String roomId) {
+        var room = com.hub.room.RoomManager.room(roomId);
+        if (room == null) {
+            return false;
+        }
+        String game = room.game() == null || room.game().isBlank() ? room.template.key() : room.game();
+        String label = game + "｜" + roomId;
+        p.closeInventory();
+        org.bukkit.Location spot = room.entry() != null ? room.entry()
+                : (room.world == null ? null : room.world.getSpawnLocation());
+        if (spot != null) {
+            p.teleport(spot);
+        }
+        p.setFallDistance(0f);
+        p.setGameMode(GameMode.SPECTATOR);
+        p.getInventory().clear();
+        spectating.put(p.getUniqueId(), game);
+        p.sendMessage(LEGACY.deserialize("&b&l房间 " + roomId + " &f正在对局中&7，已进入&b观战模式&7。"));
+        p.sendMessage(exitButton());
+        Chat.actionBar(p, "&7观战中：&b" + label + " &7｜ 输入 &e/hub &7返回大厅");
+        return true;
+    }
+
     /** 聊天栏里那行可点的「退出观战」按钮。 */
     private Component exitButton() {
         return LEGACY.deserialize("&b&l[ 点击这里退出观战 ]")

@@ -33,6 +33,64 @@ public final class RoomActions {
     }
 
     /** 读 plugins/HubCore/games.yml（join/start/stop 命令映射）。 */
+    /** 取 HubCore 的管理器（`plugin` 字段是 Bukkit 的 Plugin，拿不到业务方法）。 */
+    private static com.hub.HubManager manager() {
+        if (plugin instanceof com.hub.HubCorePlugin hub) {
+            return hub.getManager();
+        }
+        var core = org.bukkit.Bukkit.getPluginManager().getPlugin("HubCore");
+        return core instanceof com.hub.HubCorePlugin hub ? hub.getManager() : null;
+    }
+
+    /**
+     * 这个房间现在是不是"对局进行中"。
+     *
+     * <p>判据：房间的**任意**子游戏/父游戏在 HubCore 上报的状态是 PLAYING。
+     * 用上报状态而不是会话状态，是因为"对局进行中"的权威定义在游戏侧（它才知道什么时候开打）。
+     */
+    private static boolean roomRunning(String gameKey, RoomManager.Room room) {
+        com.hub.HubManager manager = manager();
+        if (manager == null) {
+            return false;
+        }
+        java.util.Set<String> games = new java.util.LinkedHashSet<>();
+        if (gameKey != null && !gameKey.isBlank()) {
+            games.add(gameKey);
+        }
+        if (room.subGames() != null) {
+            games.addAll(room.subGames());
+        }
+        // ① **会话状态**最可靠：房间世界里有一个 RUNNING 的会话，就说明这局已经开打了。
+        //    （游戏侧上报的场地状态不是每个游戏都会及时写，TNT 大战就是漏的）
+        for (com.hub.session.GameSession session : com.hub.session.GameSession.activeSessions()) {
+            if (!session.isActive() || session.state() != com.hub.session.SessionState.RUNNING) {
+                continue;
+            }
+            if (!games.isEmpty() && games.stream().noneMatch(g -> g.equalsIgnoreCase(session.gameKey()))) {
+                continue;
+            }
+            for (java.util.UUID id : session.players()) {
+                var player = org.bukkit.Bukkit.getPlayer(id);
+                if (player == null) {
+                    continue;
+                }
+                // 玩家的世界名以房间 id 开头 → 他就在这个房间里
+                if (player.getWorld() != null && player.getWorld().getName().startsWith(room.roomId)) {
+                    return true;
+                }
+            }
+        }
+        // ② 兜底：游戏上报的场地状态
+        for (String g : games) {
+            for (var info : manager.arenasInRoom(g, room.roomId).values()) {
+                if (info != null && info.state() == com.hub.api.GameState.PLAYING) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private static FileConfiguration games() {
         if (plugin == null) {
             return new YamlConfiguration();
@@ -67,6 +125,15 @@ public final class RoomActions {
                 ? room.game() : room.template.key();
         if (plugin != null) {
             plugin.getLogger().info("[/hub join] " + p.getName() + " -> " + roomId + "（" + gameKey + "）");
+        }
+        // **对局中进房 = 观战**（框架统一规则，取代"各游戏自己判断"）
+        com.hub.HubManager manager = manager();
+        if (manager != null && roomRunning(gameKey, room)) {
+            if (manager.spectateRoom(p, room.roomId)) {
+                plugin.getLogger().info("[/hub join] " + p.getName() + " -> " + roomId
+                        + "（对局进行中，改为观战）");
+                return true;
+            }
         }
         String join = games().getString("games." + gameKey + ".join-command");
         if (join != null && !join.isBlank()) {
