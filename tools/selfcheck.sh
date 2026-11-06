@@ -49,4 +49,14 @@ fi
 
 echo "== 运行自检 =="
 java -cp "$OUT:$CP" com.hub.selfcheck.SelfCheck
-exit $?
+rc=$?
+
+# 【I3】事件桥接体检：游戏侧 instanceof 的事件，框架必须真的派发
+# （2026-11-07 那批"机制莫名其妙丢了"的根因：游戏写了处理器，框架根本没派发）
+echo
+echo "== 事件桥接体检 =="
+if ! python3 "$(dirname "$0")/check-event-bridge.py"; then
+    echo "❌ 有事件游戏在等、框架不派发"
+    rc=1
+fi
+exit $rc

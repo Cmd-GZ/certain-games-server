@@ -36,6 +36,19 @@ public final class RegionEvents implements Listener {
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onDamage(EntityDamageEvent event) {
+        // **公共区 / 跨区互打一律禁止**（2026-11-07 补回：重构时删掉了上游 SkyPitListener 的全服护栏，
+        // 于是大厅能互砍、天坑里的玩家能打到主城路人、上方天坑外也能被天坑内的人打到）。
+        // 规则：玩家对玩家的伤害，**只有双方属于同一个对局**时才交给该对局裁决。
+        Player pv = event.getEntity() instanceof Player p0 ? p0 : null;
+        Player pd = resolvePlayerDamager(event);
+        if (pv != null && pd != null) {
+            GameSession ov = ownerOfPlayer(pv);
+            GameSession od = ownerOfPlayer(pd);
+            if (ov == null || od == null || ov != od) {
+                event.setCancelled(true);
+                return;
+            }
+        }
         GameSession owner = ownerOfDamage(event);
         if (owner == null) {
             return;
@@ -53,6 +66,158 @@ public final class RegionEvents implements Listener {
                 event.getEntity().getLocation(), victim == null ? null : victim.getInventory().getItemInMainHand(),
                 event);
         dispatch(owner, ctx, () -> event.setCancelled(true), event);
+    }
+
+
+    // ---------- 补齐的桥接（2026-11-07）----------
+    // 为什么补：重构把各游戏的监听器搬进 `GameSession#onGameEvent`，但框架只桥接了 31 种事件，
+    // 游戏侧 `instanceof` 处理的却多出 26 种 —— 那些代码**永远不会被调用**（捡箭、切换副手、
+    // 潜行/疾跑、死亡后的游戏模式切换、盔甲架交互……）。玩家侧表现就是"机制丢了"。
+    // 这里按"事件涉及的玩家/位置 → 归属会话"补上，语义与既有桥接一致。
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPickupItem(org.bukkit.event.player.PlayerAttemptPickupItemEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPickupArrow(org.bukkit.event.player.PlayerPickupArrowEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onGameModeChange(org.bukkit.event.player.PlayerGameModeChangeEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onSwapHands(org.bukkit.event.player.PlayerSwapHandItemsEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onToggleSneak(org.bukkit.event.player.PlayerToggleSneakEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onToggleSprint(org.bukkit.event.player.PlayerToggleSprintEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onDismount(org.bukkit.event.entity.EntityDismountEvent event) {
+        if (event.getEntity() instanceof Player p) {
+            bridgePlayer(event, p);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onRegainHealth(org.bukkit.event.entity.EntityRegainHealthEvent event) {
+        if (event.getEntity() instanceof Player p) {
+            bridgePlayer(event, p);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onShootBow(org.bukkit.event.entity.EntityShootBowEvent event) {
+        if (event.getEntity() instanceof Player p) {
+            bridgePlayer(event, p);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDropItem(org.bukkit.event.entity.EntityDropItemEvent event) {
+        if (event.getEntity() instanceof Player p) {
+            bridgePlayer(event, p);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPickupByEntity(org.bukkit.event.entity.EntityPickupItemEvent event) {
+        if (event.getEntity() instanceof Player p) {
+            bridgePlayer(event, p);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onInteractAtEntity(org.bukkit.event.player.PlayerInteractAtEntityEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onArmorStandManipulate(org.bukkit.event.player.PlayerArmorStandManipulateEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onHangingPlace(org.bukkit.event.hanging.HangingPlaceEvent event) {
+        if (event.getPlayer() != null) {
+            bridgePlayer(event, event.getPlayer());
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onHangingBreak(org.bukkit.event.hanging.HangingBreakByEntityEvent event) {
+        if (event.getRemover() instanceof Player p) {
+            bridgePlayer(event, p);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEggThrow(org.bukkit.event.player.PlayerEggThrowEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlockPhysics(org.bukkit.event.block.BlockPhysicsEvent event) {
+        bridgeLocation(event, event.getBlock().getLocation());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPistonExtend(org.bukkit.event.block.BlockPistonExtendEvent event) {
+        bridgeLocation(event, event.getBlock().getLocation());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPistonRetract(org.bukkit.event.block.BlockPistonRetractEvent event) {
+        bridgeLocation(event, event.getBlock().getLocation());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onInventoryOpen(org.bukkit.event.inventory.InventoryOpenEvent event) {
+        if (event.getPlayer() instanceof Player p) {
+            bridgePlayer(event, p);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onWorldLoad(org.bukkit.event.world.WorldLoadEvent event) {
+        bridgeLocation(event, event.getWorld().getSpawnLocation());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerAnimation(org.bukkit.event.player.PlayerAnimationEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+
+    /** 聊天（GTB 靠玩家打字猜词）：异步事件，只转给该玩家所在的那一场。 */
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onAsyncChat(io.papermc.paper.event.player.AsyncChatEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    /** 老式聊天事件（部分插件仍注册它，Paper 会同时触发）。 */
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onLegacyChat(org.bukkit.event.player.AsyncPlayerChatEvent event) {
+        bridgePlayer(event, event.getPlayer());
+    }
+
+    /** Paper 的按键输入事件（GroupRace / SnakeParty 这类靠输入的游戏）。 */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerInput(org.bukkit.event.player.PlayerInputEvent event) {
+        bridgePlayer(event, event.getPlayer());
     }
 
     // ---------- 方块 ----------
@@ -389,6 +554,26 @@ public final class RegionEvents implements Listener {
      * <p>为什么受害者优先：一条伤害"发生在谁身上"决定了谁最该说话；
      * 一个在自己场地里的人被外面的人打，应该由**他所处的那一局**判断（而不是打人者的）。
      */
+
+    /** 直接攻击者，或投掷物/爆炸的"玩家来源"（帮倒忙的判定都要算到他头上）。 */
+    private static Player resolvePlayerDamager(EntityDamageEvent event) {
+        if (!(event instanceof EntityDamageByEntityEvent by)) {
+            return null;
+        }
+        if (by.getDamager() instanceof Player p) {
+            return p;
+        }
+        if (by.getDamager() instanceof org.bukkit.entity.Projectile proj
+                && proj.getShooter() instanceof Player shooter) {
+            return shooter;
+        }
+        if (by.getDamager() instanceof org.bukkit.entity.TNTPrimed tnt
+                && tnt.getSource() instanceof Player src) {
+            return src;
+        }
+        return null;
+    }
+
     private static GameSession ownerOfDamage(EntityDamageEvent event) {
         if (event.getEntity() instanceof Player victim) {
             GameSession s = ownerOfPlayer(victim);
