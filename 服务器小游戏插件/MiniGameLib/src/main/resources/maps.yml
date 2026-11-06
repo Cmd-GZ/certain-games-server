@@ -798,6 +798,7 @@ maps:
           x2: -250
           y2: 78
           z2: 296
+          game: memoryflip      # 之前漏了这行 → 派对按区域算子游戏时永远看不到 memoryflip
   holdthefort:
     世界树战场:
       entry:

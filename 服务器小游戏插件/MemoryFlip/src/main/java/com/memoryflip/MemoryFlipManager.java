@@ -88,9 +88,20 @@ public final class MemoryFlipManager {
 
     MemoryGame game() {
         if (bound == null) {
-            bound = use(arenaKey());
+            // **优先绑到当前房间**：以前这里直接 use("main")，于是派对/控制台驱动的开局
+            // 全都落在同一份 "main" 状态上 —— 两个房间会互相覆盖（2026-11-06 两房验证发现）。
+            String roomId = com.hub.room.RoomContext.currentRoomId();
+            bound = use(roomId == null || roomId.isBlank() ? arenaKey() : roomId);
         }
         return bound;
+    }
+
+    /** 进入某个房间的处理上下文：把 bound 切到那一间（没有上下文就维持现状）。 */
+    void bindRoom() {
+        String roomId = com.hub.room.RoomContext.currentRoomId();
+        if (roomId != null && !roomId.isBlank()) {
+            use(roomId);
+        }
     }
 
     /** 切到某个房间的那一局（取或建）。 */
