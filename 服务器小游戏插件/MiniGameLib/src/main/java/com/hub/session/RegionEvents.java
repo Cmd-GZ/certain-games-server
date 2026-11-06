@@ -109,6 +109,12 @@ public final class RegionEvents implements Listener {
     public void onInteract(org.bukkit.event.player.PlayerInteractEvent event) {
         GameSession owner = ownerOfPlayer(event.getPlayer());
         if (owner == null) {
+            // **公共区兜底**：建场工具这类"还没有对局"的交互，派给声明 wantsPublicEvents 的会话
+            for (GameSession s : GameSession.activeSessions()) {
+                if (s.isActive()) {
+                    s.firePublicEvent(event);
+                }
+            }
             return;
         }
         owner.fireGameEvent(event);

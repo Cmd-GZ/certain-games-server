@@ -450,6 +450,28 @@ public abstract class GameSession {
     protected void onGameEvent(org.bukkit.event.Event event) {
     }
 
+    /**
+     * **公共区事件要不要也派给本会话**（默认 false）。
+     *
+     * <p>为什么需要：有些交互发生在"还没有任何对局"的时候——典型是 HTF 的**建场木棍**：
+     * 地图还没建出来，自然没有区域归属，框架的区域派发到不了任何会话。
+     * 这类会话自己声明需要公共区事件，框架就把**未归属**的交互也送过来（见
+     * {@code RegionEvents#onInteract} 的兜底分支）。
+     *
+     * <p>约定：**只有交互（{@code PlayerInteractEvent}）会这样做**，其它事件类型仍严格按归属派发；
+     * 拿到事件后请自己判断"是不是我的"（例如"这个玩家正在建场吗"）。
+     */
+    protected boolean wantsPublicEvents() {
+        return false;
+    }
+
+    /** 公共区兜底派发（只给同包的 RegionEvents 用）。 */
+    final void firePublicEvent(org.bukkit.event.Event event) {
+        if (wantsPublicEvents()) {
+            fireGameEvent(event);
+        }
+    }
+
     final void fireGameEvent(org.bukkit.event.Event event) {
         try {
             onGameEvent(event);
