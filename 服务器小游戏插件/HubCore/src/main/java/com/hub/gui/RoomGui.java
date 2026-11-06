@@ -36,7 +36,7 @@ public final class RoomGui {
     /** 模板一页多少个。 */
     public static final int TEMPLATE_SLOTS = 9;
 
-    private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacySection();
+    private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
 
     /** 页面的身份标记（用 holder 而不是标题识别，OP 改标题也不会误判）。 */
     public enum Mode {
@@ -238,7 +238,10 @@ public final class RoomGui {
             case TEMPLATES -> "&8选模板（兜底）· " + (gameKey == null ? "全部" : gameKey);
             case ROOM_ACTIONS -> "&8房间 · " + roomId;
         };
-        Inventory inv = Bukkit.createInventory(holder, 27, LEGACY.deserialize(title));
+        // 行数按页内容定：选地图页最多 18 张图 + 返回键，27 格（3 行）会挤在返回键那一行
+        // 导致"展示框错位"（2026-11-07 反馈）；这里给 6 行。
+        int rows = mode == Mode.MAPS ? 6 : (mode == Mode.TEMPLATES ? 4 : 3);
+        Inventory inv = Bukkit.createInventory(holder, rows * 9, LEGACY.deserialize(title));
         holder.setInventory(inv);
 
         if (mode == Mode.MAPS) {
@@ -252,7 +255,7 @@ public final class RoomGui {
                 }
                 inv.setItem(slot++, mapItem(gameKey, mapName));
             }
-            inv.setItem(26, actionItem(Material.ARROW, "&7返回房间列表", "&8回到上一页"));
+            inv.setItem((rows - 1) * 9 + 4, actionItem(Material.ARROW, "&7返回房间列表", "&8回到上一页"));
             if (maps.isEmpty()) {
                 inv.setItem(13, actionItem(Material.BARRIER, "&c这个游戏还没登记地图",
                         "&7见 plugins/MiniGameLib/maps.yml"));
@@ -311,7 +314,7 @@ public final class RoomGui {
     /** @param rightClick 右键（管理员用它打开"管理"页） */
     public static boolean onClick(Player p, Holder holder, int slot, boolean rightClick) {
         if (holder.mode == Mode.MAPS) {
-            if (slot == 26) {
+            if (slot >= 45) {   // 最后一行：返回
                 open(p, holder.gameKey, Mode.ROOMS);
                 return true;
             }

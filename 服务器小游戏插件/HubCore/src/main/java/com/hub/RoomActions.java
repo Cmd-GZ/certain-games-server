@@ -18,7 +18,7 @@ import java.io.File;
  */
 public final class RoomActions {
 
-    private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacySection();
+    private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
     private static Plugin plugin;
 
     /** 已经因"进房"而重载过配置的房间（每个房间只重载一次，避免把已在队列里的玩家清掉）。 */

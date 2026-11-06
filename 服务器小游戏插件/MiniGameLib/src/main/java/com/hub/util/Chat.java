@@ -60,6 +60,19 @@ public final class Chat {
         }
     }
 
+    /**
+     * **把带 `&` 颜色码的字符串转成 Component**（2026-11-07 修：菜单里直接显示 `&e` 的 bug）。
+     *
+     * <p>坑在哪：`LegacyComponentSerializer.legacySection()` 认的是 `§`，不认 `&`；
+     * 直接把 `"&e小游戏菜单"` 丢进去，玩家看到的就是字面的 `&e`。
+     * 全仓库统一走这个方法，别再用 `com.hub.util.Chat.legacy("&…")`。
+     */
+    public static net.kyori.adventure.text.Component legacy(String msg) {
+        String colored = org.bukkit.ChatColor.translateAlternateColorCodes('&', msg == null ? "" : msg);
+        return net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
+                .legacySection().deserialize(colored);
+    }
+
     /** 去掉颜色/格式代码，便于写进控制台日志。 */
     private static String strip(String msg) {
         if (msg == null) {
