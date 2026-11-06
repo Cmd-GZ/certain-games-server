@@ -644,7 +644,7 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
             sender.sendMessage(LEGACY.deserialize("&c用法：/hub create <游戏> <地图> [房间名]"));
             sender.sendMessage(LEGACY.deserialize("&7　子小游戏请写成 &f/hub create arcadeparty:<子游戏> <地图>"
                     + " &7（= 套壳成只有它的派对）"));
-            sender.sendMessage(LEGACY.deserialize("&7可用模板：&f/hub room templates"));
+            sender.sendMessage(LEGACY.deserialize("&7可用地图：&f/hub room maps <游戏>&7；模板（兜底）：&f/hub room templates"));
             return;
         }
         String game = args[1];
@@ -885,9 +885,20 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
                     for (String line : com.hub.gui.RoomGui.describe(game, com.hub.gui.RoomGui.Mode.ROOMS)) {
                         sender.sendMessage(LEGACY.deserialize(line));
                     }
-                    for (String line : com.hub.gui.RoomGui.describe(game, com.hub.gui.RoomGui.Mode.TEMPLATES)) {
+                    // 创建入口现在先选**地图**（正规路径）；模板列表只是老游戏的兜底
+                    for (String line : com.hub.gui.RoomGui.describe(game, com.hub.gui.RoomGui.Mode.MAPS)) {
                         sender.sendMessage(LEGACY.deserialize(line));
                     }
+                }
+            }
+            case "maps", "map" -> {
+                // **选地图**（创建房间的正规入口）的文本版：与 GUI 里的地图页同源
+                if (args.length < 3) {
+                    sender.sendMessage(LEGACY.deserialize("&c用法：/hub room maps <游戏>"));
+                    return;
+                }
+                for (String line : com.hub.gui.RoomGui.describe(args[2], com.hub.gui.RoomGui.Mode.MAPS)) {
+                    sender.sendMessage(LEGACY.deserialize(line));
                 }
             }
             case "templates" -> {

@@ -40,9 +40,11 @@ public final class RoomGui {
 
     /** 页面的身份标记（用 holder 而不是标题识别，OP 改标题也不会误判）。 */
     public enum Mode {
-        /** 房间列表。 */
+        /** 房间列表（第一格 = 创建）。 */
         ROOMS,
-        /** 模板列表（点一个建房间）。 */
+        /** **地图列表**（点一张图 → 按这张图建房间）。这是"创建房间"的正规入口。 */
+        MAPS,
+        /** 模板列表（**兜底**：没有 maps.yml 登记的老游戏才走到这里）。 */
         TEMPLATES,
         /** 单个房间的动作页：加入 / 开始 / 停止 / 删除。 */
         ROOM_ACTIONS
@@ -142,7 +144,31 @@ public final class RoomGui {
     /** 文本版（含 ROOM_ACTIONS 需要 roomId）。 */
     public static List<String> describe(String gameKey, Mode mode, String roomId) {
         List<String> out = new ArrayList<>();
-        if (mode == Mode.ROOMS) {
+        if (mode == Mode.MAPS) {
+            var names = gameKey == null ? java.util.List.<String>of()
+                    : com.hub.room.GameMaps.mapNames(gameKey);
+            out.add("&b[选地图] &f" + (gameKey == null ? "全部" : gameKey)
+                    + " &7共 &f" + names.size() + " &7张（点一张用它建房间）");
+            for (String name : names) {
+                var map = com.hub.room.GameMaps.get(gameKey, name);
+                String worlds = "";
+                int regions = 0;
+                if (map != null) {
+                    java.util.List<String> tpls = new java.util.ArrayList<>();
+                    for (var w : map.worlds()) {
+                        tpls.add(w.templateKey());
+                        if (w.regions() != null) {
+                            regions += w.regions().size();
+                        }
+                    }
+                    worlds = String.join("、", tpls);
+                }
+                out.add("&7- &f" + name + " &7世界=&f" + worlds + " &7区域=&f" + regions + " 块");
+            }
+            if (names.isEmpty()) {
+                out.add("&7（这个游戏还没有登记地图，见 &fplugins/MiniGameLib/maps.yml&7）");
+            }
+        } else if (mode == Mode.ROOMS) {
             var rooms = RoomManager.rooms().stream()
                     .filter(r -> gameKey == null || gameKey.equals(r.game()))
                     .toList();
@@ -150,11 +176,13 @@ public final class RoomGui {
                     + " &7共 &f" + rooms.size() + " &7个"
                     + " &7（第一格永远是 &f创建新房间&7）");
             for (var r : rooms) {
-                out.add("&7- &f" + r.roomId + " &7← 模板 &f" + r.template.key()
-                        + " &7人=&f" + r.playerCount() + " &7空置=&f" + r.idleSeconds() + "s");
+                String map = r.map() == null || r.map().isBlank() ? "（未登记）" : r.map();
+                out.add("&7- &f" + map + " &7状态=&f" + stateText(r)
+                        + " &7人=&f" + r.playerCount()
+                        + " &7房间=&8" + r.roomId);
             }
             if (rooms.isEmpty()) {
-                out.add("&7（还没有房间；点第一格从模板创建）");
+                out.add("&7（还没有房间；点第一格选地图创建）");
             }
         } else if (mode == Mode.ROOM_ACTIONS) {
             var room = RoomManager.room(roomId);
@@ -206,13 +234,30 @@ public final class RoomGui {
                 : new Holder(gameKey, mode);
         String title = switch (mode) {
             case ROOMS -> "&8房间 · " + (gameKey == null ? "全部" : gameKey);
-            case TEMPLATES -> "&8选地图 · " + (gameKey == null ? "全部" : gameKey);
+            case MAPS -> "&8选地图 · " + (gameKey == null ? "全部" : gameKey);
+            case TEMPLATES -> "&8选模板（兜底）· " + (gameKey == null ? "全部" : gameKey);
             case ROOM_ACTIONS -> "&8房间 · " + roomId;
         };
         Inventory inv = Bukkit.createInventory(holder, 27, LEGACY.deserialize(title));
         holder.setInventory(inv);
 
-        if (mode == Mode.ROOMS) {
+        if (mode == Mode.MAPS) {
+            // **选地图**：一张地图可能散在多个世界（派对 3 个），所以这里列的是"地图"而不是"模板世界"
+            java.util.List<String> maps = gameKey == null
+                    ? java.util.List.of() : com.hub.room.GameMaps.mapNames(gameKey);
+            int slot = 0;
+            for (String mapName : maps) {
+                if (slot >= TEMPLATE_SLOTS * 2) {
+                    break;
+                }
+                inv.setItem(slot++, mapItem(gameKey, mapName));
+            }
+            inv.setItem(26, actionItem(Material.ARROW, "&7返回房间列表", "&8回到上一页"));
+            if (maps.isEmpty()) {
+                inv.setItem(13, actionItem(Material.BARRIER, "&c这个游戏还没登记地图",
+                        "&7见 plugins/MiniGameLib/maps.yml"));
+            }
+        } else if (mode == Mode.ROOMS) {
             inv.setItem(0, createButton());
             int slot = 1;
             for (var r : RoomManager.rooms()) {
@@ -225,6 +270,11 @@ public final class RoomGui {
                 inv.setItem(slot++, roomItem(r));
             }
         } else if (mode == Mode.ROOM_ACTIONS) {
+            if (!p.hasPermission("hub.admin")) {
+                // **这一页只给管理员**：玩家看到"开始/停止/删除"完全没有意义（D21 里开局权在主持人手上）
+                open(p, gameKey, Mode.ROOMS);
+                return;
+            }
             var room = RoomManager.room(roomId);
             inv.setItem(0, actionItem(Material.LIME_WOOL, "&a&l进入并加入", "&7传送到房间世界并加入等待队列"));
             boolean canManage = p.hasPermission("hub.admin");
@@ -255,9 +305,23 @@ public final class RoomGui {
 
     /** 处理点击；返回 true 表示这个点击被我们吃掉了。 */
     public static boolean onClick(Player p, Holder holder, int slot) {
+        return onClick(p, holder, slot, false);
+    }
+
+    /** @param rightClick 右键（管理员用它打开"管理"页） */
+    public static boolean onClick(Player p, Holder holder, int slot, boolean rightClick) {
+        if (holder.mode == Mode.MAPS) {
+            if (slot == 26) {
+                open(p, holder.gameKey, Mode.ROOMS);
+                return true;
+            }
+            createFromMap(p, holder.gameKey, slot);
+            return true;
+        }
         if (holder.mode == Mode.ROOMS) {
             if (slot == 0) {
-                open(p, holder.gameKey, Mode.TEMPLATES);
+                // 有地图就**先选地图**（正规路径）；只有没登记地图的老游戏才回退到模板列表
+                open(p, holder.gameKey, hasTemplates(holder.gameKey) ? Mode.MAPS : Mode.TEMPLATES);
                 return true;
             }
             var rooms = RoomManager.rooms().stream()
@@ -265,7 +329,15 @@ public final class RoomGui {
                     .toList();
             int idx = slot - 1;
             if (idx >= 0 && idx < rooms.size()) {
-                open(p, holder.gameKey, Mode.ROOM_ACTIONS, rooms.get(idx).roomId);
+                String rid = rooms.get(idx).roomId;
+                if (rightClick && p.hasPermission("hub.admin")) {
+                    // 右键 = 管理员的管理页（开始/停止/删除）。**普通玩家看不到这一页**
+                    open(p, holder.gameKey, Mode.ROOM_ACTIONS, rid);
+                } else {
+                    // 左键 = 直接进房（玩家点房间就是为了玩，不该再点一层）
+                    p.closeInventory();
+                    joinRoom(p, rid);
+                }
             }
             return true;
         }
@@ -325,6 +397,40 @@ public final class RoomGui {
     }
 
     /**
+     * 按"第 slot 张地图"建房间 —— 与 `/hub create <game> <map>` **同一套解析**：
+     * ① `GameMaps.get(game, map)`；② 子小游戏套壳成派对（D15）；③ `createForMap`。
+     */
+    private static void createFromMap(Player p, String gameKey, int slot) {
+        if (gameKey == null) {
+            return;
+        }
+        var names = com.hub.room.GameMaps.mapNames(gameKey);
+        if (slot < 0 || slot >= names.size()) {
+            return;
+        }
+        String mapName = names.get(slot);
+        var map = com.hub.room.GameMaps.get(gameKey, mapName);
+        if (map == null) {
+            p.sendMessage(LEGACY.deserialize("&c地图 &f" + mapName + " &c不存在（maps.yml）。"));
+            return;
+        }
+        // 子小游戏的房间拥有者永远是派对（D15）：单独开子游戏 = 打一场"只有一个游戏的派对"
+        if (com.hub.room.PartyGames.isSubGame(map.game())) {
+            map = com.hub.room.GameMaps.wrapAsParty(map);
+        }
+        p.closeInventory();
+        p.sendMessage(LEGACY.deserialize("&7正在按地图 &f" + mapName + " &7创建房间…"));
+        var room = RoomManager.createForMap(map, null);
+        if (room == null) {
+            p.sendMessage(LEGACY.deserialize("&c创建失败（达到上限 / 世界缺失）。详情见 /hub doctor。"));
+            return;
+        }
+        p.sendMessage(LEGACY.deserialize("&a已创建房间 &f" + room.roomId
+                + "&a（地图 &f" + mapName + "&a），正在进入…"));
+        joinRoom(p, room.roomId);
+    }
+
+    /**
      * 进入房间：传送进房间世界 + **让游戏把人收进等待队列**（走 games.yml 的 join-command）。
      *
      * <p>只传送是不够的：玩家站在房间里但游戏不知道他来了，什么都不会发生。
@@ -371,7 +477,7 @@ public final class RoomGui {
         ItemStack it = new ItemStack(Material.EMERALD_BLOCK);
         ItemMeta meta = it.getItemMeta();
         meta.displayName(noItalic("&a&l创建新房间"));
-        meta.lore(List.of(noItalic("&7选一个模板，从模板复制一份新世界"), noItalic("&8点一下开始")));
+        meta.lore(List.of(noItalic("&7先选一张地图，再按它复制出新房间"), noItalic("&8点一下开始")));
         it.setItemMeta(meta);
         return it;
     }
@@ -379,12 +485,69 @@ public final class RoomGui {
     private static ItemStack roomItem(RoomManager.Room r) {
         ItemStack it = new ItemStack(Material.PAPER);
         ItemMeta meta = it.getItemMeta();
-        meta.displayName(noItalic("&f" + r.roomId));
-        meta.lore(List.of(
-                noItalic("&7模板：&f" + r.template.key()),
-                noItalic("&7人数：&f" + r.playerCount()),
-                noItalic("&7空置：&f" + r.idleSeconds() + "s"),
-                noItalic("&8点击进入")));
+        // 标题用**地图名**（玩家关心"这是什么图"，不关心房间号）；房间号放 lore 末尾
+        String map = r.map() == null || r.map().isBlank() ? "（未登记地图）" : r.map();
+        meta.displayName(noItalic("&f" + map));
+        List<Component> lore = new ArrayList<>();
+        lore.add(noItalic("&7状态：&f" + stateText(r)));
+        lore.add(noItalic("&7人数：&f" + r.playerCount()));
+        lore.add(noItalic("&7地图：&f" + map));
+        lore.add(noItalic("&7房间：&8" + r.roomId));
+        lore.add(noItalic(r.idleSeconds() > 0 ? "&7空置：&f" + r.idleSeconds() + "s" : "&a有人在场"));
+        lore.add(noItalic("&8左键进入"));
+        meta.lore(lore);
+        it.setItemMeta(meta);
+        return it;
+    }
+
+    /** 房间状态的中文（读该房间的游戏上报状态；没上报 = 等待中）。 */
+    private static String stateText(RoomManager.Room r) {
+        try {
+            if (plugin instanceof com.hub.HubCorePlugin hub && hub.getManager() != null) {
+                var infos = hub.getManager().arenasInRoom(r.game(), r.roomId);
+                for (var info : infos.values()) {
+                    if (info == null || info.state() == null) {
+                        continue;
+                    }
+                    return switch (info.state()) {
+                        case WAITING -> "&a准备中";
+                        case PLAYING -> "&c游戏进行中";
+                    };
+                }
+            }
+        } catch (RuntimeException ignored) {
+            // 读不到就当"准备中"：UI 不该因为查询失败而崩（R3：详情在 doctor）
+        }
+        return "&a准备中";
+    }
+
+    /** 地图条目：一张地图 → 建一个房间。 */
+    private static ItemStack mapItem(String gameKey, String mapName) {
+        ItemStack it = new ItemStack(Material.FILLED_MAP);
+        ItemMeta meta = it.getItemMeta();
+        meta.displayName(noItalic("&b" + mapName));
+        List<Component> lore = new ArrayList<>();
+        var map = com.hub.room.GameMaps.get(gameKey, mapName);
+        if (map != null) {
+            List<String> tpls = new ArrayList<>();
+            for (var w : map.worlds()) {
+                tpls.add(w.templateKey());
+            }
+            lore.add(noItalic("&7世界：&f" + String.join("、", tpls) + " &7（" + tpls.size() + " 个）"));
+            int regions = 0;
+            for (var w : map.worlds()) {
+                if (w.regions() != null) {
+                    regions += w.regions().size();
+                }
+            }
+            lore.add(noItalic("&7区域：&f" + regions + " 块"));
+            if (map.entry() != null) {
+                lore.add(noItalic("&7入口：&f" + (int) map.entry().x() + ", "
+                        + (int) map.entry().y() + ", " + (int) map.entry().z()));
+            }
+        }
+        lore.add(noItalic("&8点击用这张图创建房间"));
+        meta.lore(lore);
         it.setItemMeta(meta);
         return it;
     }

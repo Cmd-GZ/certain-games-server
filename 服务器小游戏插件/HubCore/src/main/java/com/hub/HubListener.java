@@ -121,7 +121,8 @@ public class HubListener implements Listener {
             event.setCancelled(true);
             if (event.getClickedInventory() != null
                     && event.getClickedInventory().equals(event.getView().getTopInventory())) {
-                com.hub.gui.RoomGui.onClick((Player) event.getWhoClicked(), rh, event.getRawSlot());
+                com.hub.gui.RoomGui.onClick((Player) event.getWhoClicked(), rh, event.getRawSlot(),
+                        event.isRightClick());
             }
             return;
         }
