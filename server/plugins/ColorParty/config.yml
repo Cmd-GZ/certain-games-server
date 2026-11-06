@@ -1,0 +1,14 @@
+arenas:
+  玻璃:
+    pos1: tpl:mini_games,12096,100,-101,0.0,0.0
+    pos2: tpl:mini_games,12060,100,-65,0.0,0.0
+    spawn: tpl:mini_games,12078.9336,101,-83.7569,-178.9,-1.6
+    lobby: tpl:mini_games,12079.717,101,-84.4545,-179.8,-1.5
+    panel-pos1: tpl:mini_games,12080,104,-104,0.0,0.0
+    panel-pos2: tpl:mini_games,12078,102,-104,0.0,0.0
+countdown:
+  enabled: true
+  seconds: 3
+  freeze: true
+  title: '&e游戏即将开始：{time}'
+  subtitle: '&7准备好'

@@ -1,0 +1,65 @@
+arenas:
+  玻璃:
+    pos1:
+      ==: org.bukkit.Location
+      world_key: minecraft:world_duel
+      x: 96.0
+      y: 100.0
+      z: -101.0
+      pitch: 0.0
+      yaw: 0.0
+    pos2:
+      ==: org.bukkit.Location
+      world_key: minecraft:world_duel
+      x: 60.0
+      y: 100.0
+      z: -65.0
+      pitch: 0.0
+      yaw: 0.0
+    spawn:
+      ==: org.bukkit.Location
+      world_key: minecraft:world_duel
+      x: 78.93363446049031
+      y: 101.0
+      z: -83.75690298360911
+      pitch: -1.6033967
+      yaw: -178.89111
+    lobby:
+      ==: org.bukkit.Location
+      world_key: minecraft:world_duel
+      x: 79.71696139395146
+      y: 101.0
+      z: -84.4544662649618
+      pitch: -1.5035013
+      yaw: -179.78998
+    panel-pos1:
+      ==: org.bukkit.Location
+      world_key: minecraft:world_duel
+      x: 80.0
+      y: 104.0
+      z: -104.0
+      pitch: 0.0
+      yaw: 0.0
+    panel-pos2:
+      ==: org.bukkit.Location
+      world_key: minecraft:world_duel
+      x: 78.0
+      y: 102.0
+      z: -104.0
+      pitch: 0.0
+      yaw: 0.0
+
+min-players: 2
+max-players: 12
+round-seconds: 5 # 每回合倒计时（秒）：倒计时结束后，不是指定颜色的地板全部消失
+round-gap-seconds: 3 # 塌陷后到下一回合换色的间隔（秒），掉落中的玩家在这段时间里被判淘汰
+start-colors: 4 # 第 1 回合地板随机铺几种颜色（指定颜色从这几种里抽，1~16）
+max-colors: 16 # 颜色种数上限（混凝土共 16 色）
+color-step: 2 # 每回合在前一回合基础上增加几种颜色
+countdown:
+  enabled: true
+  seconds: 3
+  freeze: true
+  title: '&e游戏即将开始：{time}'
+  subtitle: '&7准备好'
+

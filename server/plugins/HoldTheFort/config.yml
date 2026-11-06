@@ -1,0 +1,29 @@
+# 全局配置（§8.1）。地图文件放在 maps/ 下，改完重启生效。
+
+defaults:
+  # 地图没写 speed / epsilon 时继承这里
+  speed: 0.6          # V₀：战线物理速度（格/秒）
+  epsilon: 1.0        # 中性带半宽（格）
+
+accel:
+  # 时间加速（§5.3.1）：到 tmax 时速度是开局的 multiplier 倍
+  t1_minutes: 8
+  tmax_minutes: 15
+  multiplier: 4
+
+match:
+  min_players: 2      # 开局所需总人数
+  team_limit: 8       # 每队人数上限
+  respawn_seconds: 5  # 重生等待
+
+  # 战场世界与大厅世界相同时是否允许开局（默认禁止）
+  allow_same_world: false
+  # 开局时是否按小游戏需要调整战场世界（时间/天气/刷怪/掉落等）。
+  # 战场世界由服务器或世界管理插件负责创建，本插件不会创建或卸载任何世界。
+  configure_world: true
+
+lobby:
+  world: world
+  x: 1.66
+  y: 57.0
+  z: -3.08

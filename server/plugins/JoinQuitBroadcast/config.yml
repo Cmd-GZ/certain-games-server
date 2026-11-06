@@ -1,0 +1,14 @@
+# 玩家进出服务器时的聊天栏播报设置
+# 颜色代码用 & 开头，例如 &a 绿色、&c 红色、&l 加粗
+# 也支持十六进制颜色，例如 &#FFAA00
+# 可用占位符: %player% = 玩家名, %online% = 当前在线人数
+
+join:
+  # 玩家进入时是否播报
+  enabled: true
+  message: "&a[+] &7欢迎 &f%player% &7加入GT小游戏服务器,我喜欢你 &8| &7在线: &f%online%"
+
+quit:
+  # 玩家退出时是否播报
+  enabled: true
+  message: "&c[-] &f%player% &7离开了服务器，后会有期 &8| &7在线: &f%online%"

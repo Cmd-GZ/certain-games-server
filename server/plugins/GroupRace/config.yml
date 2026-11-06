@@ -1,0 +1,153 @@
+# ============================================================
+# 群友竞速赛（GroupRace）配置文件
+# 修改后：在非对局状态执行 /race reload，或重启服务器
+# 注意：YAML 的冒号后面必须有空格，缩进必须用空格（不能用 Tab）
+# ============================================================
+
+# ---------- 人数 ----------
+min-players: 2
+max-players: 16
+
+# ---------- 对局 ----------
+# 一局时长（秒）
+game-seconds: 300
+# 超过一半玩家到达终点后，剩余时间缩短到多少秒
+finish-short-seconds: 20
+
+# ---------- 飞猪 ----------
+pig:
+  # 自动前进速度（格/tick，约 0.5-0.8）
+  speed: 0.45
+  # 惯性：0 = 立即转向，0.9 = 很滑；越大越难急转
+  inertia: 0.9
+  # 按住跳跃键上升速度（格/tick）
+  ascend-speed: 0.35
+  # 按住下蹲键下降速度（格/tick）
+  descend-speed: 0.35
+  # 多名玩家在起点横向散开的间距（格）
+  start-spread: 0
+
+# ---------- 圆环 ----------
+ring:
+  # 圆环半径（格）；方块会围成一圈，中间是穿过用的洞
+  radius: 3.0
+  # 普通圆环方块材质
+  material: SEA_LANTERN
+  # 终点圆环方块材质
+  finish-material: REDSTONE_BLOCK
+
+# ---------- 场地 ----------
+# 用指令设置，不要手写坐标：
+#   /race setlobby | /race setstart | /race pos1 | /race pos2
+#   /race addring | /race addfinish | /race save
+arena:
+  pos1: 'tpl:mini_games,-283.1351,27.7288,27.2234,178.0,28.9'
+  pos2: 'tpl:mini_games,-247.1164,35.9732,-221.3594,29.2,59.8'
+  lobby: 'tpl:mini_games,-267.4779,16,24.3883,179.1,-2.4'
+  start: 'tpl:mini_games,-267.379,16,16.81,-179.7,-3.1'
+
+# 圆环列表（用 /race addring、/race addfinish 自动写入，不要手写）
+rings:
+- world: 'tpl:mini_games'
+  x: -267.62210127698216
+  y: 16.87315943300377
+  z: 3.5719784251385622
+  nx: 0.0
+  nz: -1.0
+  radius: 3.0
+  finish: false
+- world: 'tpl:mini_games'
+  x: -270.95361927890787
+  y: 18.37430362024895
+  z: -12.120620929441252
+  nx: 0.0
+  nz: -1.0
+  radius: 3.0
+  finish: false
+- world: 'tpl:mini_games'
+  x: -265.2135338770904
+  y: 13.879959806125045
+  z: -25.496049168123122
+  nx: 0.0
+  nz: -1.0
+  radius: 3.0
+  finish: false
+- world: 'tpl:mini_games'
+  x: -274.2760922357929
+  y: 13.881989560584056
+  z: -46.484107954659194
+  nx: 0.0
+  nz: -1.0
+  radius: 3.0
+  finish: false
+- world: 'tpl:mini_games'
+  x: -261.90785108411086
+  y: 13.881989560584056
+  z: -66.31077012382421
+  nx: 0.0
+  nz: -1.0
+  radius: 3.0
+  finish: false
+- world: 'tpl:mini_games'
+  x: -263.3805822250339
+  y: 21.370921371453786
+  z: -87.1881041616022
+  nx: 0.0
+  nz: -1.0
+  radius: 3.0
+  finish: false
+- world: 'tpl:mini_games'
+  x: -266.6751594632951
+  y: 13.507188999966786
+  z: -119.86218884803223
+  nx: 0.0
+  nz: -1.0
+  radius: 3.0
+  finish: false
+- world: 'tpl:mini_games'
+  x: -259.99227053521884
+  y: 17.62174510693524
+  z: -141.70354636601033
+  nx: 0.0
+  nz: -1.0
+  radius: 3.0
+  finish: false
+- world: 'tpl:mini_games'
+  x: -269.582345640115
+  y: 17.62174510693524
+  z: -155.32221104824836
+  nx: 0.0
+  nz: -1.0
+  radius: 3.0
+  finish: false
+- world: 'tpl:mini_games'
+  x: -256.8623693375095
+  y: 8.627411976594276
+  z: -169.5520061462205
+  nx: 0.0
+  nz: -1.0
+  radius: 3.0
+  finish: false
+- world: 'tpl:mini_games'
+  x: -265.57808428791446
+  y: 13.504892516538755
+  z: -189.51828782018796
+  nx: 0.0
+  nz: -1.0
+  radius: 3.0
+  finish: false
+- world: 'tpl:mini_games'
+  x: -267.21048376963125
+  y: 17.62309540284984
+  z: -214.22180678156533
+  nx: 0.0
+  nz: -1.0
+  radius: 3.0
+  finish: true
+countdown:
+  enabled: true
+  seconds: 3
+  freeze: true
+  title: '&e游戏即将开始：{time}'
+  subtitle: '&7准备好'
+

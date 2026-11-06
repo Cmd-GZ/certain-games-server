@@ -1,0 +1,203 @@
+titles:
+  xinshou:
+    name: 新手
+    color: '&a'
+    description: '&7刚刚加入服务器的新玩家'
+    visible: true
+  xiaopenyou:
+    name: 爆笑小朋友
+    color: '&6'
+    description: '&1无&2敌&3雷&4霆&5爆&6缸&7小&8朋&9友\n&a&m我&b&m说&c&m起&d&m这&f&m么&1&m长&2&m的&3&m名&4&m字&5&m是&6&m为&7&m了&8&m测&9&m试&a&m你&b&m信&c&m吗'
+    visible: false
+  the_first:
+    name: GT小游戏测试版
+    color: '&6'
+    description: '&5&l参与最初阶段的内测，感谢你的支持！'
+    visible: true
+  shetuan1:
+    name: GTMC社团之夜Ⅰ
+    color: '&c'
+    description: 参与第一次MC社社团之夜活动获得
+    visible: true
+players:
+  8a34579f-ac31-3f3a-ad37-0c45cc5c526e: xinshou
+  b9e091af-7edb-3300-ae7c-a49e0bfe9888: shetuan1
+  f9d2a3cc-55b7-3121-ab89-0af9eede9fc4: the_first
+  e47420a9-602f-3d8a-9fa7-37159bef3846: shetuan1
+  df241e13-06f1-3d99-a34d-f40c01e89192: the_first
+  3aa3c8f7-246a-3a34-93d8-4b7e7dd55abc: xinshou
+  7a7f843b-220b-336b-b3e4-f11300277072: xiaopenyou
+  aca42832-e3bd-3480-b9f1-eb5188a13ae0: the_first
+  931a41c5-0b1d-324d-bb64-e4de45dd22c3: the_first
+  0b86aac4-ecdb-393c-ae63-514e6620a804: the_first
+  4ce97b0f-a675-3bfd-90e6-0beaa300970c: the_first
+  081a3818-7b5f-3559-9200-133712f6410a: shetuan1
+  b2eeae82-689d-3c8c-8813-ecc9d17f5528: the_first
+  f38f89bd-b9d0-3bbc-9d05-cacdfe243582: the_first
+  5fa888db-73eb-3dc1-b34e-c08332f535b1: the_first
+  e7f2c0e1-bd79-32ba-ac12-5161a17f32ce: shetuan1
+  be508801-b192-3d79-9e59-8cc5b5261954: the_first
+  6765f072-2191-3589-b0d6-d02525c03be8: shetuan1
+  7e198621-f77f-3ef6-8bcf-1e9638f2a4ae: shetuan1
+  97800110-4904-3c38-8fbc-de14c88e5972: the_first
+  29fc437c-4d61-31e2-befc-5bf01d273650: xinshou
+  cdd3250c-5144-3214-93b7-31ea29302bdb: shetuan1
+owned:
+  d8d7c492-fe17-3243-a380-52cda71a1046:
+  - xinshou
+  - the_first
+  b9e091af-7edb-3300-ae7c-a49e0bfe9888:
+  - shetuan1
+  - the_first
+  9987ee1c-5c45-3a0c-9370-d2f0b3d07d01:
+  - shetuan1
+  7a7f843b-220b-336b-b3e4-f11300277072:
+  - shetuan1
+  - xiaopenyou
+  - xinshou
+  - the_first
+  e709f9ae-d1e3-350a-bb15-b1762f1c7339:
+  - xinshou
+  - the_first
+  f465c79c-6e0d-3f73-8c49-1078e7884a37:
+  - xinshou
+  - the_first
+  aefd854b-caa9-3639-854a-b57186f51c65:
+  - the_first
+  a80e8c4b-6aab-3462-b201-a98e7217549a:
+  - shetuan1
+  - xinshou
+  a3ed28af-f8c4-3716-8747-f0cacbac5ba1:
+  - the_first
+  e7f2c0e1-bd79-32ba-ac12-5161a17f32ce:
+  - shetuan1
+  - xiaopenyou
+  - xinshou
+  - the_first
+  b75a9754-8043-354a-a20a-ddc7938a03de:
+  - xinshou
+  - the_first
+  81a5184d-3baa-3d21-9ec7-7d13c4328124:
+  - xinshou
+  - the_first
+  8269c041-8ba6-3c5a-9ca0-26c4d9206f32:
+  - the_first
+  931a41c5-0b1d-324d-bb64-e4de45dd22c3:
+  - xinshou
+  - the_first
+  0b86aac4-ecdb-393c-ae63-514e6620a804:
+  - xinshou
+  - the_first
+  512c9122-bdcb-33ca-bc05-a6bcf52ea835:
+  - shetuan1
+  - xinshou
+  - the_first
+  284d04c2-c729-3aa5-9df3-6f06533003eb:
+  - xinshou
+  - the_first
+  4b5daa6c-fc09-30f7-a061-c4e9829700fd:
+  - shetuan1
+  - xinshou
+  f38f89bd-b9d0-3bbc-9d05-cacdfe243582:
+  - shetuan1
+  - xinshou
+  - the_first
+  7e198621-f77f-3ef6-8bcf-1e9638f2a4ae:
+  - shetuan1
+  - xinshou
+  - the_first
+  b0698f4f-d977-319f-bd4b-d47d7088d0c6:
+  - xinshou
+  - the_first
+  cdd3250c-5144-3214-93b7-31ea29302bdb:
+  - shetuan1
+  - xiaopenyou
+  - xinshou
+  - the_first
+  3ed52f68-4a09-3071-af85-d7605683a163:
+  - xinshou
+  - the_first
+  3aa3c8f7-246a-3a34-93d8-4b7e7dd55abc:
+  - xinshou
+  - the_first
+  080ce803-1ba5-35b0-9510-7e58019d6889:
+  - xinshou
+  - the_first
+  aca42832-e3bd-3480-b9f1-eb5188a13ae0:
+  - the_first
+  e494a2a5-9233-36bb-8f37-2679d8f4de49:
+  - shetuan1
+  - xinshou
+  081a3818-7b5f-3559-9200-133712f6410a:
+  - shetuan1
+  - xiaopenyou
+  - xinshou
+  - the_first
+  5fa888db-73eb-3dc1-b34e-c08332f535b1:
+  - xinshou
+  - the_first
+  21a76f60-afa5-3030-9e79-bfa736bf7a62:
+  - xinshou
+  - the_first
+  be508801-b192-3d79-9e59-8cc5b5261954:
+  - xinshou
+  - the_first
+  6765f072-2191-3589-b0d6-d02525c03be8:
+  - shetuan1
+  - xinshou
+  - the_first
+  bda39f71-bed7-3077-9140-55fcec690a71:
+  - the_first
+  8a34579f-ac31-3f3a-ad37-0c45cc5c526e:
+  - xinshou
+  - the_first
+  6d3a73c4-b1db-3c08-bc96-0a8474ff5a20:
+  - xinshou
+  - the_first
+  45ea9b9e-ac1a-372f-b522-db46b8fd53b8:
+  - shetuan1
+  - xinshou
+  f9d2a3cc-55b7-3121-ab89-0af9eede9fc4:
+  - xinshou
+  - the_first
+  e47420a9-602f-3d8a-9fa7-37159bef3846:
+  - shetuan1
+  - xinshou
+  - the_first
+  df241e13-06f1-3d99-a34d-f40c01e89192:
+  - xinshou
+  - the_first
+  6b34ed68-0014-3ecb-878f-58a77393965c:
+  - xinshou
+  - the_first
+  84d339e1-d014-4135-8de3-58feb0ab56cc:
+  - xinshou
+  - the_first
+  1870d4c0-19c5-38f0-80ea-215772ca5b1b:
+  - xinshou
+  - the_first
+  f7b79143-b71d-3bc3-ac25-fe57f20486b6:
+  - shetuan1
+  - xinshou
+  4ce97b0f-a675-3bfd-90e6-0beaa300970c:
+  - xinshou
+  - the_first
+  b2eeae82-689d-3c8c-8813-ecc9d17f5528:
+  - xinshou
+  - the_first
+  cf1727c4-3f9c-3652-b400-094ca6c3dde1:
+  - xinshou
+  - the_first
+  df937075-3705-3e6e-8933-424ac1394139:
+  - xinshou
+  - the_first
+  0aca6cd5-e46f-3a44-bf87-8725877e171c:
+  - xinshou
+  - the_first
+  29fc437c-4d61-31e2-befc-5bf01d273650:
+  - xinshou
+  - the_first
+  97800110-4904-3c38-8fbc-de14c88e5972:
+  - the_first
+  a8aa5895-533d-38d4-b3ab-8455cf7e3028:
+  - the_first

@@ -1,0 +1,12 @@
+arenas:
+  群系:
+    pos1: tpl:mini_games,3991.45,29,-56.52,-100.1,90.0
+    pos2: tpl:mini_games,4030.8352,2.1451,-96.5416,72.2,66.8
+    center: tpl:mini_games,4011.6648,4,-80.4762,-58.9,-1.0
+countdown:
+  enabled: true
+  seconds: 3
+  freeze: true
+  title: '&e游戏即将开始：{time}'
+  subtitle: '&7准备好'
+join-signs: {}

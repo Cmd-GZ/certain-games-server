@@ -1,0 +1,29 @@
+templates:
+  mini_games:
+    folder: tmpl_mini_games
+  tntbt_twins:
+    folder: tmpl_tntbt_twins
+  tntbt_ruins:
+    folder: tmpl_tntbt_ruins
+  mm_xft:
+    folder: tmpl_mm_xft
+  mm_ship:
+    folder: tmpl_mm_ship
+  mm_arch:
+    folder: tmpl_mm_arch
+  mm_villa:
+    folder: tmpl_mm_villa
+  duel_mace:
+    folder: tmpl_duel_mace
+  duel_sumo:
+    folder: tmpl_duel_sumo
+  fb:
+    folder: tmpl_fb
+  bdr:
+    folder: tmpl_bdr
+  gtb:
+    folder: tmpl_gtb
+  lp:
+    folder: tmpl_lp
+  htf:
+    folder: tmpl_htf

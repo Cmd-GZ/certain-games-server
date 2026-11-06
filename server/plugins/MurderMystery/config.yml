@@ -1,0 +1,55 @@
+arenas:
+  圣诞工厂:
+    pos1: tpl:mm_xft,-80.7333,151,-59.7166,-42.3,30.1
+    pos2: tpl:mm_xft,75.5142,67.3153,60.0216,136.8,-20.2
+    center: tpl:mm_xft,6.0928,80.0625,-34.0003,0.5,1.5
+    lobby: tpl:mm_xft,6.0928,80.0625,-34.0003,0.5,1.5
+  ship:
+    pos1: tpl:mm_ship,182.69,133.3424,-269.015,35.2,14.7
+    pos2: tpl:mm_ship,110.1658,72.5981,-47.6677,-114.0,-9.8
+    center: tpl:mm_ship,148.3818,110.0625,-126.0789,2.0,64.5
+    lobby: tpl:mm_ship,148.658,110.0625,-126.5037,4.2,52.0
+  档案室顶层:
+    pos1: tpl:mm_arch,577.5144,104.4776,-103.1386,140.1,33.6
+    pos2: tpl:mm_arch,402.2517,44.1467,-261.2131,-34.8,-21.0
+    center: tpl:mm_arch,426.535,69,-194.1895,-90.8,0.2
+    lobby: tpl:mm_arch,516.5517,61.0296,-194.6113,93.4,2.5
+  别墅:
+    pos1: tpl:mm_villa,33.3938,163.6919,352.3035,138.6,6.0
+    pos2: tpl:mm_villa,-114.0106,120.9412,218.6339,-125.5,-86.7
+    center: tpl:mm_villa,-143.4865,136,312.4997,-89.4,90.0
+    lobby: tpl:mm_villa,-143.4865,136,312.4997,-89.4,90.0
+  murderer:
+    base: 1.0
+    step: 2.0
+    max: 50.0
+  detective:
+    base: 1.0
+    step: 2.0
+    max: 50.0
+  hunter:
+    base: 1.0
+    step: 2.0
+    max: 50.0
+crossbow-cost: 12
+countdown:
+  enabled: true
+  seconds: 3
+  freeze: false
+  title: '&e游戏即将开始：{time}'
+  subtitle: '&7准备好'
+role-chance:
+  murderer:
+    base: 1.0
+    step: 2.0
+    max: 50.0
+  detective:
+    base: 1.0
+    step: 2.0
+    max: 50.0
+  hunter:
+    base: 1.0
+    step: 2.0
+    max: 50.0
+join-signs: {}
+

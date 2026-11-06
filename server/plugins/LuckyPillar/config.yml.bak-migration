@@ -1,0 +1,55 @@
+# ========== 幸运之柱（LuckyPillar）配置 ==========
+# 注意：YAML 的「键: 值」冒号后必须有空格，否则整份配置加载失败（场地全没）。
+# 建场只需要两个点：/lp setup <名> → 金锄头点中心、纸点等待点 → 绿宝石保存。
+
+min-players: 2
+max-players: 12
+
+# 柱阵（开局按人数现生成，不落盘）
+pillar-depth: 30 # 柱子总高度（柱顶向下多少格）；中心点 Y 已跟着抬高 20 格，柱底位置不变
+pillar-spacing: 16 # 相邻柱水平间距（固定 16 = 谁也跳不过去）
+ring-radius: 0 # 0 = 按 人数*间距/2π 自动算（clamp 5~32）；>0 = 固定半径
+center-platform-radius: 1 # 中心平台半径（1 = 3x3 草方块，铺在柱底高度）；0 = 不铺
+
+# 缩圈（世界边境）
+shrink-start-gap: 20 # 开局圈半径 = 柱环半径 + 这个值：柱子在圈内约 20 格处（0 = 贴住柱子）
+shrink-delay-seconds: 60 # 开局后多少秒才开始缩圈（这段时间圈不动，先给玩家捡东西）
+shrink-total-seconds: 0 # 0 = 45 + 10*人数
+shrink-target-radius: 2 # 缩到 2 = 圈内只剩约 5x5 空地（没台子，自己搭），之后冻结边境进终局
+out-of-zone-damage: 1 # 圈外每秒侵蚀伤害（点）
+out-of-zone-grace-seconds: 3 # 出圈多少秒后才开始掉血
+
+# 事件
+loot-interval: 2 # 每多少秒每人 1 件随机物品
+loot-gear-chance: 0.3 # 每次抽物品从「武器/工具/装备」池出的概率（0~1；其余走普通池）
+loot-enchant-chance: 0.35 # 武器/工具/装备再带 1 个随机低等级附魔的概率（0~1）
+loot-enchant-max-level: 1 # 附魔等级上限（1 = 只有 I 级；2 = 最多 II 级，上限 3）
+disaster-interval: 22 # 天灾池（箭雨 / 苦力怕雨）间隔秒数
+pvp: true # 场内玩家互伤开关（世界 world_lp 也要 pvp: true）
+
+# 终局
+final-tnt-interval: 2.5 # TNT 雨基础间隔（秒），存活人少时自动压缩到 1.2s 下限
+final-max-seconds: 120 # 终局封顶时长，到点按血量排名结算
+final-tnt-fuse: 20 # TNT 引信（tick）
+arenas:
+  虚空:
+    world: world_lp
+    center:
+      x: 79.0
+      y: 101.64
+      z: 73.83
+      yaw: 117.61
+      pitch: 20.58
+    lobby:
+      x: -52.14
+      y: 26.0
+      z: -6.78
+      yaw: 72.54
+      pitch: 14.88
+countdown:
+  enabled: true
+  seconds: 3
+  freeze: true
+  title: '&e游戏即将开始：{time}'
+  subtitle: '&7准备好'
+

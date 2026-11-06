@@ -1,0 +1,40 @@
+arenas:
+  群系:
+    pos1:
+      ==: org.bukkit.Location
+      world_key: minecraft:world_hp
+      x: -8.55
+      y: 29.0
+      z: -56.52
+      pitch: 90.0
+      yaw: -100.06058
+    pos2:
+      ==: org.bukkit.Location
+      world_key: minecraft:world_hp
+      x: 30.835196613287096
+      y: 2.1451278738363357
+      z: -96.54161088242559
+      pitch: 66.82718
+      yaw: 72.157776
+    center:
+      ==: org.bukkit.Location
+      world_key: minecraft:world_hp
+      x: 11.664804884866
+      y: 4.0
+      z: -80.47624416786132
+      pitch: -0.99337065
+      yaw: -58.88916
+
+# 游戏规则
+min-players: 2
+max-players: 8
+round-seconds: 90
+two-bomb-threshold: 5 # 存活人数 >= 此值时同时 2 个 TNT，否则 1 个
+join-signs: {}
+countdown:
+  enabled: true
+  seconds: 3
+  freeze: true
+  title: '&e游戏即将开始：{time}'
+  subtitle: '&7准备好'
+

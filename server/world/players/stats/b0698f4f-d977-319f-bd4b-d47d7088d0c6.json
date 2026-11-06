@@ -1,0 +1,61 @@
+{
+  "stats": {
+    "minecraft:picked_up": {
+      "minecraft:gold_ingot": 150,
+      "minecraft:feather": 4,
+      "minecraft:chicken": 3,
+      "minecraft:diamond_block": 3
+    },
+    "minecraft:killed": {
+      "minecraft:chicken": 1
+    },
+    "minecraft:used": {
+      "minecraft:stone_sword": 15,
+      "minecraft:wind_charge": 19,
+      "minecraft:red_bed": 1,
+      "minecraft:cake": 1,
+      "minecraft:iron_sword": 15,
+      "minecraft:tnt": 23,
+      "minecraft:mace": 7,
+      "minecraft:oak_log": 22,
+      "minecraft:golden_apple": 1,
+      "minecraft:barrier": 1,
+      "minecraft:flint_and_steel": 1,
+      "minecraft:ender_pearl": 1,
+      "minecraft:fishing_rod": 4
+    },
+    "minecraft:dropped": {
+      "minecraft:diamond_block": 3,
+      "minecraft:arrow": 5,
+      "minecraft:compass": 1,
+      "minecraft:tnt": 1
+    },
+    "minecraft:killed_by": {
+      "minecraft:player": 11,
+      "minecraft:zombie": 1
+    },
+    "minecraft:custom": {
+      "minecraft:talked_to_villager": 4,
+      "minecraft:time_since_rest": 255021,
+      "minecraft:walk_one_cm": 64130,
+      "minecraft:leave_game": 39,
+      "minecraft:mob_kills": 1,
+      "minecraft:damage_taken": 12946,
+      "minecraft:damage_dealt": 1577,
+      "minecraft:play_time": 1091593,
+      "minecraft:jump": 1380,
+      "minecraft:time_since_death": 255001,
+      "minecraft:drop": 10,
+      "minecraft:sprint_one_cm": 107841,
+      "minecraft:fall_one_cm": 125555,
+      "minecraft:total_world_time": 1091593,
+      "minecraft:fly_one_cm": 351169,
+      "minecraft:crouch_one_cm": 1028,
+      "minecraft:sneak_time": 673,
+      "minecraft:climb_one_cm": 121,
+      "minecraft:deaths": 19,
+      "minecraft:player_kills": 2
+    }
+  },
+  "DataVersion": 4903
+}

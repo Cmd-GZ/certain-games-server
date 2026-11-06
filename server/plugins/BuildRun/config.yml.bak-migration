@@ -1,0 +1,80 @@
+arenas:
+  红地板:
+    pos1:
+      ==: org.bukkit.Location
+      world_key: minecraft:world_gtb
+      x: -9.0
+      y: 146.0
+      z: -116.0
+      pitch: 0.0
+      yaw: 0.0
+    pos2:
+      ==: org.bukkit.Location
+      world_key: minecraft:world_gtb
+      x: -23.0
+      y: 127.0
+      z: -130.0
+      pitch: 0.0
+      yaw: 0.0
+    direction: -x
+    gap: 0
+    spawn:
+      ==: org.bukkit.Location
+      world_key: minecraft:world_gtb
+      x: -14.738249689485768
+      y: 128.0
+      z: -121.27563774557983
+      pitch: 1.303949
+      yaw: 171.88803
+    lobby:
+      ==: org.bukkit.Location
+      world_key: minecraft:world_gtb
+      x: -14.738249689485768
+      y: 128.0
+      z: -121.27563774557983
+      pitch: 0.40500498
+      yaw: 177.58142
+
+# max-players 已取消：你建我跑不再限制人数（加几个人就复制几块场地）；这个键现在不读，写了也不生效
+min-players: 2 # 至少几人开局（多少人就有多少块复制场地）——这是下限，不是上限
+build-seconds: 180 # 第一阶段：每人建跑酷的时长（秒）；180 = 3 分钟
+run-seconds: 30 # 每条跑酷每次尝试的时限（秒）：建造者一次、其他跑者一次（90→30，2026-10-18）
+run-preview-seconds: 3 # 建造者开跑前：所有人（含建造者本人）先在旁观模式看这条跑酷几秒（0 = 关，直接开跑）
+fail-linger-seconds: 3 # 建造者没通过（碰地板/跑出场地/超时）后：留在原地（免伤）让观众再看几秒，到点才转旁观+跳过（0 = 立刻跳过）
+highlight-end: true # 其他选手（非建造者）一起跑时：在终点方块上挂发光轮廓（隔墙可见）；false = 不挂
+floor-tolerance: 1 # 跑者脚底低于「场地最低Y + 1 + 这个值」= 碰到地板判失败（默认1 = 至少离地板2格）
+copy-blocks-per-tick: 4000 # 复制/清理场地时每 tick 最多处理多少方块（越大越快、越卡）
+max-volume: 100000 # 单块场地的方块数上限（超过不让开局：每块都要复制 N 份）
+
+# ========== 羊毛特殊效果 ==========
+# 站在某种羊毛上就给对应药水效果，离开后效果自然再留 effect-seconds 秒。
+# 绿色（起点）/ 粉色（终点）是标志方块，不在表里，也不能自己放、拆不掉。
+# 红色羊毛是「死亡方块」：跑的时候踩到立刻淘汰（建造阶段踩只提示，不会死）。
+wool:
+  effect-seconds: 5 # 每次踩上羊毛给多少秒效果
+  refresh-ticks: 5 # 每多少 tick 检查一次脚下羊毛（5 = 0.25s；改大更省性能、更迟钝）
+  end-hold-ms: 1000 # 跑者在终点方块（粉羊毛）上连续站满多少毫秒算通过
+  death-blocks: # 死亡方块：跑的时候踩到立刻淘汰（建造阶段只提示）；写成 [] = 关掉
+    - RED_WOOL
+  effects: # 颜色: "效果名:等级"（0 = I 级；多个用逗号隔开，如 "SPEED:1,JUMP_BOOST:0"）
+    WHITE_WOOL: JUMP_BOOST:0 # 跳跃提升 I
+    ORANGE_WOOL: JUMP_BOOST:1 # 跳跃提升 II
+    MAGENTA_WOOL: REGENERATION:0 # 生命恢复 I
+    LIGHT_BLUE_WOOL: DOLPHINS_GRACE:0 # 海豚的恩惠
+    YELLOW_WOOL: SPEED:1 # 速度 II
+    LIME_WOOL: LEVITATION:0 # 漂浮 I
+    CYAN_WOOL: WATER_BREATHING:0 # 水下呼吸
+    BLUE_WOOL: SLOWNESS:0 # 缓慢 I（坑）
+    BROWN_WOOL: MINING_FATIGUE:0 # 挖掘疲劳（坑）
+    # 红色羊毛是死亡方块（见上面的 death-blocks），不在这里配药水效果
+    BLACK_WOOL: BLINDNESS:0 # 失明（坑）
+    GRAY_WOOL: INVISIBILITY:0 # 隐身
+    LIGHT_GRAY_WOOL: GLOWING:0 # 发光
+    PURPLE_WOOL: LEVITATION:1 # 漂浮 II
+countdown:
+  enabled: true
+  seconds: 3
+  freeze: true
+  title: '&e游戏即将开始：{time}'
+  subtitle: '&7准备好'
+

@@ -1,0 +1,74 @@
+[
+  {
+    "uuid": "e7f2c0e1-bd79-32ba-ac12-5161a17f32ce",
+    "name": "SharpOwO",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  },
+  {
+    "uuid": "7a7f843b-220b-336b-b3e4-f11300277072",
+    "name": "Oni_anpeti",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  },
+  {
+    "uuid": "84d339e1-d014-4135-8de3-58feb0ab56cc",
+    "name": "SharpOwO",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  },
+  {
+    "uuid": "6b34ed68-0014-3ecb-878f-58a77393965c",
+    "name": "Azami",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  },
+  {
+    "uuid": "512c9122-bdcb-33ca-bc05-a6bcf52ea835",
+    "name": "ARKNIGHTS_5G",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  },
+  {
+    "uuid": "bf688de4-0154-3c57-9a34-ff5aaadd4cf7",
+    "name": "\u0016\u0016Command_Gojira",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  },
+  {
+    "uuid": "cdd3250c-5144-3214-93b7-31ea29302bdb",
+    "name": "Breeze_dust",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  },
+  {
+    "uuid": "a8ef4538-34df-3813-b262-9f61623fb973",
+    "name": "Oni_anpetistop",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  },
+  {
+    "uuid": "28b92507-fa53-3d21-8b69-4dfad7bd79f9",
+    "name": "stop",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  },
+  {
+    "uuid": "b9e091af-7edb-3300-ae7c-a49e0bfe9888",
+    "name": "Command_Gojira",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  },
+  {
+    "uuid": "aa479da3-e13a-3ad6-b081-1bf05d6ed0cb",
+    "name": "Command_Gojria",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  },
+  {
+    "uuid": "081a3818-7b5f-3559-9200-133712f6410a",
+    "name": "13247903",
+    "level": 4,
+    "bypassesPlayerLimit": false
+  }
+]

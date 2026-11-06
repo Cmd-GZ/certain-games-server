@@ -1,0 +1,100 @@
+# ============================================================
+# 动物屠宰（AnimalSlaughter）配置文件
+# 修改后在非对局状态执行 /animal reload，或重启服务器
+# 注意：YAML 的冒号后面必须有空格，缩进必须用空格（不能用 Tab）
+# ============================================================
+
+# ---------- 人数 ----------
+# 最少开局人数（至少 2）
+min-players: 2
+# 最多人数
+max-players: 16
+
+# ---------- 对局 ----------
+# 一局时长（秒）
+game-seconds: 60
+# 开始后先倒计时几秒才放动物/开始计时（标题显示「游戏即将开始：3/2/1」）
+countdown-seconds: 3
+
+# ---------- 动物 ----------
+mobs:
+  # 每隔多少 tick 检查并补充一次动物（20 tick = 1 秒）
+  spawn-interval-ticks: 20
+  # 每次检查最多补几只
+  spawn-per-cycle: 20
+  # 正常动物上限（达到上限就不再生成）
+  limits:
+    chicken: 16
+    pig: 12
+    cow: 8
+  # 干扰项上限（独立计算；三种各一个上限）
+  decoy-limits:
+    chicken: 8
+    pig: 4
+    cow: 4
+  # 正常动物的血量（干扰项固定 1 血）
+  health:
+    chicken: 1.0
+    pig: 2.0
+    cow: 4.0
+  # 击杀得分
+  score:
+    chicken: 1
+    pig: 3
+    cow: 5
+  # 干扰项击杀扣当前分数的百分比（扣到 0 为止）
+  decoy-percent: 50
+  invulnerable-ticks: 0
+
+# ---------- 逃跑 ----------
+flee:
+  # 被攻击后逃跑的寻路速度倍率（1.0 = 正常走路）
+  speed: 1.5
+  # 牛逃跑时的速度倍率（更快的牛）
+  cow-speed: 2.4
+  # 每次被打后逃跑持续多少毫秒
+  duration-ms: 1200
+  wander-radius: 4.0
+  repath-ms: 400
+
+# ---------- 掉落物 ----------
+drops:
+  # 掉落物不可拾取，多少秒后自动清理
+  clear-seconds: 8
+
+# ---------- 场地 ----------
+# 用指令设置，不要手写坐标；设置完成后 /animal save
+arena:
+  # 圆心（站在场地中心执行 /animal setarena <半径> 会自动写入）
+  center: tpl:mini_games,12.50,50.00,301.50,1.3,-2.6
+  # 圆形半径（格）
+  radius: 20
+  # 等待点
+  lobby: tpl:mini_games,12.53,50.00,301.42,90.0,-1.4
+  # 玩家出生点，可多个；用 /animal addspawn 添加或 /animal genspawns 自动生成
+  spawns:
+  - tpl:mini_games,25.50,50.00,300.50,0.0,0.0
+  - tpl:mini_games,21.50,50.00,301.50,0.0,0.0
+  - tpl:mini_games,3.50,50.00,311.50,0.0,0.0
+  - tpl:mini_games,19.50,50.00,300.50,0.0,0.0
+  - tpl:mini_games,20.50,50.00,313.50,0.0,0.0
+  - tpl:mini_games,4.50,50.00,297.50,0.0,0.0
+  - tpl:mini_games,-2.50,50.00,300.50,0.0,0.0
+  - tpl:mini_games,1.50,50.00,296.50,0.0,0.0
+  - tpl:mini_games,17.50,50.00,290.50,0.0,0.0
+  - tpl:mini_games,7.50,50.00,291.50,0.0,0.0
+  - tpl:mini_games,5.50,50.00,317.50,0.0,0.0
+  - tpl:mini_games,14.50,50.00,309.50,0.0,0.0
+  - tpl:mini_games,5.50,50.00,289.50,0.0,0.0
+  - tpl:mini_games,25.50,50.00,291.50,0.0,0.0
+  - tpl:mini_games,7.50,50.00,295.50,0.0,0.0
+  - tpl:mini_games,16.50,50.00,300.50,0.0,0.0
+sidebar:
+  enabled: true
+  title: '&c&l动物屠宰 · 积分'
+  header: '&7积分榜'
+  line: '&e{name}'
+  footer: '&7{phase} &e{time}s'
+  header-score: 0
+  footer-score: 0
+

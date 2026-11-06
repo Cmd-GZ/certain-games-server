@@ -1,0 +1,115 @@
+# ============================================================
+# 击退大战（KnockbackBattle）配置文件
+# 修改后在非对局状态执行 /kb reload，或重启服务器
+# 注意：YAML 的冒号后面必须有空格，缩进必须用空格（不能用 Tab）
+# ============================================================
+
+# ---------- 人数 ----------
+# 最少开局人数（至少 2）
+min-players: 2
+# 最多人数
+max-players: 16
+
+# ---------- 对局 ----------
+# 一局时长（秒）；时间到时仍存活的玩家全部获胜
+game-seconds: 180
+
+# ---------- 对局增益 ----------
+# 开局时给所有玩家；duration-seconds: 0 = 整局持续
+# amplifier: 0 = 等级 I，1 = 等级 II（可自行调）
+player-effects:
+  speed:
+    enabled: true
+    amplifier: 1
+    duration-seconds: 0
+  jump-boost:
+    enabled: true
+    amplifier: 4
+    duration-seconds: 0
+
+# ---------- 等待室道具 ----------
+# 返回大厅：默认放在快捷栏最后一格（槽位 8）
+# 开始游戏：仅管理员拿到，默认放在第 5 格（槽位 4）
+wait-items:
+  return:
+    material: RED_BED
+    name: '&a&l返回大厅 &7(右键)'
+    lore:
+    - '&7点击返回大厅'
+    slot: 8
+  start:
+    material: PAPER
+    name: '&a&l开始游戏 &7(右键)'
+    lore:
+    - '&7点击立刻开始本局'
+    slot: 4
+
+# ---------- 击退镐 ----------
+stick:
+  # 默认用铁镐；想换木质/石质/钻石镐直接改这里
+  material: IRON_PICKAXE
+  name: '&e&l击退镐 &7(左键敲击)'
+  lore:
+  - '&7左键敲击玩家，把 TA 打飞'
+  # 命中后给目标的水平 / 垂直速度（越大飞得越远）
+  knockback:
+    horizontal: 1.2
+    vertical: 0.45
+  # 两次有效敲击之间的冷却（秒）
+  cooldown-seconds: 0.4
+
+# ---------- 风弹 ----------
+wind-charge:
+  material: WIND_CHARGE
+  name: '&b&l风弹 &7(右键发射)'
+  lore:
+  - '&7炸飞周围的玩家'
+  - '&7发射时也会推动自己'
+  # 风弹飞行速度
+  speed: 1.5
+  # 两次使用之间的冷却（秒）
+  use-cooldown-seconds: 0.5
+  # 弹药：开局给 amount 个，每 refill-seconds 秒补 refill-amount 个，最多 amount 个
+  ammo:
+    amount: 8
+    refill-amount: 1
+    refill-seconds: 3
+  # 命中后的击退（半径内的玩家都会受到；距离越远力度略低）
+  knockback:
+    horizontal: 2.0
+    vertical: 0.8
+    radius: 5.0
+    # 发射瞬间推动自己的力度
+    self-horizontal: 0.8
+    self-vertical: 0.8
+
+# ---------- 场地 ----------
+# 用指令设置，不要手写坐标：
+#   /kb setpos1 | /kb setpos2 | /kb setlobby | /kb addspawn | /kb setvoid | /kb save
+arena:
+  # 区域两个对角（只取 X/Z；站在场地范围内即可）
+  pos1: tpl:mini_games,302.08,30.52,-238.11,41.9,26.4
+  pos2: tpl:mini_games,232.71,30.52,-163.70,-132.3,34.5
+  # 等待点
+  lobby: tpl:mini_games,269.39,24.00,-200.36,-2.2,-7.2
+  # 出生点，可多个；用 /kb addspawn 添加
+  spawns:
+  - tpl:mini_games,293.45,28.00,-210.36,65.1,0.4
+  - tpl:mini_games,290.43,28.00,-213.42,55.6,5.8
+  - tpl:mini_games,293.27,28.00,-188.80,114.9,-0.6
+  - tpl:mini_games,290.53,28.00,-185.55,125.3,-0.6
+  - tpl:mini_games,283.61,28.00,-178.84,146.9,-0.0
+  - tpl:mini_games,280.37,28.00,-175.67,155.9,0.6
+  - tpl:mini_games,258.87,28.00,-175.13,-156.4,3.1
+  - tpl:mini_games,255.46,28.00,-178.36,-145.2,4.0
+  - tpl:mini_games,248.58,28.00,-185.32,-123.3,7.5
+  - tpl:mini_games,245.41,28.00,-188.32,-115.6,5.8
+  # 低于这个 Y 判定掉出场地，淘汰为旁观者
+  void-y: -64.0
+countdown:
+  enabled: true
+  seconds: 3
+  freeze: true
+  title: '&e游戏即将开始：{time}'
+  subtitle: '&7准备好'
+

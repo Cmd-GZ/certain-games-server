@@ -1,0 +1,89 @@
+# ============================================================
+# 蛇行派对（SnakeParty）配置文件
+# 修改后在非对局状态执行 /snake reload，或重启服务器
+# 注意：YAML 的冒号后面必须有空格，缩进必须用空格（不能用 Tab）
+# ============================================================
+
+# ---------- 人数 ----------
+# 最少开局人数（至少 2）
+min-players: 2
+# 最多人数
+max-players: 16
+
+# ---------- 对局 ----------
+# 一局时长（秒）；时间到时仍存活的玩家共同获胜
+game-seconds: 120
+# 开始后先播几秒 title 倒计时（游戏即将开始：3/2/1），倒计时期间玩家不能动、也不会生成玻璃板
+countdown-seconds: 3
+
+# ---------- 自动前进 ----------
+movement:
+  # 每 tick 沿视线方向前进的速度（0.25 左右 ≈ 正常走路偏快；越大越快）
+  speed: 0.28
+  boost-multiplier: 1.7
+  empty-w-multiplier: 1.15
+
+# ---------- 玻璃板 ----------
+plate:
+  # 刚开局时每块玻璃板的存活时间（秒）
+  lifetime-seconds: 3.0
+  # 每过 1 秒，玻璃板存活时间增加多少毫秒（越大 = 消失得越慢）
+  lifetime-growth-ms-per-second: 150
+  # 玻璃板存活时间上限（秒）
+  max-lifetime-seconds: 45.0
+  # 玩家颜色顺序（自动拼成 <颜色>_STAINED_GLASS）
+  colors:
+  - RED
+  - ORANGE
+  - YELLOW
+  - LIME
+  - LIGHT_BLUE
+  - BLUE
+  - PURPLE
+  - MAGENTA
+  - PINK
+  - CYAN
+  - WHITE
+  - GRAY
+  - BROWN
+  - GREEN
+  - BLACK
+  - LIGHT_GRAY
+  place-distance: 1.2
+
+# ---------- 场地 ----------
+# 用指令设置，不要手写坐标；设置完成后 /snake save
+arena:
+  # 场地中心（站在平台中央执行 /snake setarena <半径> 自动写入）
+  center: tpl:mini_games,258.50,34.00,296.50,-147.4,63.5
+  # 方形场地的一半边长（格）；实际范围是 (2*半径+1) x (2*半径+1)
+  radius: 60
+  # /snake setarena 铺平台用的方块
+  floor-material: STONE
+  # 等待点
+  lobby: tpl:mini_games,263.41,34.00,294.77,86.1,16.1
+  # 玩家出生点，可多个；用 /snake addspawn 添加或 /snake genspawns 自动生成
+  spawns:
+  - tpl:mini_games,294.50,34.00,296.50,0.0,0.0
+  - tpl:mini_games,291.50,34.00,310.50,22.5,0.0
+  - tpl:mini_games,283.50,34.00,321.50,45.0,0.0
+  - tpl:mini_games,272.50,34.00,329.50,67.5,0.0
+  - tpl:mini_games,258.50,34.00,332.50,90.0,0.0
+  - tpl:mini_games,244.50,34.00,329.50,112.5,0.0
+  - tpl:mini_games,233.50,34.00,321.50,135.0,0.0
+  - tpl:mini_games,225.50,34.00,310.50,157.5,0.0
+  - tpl:mini_games,222.50,34.00,296.50,180.0,0.0
+  - tpl:mini_games,225.50,34.00,282.50,202.5,0.0
+  - tpl:mini_games,233.50,34.00,271.50,225.0,0.0
+  - tpl:mini_games,244.50,34.00,263.50,247.5,0.0
+  - tpl:mini_games,258.50,34.00,260.50,270.0,0.0
+  - tpl:mini_games,272.50,34.00,263.50,292.5,0.0
+  - tpl:mini_games,283.50,34.00,271.50,315.0,0.0
+  - tpl:mini_games,291.50,34.00,282.50,337.5,0.0
+  floor-layers: 2
+stamina:
+  max: 100.0
+  drain-per-second: 35.0
+  regen-per-second: 18.0
+config-version: 1
+

@@ -1,0 +1,97 @@
+# ============================================================
+# 高台之王（HillKing）配置文件
+# 修改后在非对局状态执行 /hill reload，或重启服务器
+# 注意：YAML 的冒号后面必须有空格，缩进必须用空格（不能用 Tab）
+# ============================================================
+
+# ---------- 人数 ----------
+# 最少开局人数（至少 2）
+min-players: 2
+# 最多人数
+max-players: 16
+
+# ---------- 对局 ----------
+# 一局时长（秒）
+game-seconds: 60
+# 站在高台上每秒得多少分（离开高台不得分）
+points-per-second: 1
+
+# ---------- 咸鱼 ----------
+fish:
+  material: COD
+  name: '&6&l咸鱼 &7(左键拍人)'
+  lore:
+  - '&7左键拍玩家，把 TA 从高台上拍下去'
+  - '&7站在高台上每秒自动得分'
+  # 击退等级：决定附魔显示与下面的默认力度（2 = 击退 II）
+  knockback-level: 2
+  # 每级的水平 / 垂直击退力度（默认 2 级 → 水平 1.2、垂直 0.5）
+  horizontal-per-level: 0.6
+  vertical-per-level: 0.25
+  # 两次有效拍击之间的冷却（秒）
+  cooldown-seconds: 0.3
+
+# ---------- 等待室道具 ----------
+wait-items:
+  return:
+    material: RED_BED
+    name: '&a&l返回大厅 &7(右键)'
+    lore:
+    - '&7点击返回大厅'
+    slot: 8
+  start:
+    material: PAPER
+    name: '&a&l开始游戏 &7(右键)'
+    lore:
+    - '&7点击立刻开始本局'
+    slot: 4
+
+# ---------- 右侧计分板 ----------
+sidebar:
+  enabled: true
+  # 标题（支持 & 颜色代码）
+  title: '&6&l高台之王 · 积分'
+
+# ---------- 场地 ----------
+# 用指令设置，不要手写坐标；/hill build 会自动建台并生成出生点
+arena:
+  # 圆心（台面中心；/hill build 会自动写入）
+  center: world_mini_game,627.50,53.00,307.50,178.8,85.0
+  # 圆形半径（格）
+  radius: 7
+  # 台面比执行建场指令时站立的方块高几格（0 = 与脚下齐平）
+  height: 2
+  # 台面下方再铺几层石头（底座厚度）
+  depth: 3
+  # 台面方块 / 底座方块
+  platform-material: RED_WOOL
+  base-material: STONE
+  # 玩家掉到台面以下这么多格，自动送回台上（不淘汰，只是这段时间不得分）
+  fall-reset-below: 1.0
+  # 等待点（/hill setlobby 写）
+  lobby: world_mini_game,627.27,53.00,308.00,0.1,2.7
+  # 玩家出生点（/hill build 会自动生成；也可 /hill genspawns 重新生成）
+  spawns:
+  - world_mini_game,628.29,53.00,305.11,0.0,0.0
+  - world_mini_game,627.16,53.00,304.02,0.0,0.0
+  - world_mini_game,624.38,53.00,309.60,0.0,0.0
+  - world_mini_game,623.88,53.00,306.66,0.0,0.0
+  - world_mini_game,628.82,53.00,310.37,0.0,0.0
+  - world_mini_game,628.36,53.00,306.85,0.0,0.0
+  - world_mini_game,624.99,53.00,305.19,0.0,0.0
+  - world_mini_game,630.84,53.00,303.94,0.0,0.0
+  - world_mini_game,625.29,53.00,307.95,0.0,0.0
+  - world_mini_game,624.75,53.00,303.46,0.0,0.0
+  - world_mini_game,629.46,53.00,311.99,0.0,0.0
+  - world_mini_game,627.24,53.00,309.29,0.0,0.0
+  - world_mini_game,630.01,53.00,305.87,0.0,0.0
+  - world_mini_game,628.70,53.00,302.74,0.0,0.0
+  - world_mini_game,625.39,53.00,311.46,0.0,0.0
+  - world_mini_game,627.16,53.00,311.88,0.0,0.0
+countdown:
+  enabled: true
+  seconds: 3
+  freeze: false
+  title: '&e游戏即将开始：{time}'
+  subtitle: '&7准备好'
+

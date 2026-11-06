@@ -1,0 +1,99 @@
+{
+  "stats": {
+    "minecraft:used": {
+      "minecraft:red_wool": 50,
+      "minecraft:stone_sword": 239,
+      "minecraft:diamond_axe": 45,
+      "minecraft:diamond_pickaxe": 59,
+      "minecraft:splash_potion": 13,
+      "minecraft:wooden_sword": 11,
+      "minecraft:snowball": 8,
+      "minecraft:diamond_shovel": 47,
+      "minecraft:bow": 95,
+      "minecraft:iron_sword": 364,
+      "minecraft:blue_wool": 23
+    },
+    "minecraft:killed": {
+      "minecraft:chicken": 74,
+      "minecraft:pig": 82,
+      "minecraft:cow": 34
+    },
+    "minecraft:picked_up": {
+      "minecraft:blue_wool": 1
+    },
+    "minecraft:custom": {
+      "minecraft:pig_one_cm": 57477,
+      "minecraft:time_since_rest": 3283,
+      "minecraft:walk_one_cm": 562146,
+      "minecraft:leave_game": 6,
+      "minecraft:walk_under_water_one_cm": 22693,
+      "minecraft:mob_kills": 190,
+      "minecraft:damage_taken": 52416,
+      "minecraft:play_time": 336441,
+      "minecraft:damage_dealt": 11307,
+      "minecraft:jump": 2836,
+      "minecraft:time_since_death": 3263,
+      "minecraft:drop": 1,
+      "minecraft:sprint_one_cm": 505694,
+      "minecraft:fall_one_cm": 537214,
+      "minecraft:total_world_time": 336441,
+      "minecraft:swim_one_cm": 31155,
+      "minecraft:fly_one_cm": 1064315,
+      "minecraft:walk_on_water_one_cm": 8667,
+      "minecraft:crouch_one_cm": 3290,
+      "minecraft:sneak_time": 2157,
+      "minecraft:deaths": 38,
+      "minecraft:player_kills": 22
+    },
+    "minecraft:dropped": {
+      "minecraft:blue_wool": 1
+    },
+    "minecraft:mined": {
+      "minecraft:mud": 5,
+      "minecraft:cherry_log": 4,
+      "minecraft:granite": 5,
+      "minecraft:dark_oak_log": 4,
+      "minecraft:spruce_log": 3,
+      "minecraft:podzol": 3,
+      "minecraft:crimson_stem": 4,
+      "minecraft:diorite": 5,
+      "minecraft:mycelium": 3,
+      "minecraft:red_sand": 6,
+      "minecraft:cobblestone": 3,
+      "minecraft:gravel": 5,
+      "minecraft:white_stained_glass": 2,
+      "minecraft:polished_diorite": 3,
+      "minecraft:rooted_dirt": 2,
+      "minecraft:bamboo_block": 4,
+      "minecraft:clay": 4,
+      "minecraft:birch_log": 5,
+      "minecraft:jungle_log": 4,
+      "minecraft:soul_sand": 3,
+      "minecraft:coarse_dirt": 4,
+      "minecraft:soul_soil": 3,
+      "minecraft:snow_block": 3,
+      "minecraft:blackstone": 4,
+      "minecraft:dirt": 6,
+      "minecraft:mangrove_log": 3,
+      "minecraft:andesite": 3,
+      "minecraft:grass_block": 2,
+      "minecraft:cobbled_deepslate": 3,
+      "minecraft:tuff": 1,
+      "minecraft:basalt": 3,
+      "minecraft:deepslate": 4,
+      "minecraft:sand": 6,
+      "minecraft:calcite": 3,
+      "minecraft:polished_andesite": 4,
+      "minecraft:warped_stem": 5,
+      "minecraft:dripstone_block": 4,
+      "minecraft:oak_log": 4,
+      "minecraft:polished_granite": 3,
+      "minecraft:acacia_log": 3,
+      "minecraft:stone": 4
+    },
+    "minecraft:killed_by": {
+      "minecraft:player": 38
+    }
+  },
+  "DataVersion": 4903
+}

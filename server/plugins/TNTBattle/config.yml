@@ -1,0 +1,233 @@
+# 等待人数
+min-players: 2
+# 最多人数（可调，最高 100）
+max-players: 16
+# 伤害测试
+debug-damage: false
+
+# TNT 发射冷却（秒），用经验条显示
+tnt-cooldown-seconds: 5
+# TNT 引信（tick，20 = 1 秒）
+tnt-fuse-ticks: 50
+# 发射初速度（越大飞得越远）
+tnt-velocity: 2
+# 爆炸威力（原版 TNT 默认 4.0）
+tnt-yield: 8.0
+
+# 羊毛发放间隔（秒）
+wool-cooldown-seconds: 5
+# 每次发放数量
+wool-amount: 5
+
+steak:
+  enabled: true
+  amount: 64
+  # 默认吃完不补充
+  auto-refill: false
+  # 开启后每隔多少秒补满
+  refill-cooldown-seconds: 30
+  slot: 8
+
+
+# 掉到这个 Y 以下判定掉入虚空、直接淘汰
+void-y: 9
+
+# 场地（OP 用 /tntbattle pos1|pos2 圈区域、addspawn red|blue 加出生点、setlobby、setvoid，再 /tntbattle save）
+arena:
+  world: 'tpl:mini_games'
+  # 区域两个对角：TNT 只会破坏这个范围内的方块
+  pos1: tpl:mini_games,334.00,57.00,-32.00,0.00,0.00
+  pos2: tpl:mini_games,191.00,57.00,101.00,0.00,0.00
+  # 等待点
+  lobby: tpl:mini_games,261.48,89.00,30.28,-177.90,84.00
+  # 每队可以配置多个出生点（/tntbattle addspawn red|blue）
+  red-spawns:
+  - tpl:mini_games,262.50,29.00,-10.50,0.45,-2.85
+  - tpl:mini_games,285.50,29.00,11.50,-0.01,-1.35
+  - tpl:mini_games,238.50,29.00,11.50,0.14,-2.10
+  blue-spawns:
+  - tpl:mini_games,261.50,29.00,71.50,-179.25,-1.05
+  - tpl:mini_games,238.50,29.00,50.50,177.74,-1.05
+  - tpl:mini_games,285.50,29.00,50.50,-178.51,-2.55
+
+wait-items:
+  return:
+    material: RED_BED
+    name: '&a&l回主城 &7(右键)'
+    lore:
+    - '&7点击返回主城'
+    slot: 8
+  start:
+    material: PAPER
+    name: '&a&l开始游戏 &7(右键)'
+    lore:
+    - '&7点击立刻开始本局'
+    slot: 4
+  music:
+    material: NOTE_BLOCK
+    name: '&b&l背景音乐 &7(右键开关)'
+    lore:
+    - '&7只控制你自己能不能听到'
+    slot: 0
+tnt-damage: 10.0
+tnt-damage-radius: 6.0
+end-delay-ticks: 60
+config-version: 8
+tnt-ramp:
+  enabled: true
+  interval-seconds: 60
+  amount-per-step: 1
+  max-amount: 5
+fall-damage-multiplier: 0.3
+tnt-max-ammo: 10
+build-height-limit: 56
+
+special-items:
+  cooldown-seconds: 5
+  pool:
+  - type: flame
+    weight: 70
+    material: FIRE_CHARGE
+    name: '&6&l烈焰弹 &7(右键发射)'
+    lore:
+    - '&7碰到方块才会爆炸'
+    velocity: 2
+    yield: 4.0
+    damage: 4.0
+    damage-radius: 6.0
+    enabled: true
+    unlock-seconds: 0
+    self-launch: 1.5
+    self-launch-radius: 3.0
+  - type: blackhole
+    weight: 20
+    material: NETHER_STAR
+    name: '&5&l黑洞炸弹 &7(右键发射)'
+    lore:
+    - '&7落地后把附近玩家吸向中心'
+    velocity: 2
+    fuse-ticks: 50
+    pull-radius: 6.0
+    pull-strength: 0.35
+    pull-seconds: 4
+    enabled: true
+    unlock-seconds: 120
+  - type: decoy
+    weight: 10
+    material: TARGET
+    name: '&e&l诱饵炸弹 &7(右键发射)'
+    lore:
+    - '&7让附近玩家的视线锁定它'
+    velocity: 2
+    fuse-ticks: 50
+    lock-radius: 12.0
+    lock-seconds: 5
+    enabled: true
+    unlock-seconds: 0
+  - type: highex
+    weight: 50
+    material: TNT
+    name: '&c&l高爆炸弹 &7(右键发射)'
+    lore:
+    - '&7爆炸范围更大'
+    velocity: 2
+    fuse-ticks: 50
+    yield: 12.0
+    damage: 16.0
+    damage-radius: 10.0
+    enabled: true
+    unlock-seconds: 0
+  - type: bridge_egg
+    enabled: true
+    weight: 50
+    material: EGG
+    name: '&f&l搭路蛋 &7(右键发射)'
+    lore:
+    - '&7全体船员，准备跳帮！'
+    velocity: 2
+    max-blocks: 160
+    width: 2
+    unlock-seconds: 30
+    ground-scan-depth: 100
+    ground-min-gap: 1.0
+  - type: angel
+    enabled: true
+    weight: 15
+    material: FEATHER
+    name: '&b&l天使之赐 &7(右键使用)'
+    lore:
+    - '&7获得漂浮效果'
+    levitation-amplifier: 2
+    levitation-seconds: 3.5
+    unlock-seconds: 0
+  - type: sticky
+    enabled: true
+    weight: 50
+    material: SLIME_BLOCK
+    name: '&a&l粘性炸药 &7(右键发射)'
+    lore:
+    - '&7飞出去后黏在方块上，到点爆炸'
+    unlock-seconds: 0
+    velocity: 2
+    damage-radius: 8.0
+    fuse-ticks: 50
+    damage: 8.0
+    yield: 6.0
+leaderboard:
+  enabled: true
+  limit: 10
+  title: '&6&lTNT 对战 胜场排行榜'
+  line: '&e#%rank% &f%player% &7- &c%wins% &7胜喵'
+  empty: '&7暂无胜场记录'
+  location: tpl:tntbt_twins,270.18,92.62,30.07,-175.20,13.65
+  view-range: 4.0
+bridge-egg:
+  ground-scan-depth: 8
+  ground-min-gap: 1.0
+music:
+  enabled: true
+  loop: true
+  volume: 1.0
+  trigger-team-alive: 1
+  tail-ticks: 20
+  max-record-seconds: 600
+  default-on: false
+countdown:
+  enabled: true
+  seconds: 3
+  freeze: true
+  title: '&e游戏即将开始：{time}'
+  subtitle: '&7准备好'
+arenas:
+  双岛:
+    world: 'tpl:tntbt_twins'
+    pos1: tpl:tntbt_twins,334.00,57.00,-32.00,0.00,0.00
+    pos2: tpl:tntbt_twins,191.00,57.00,101.00,0.00,0.00
+    lobby: tpl:tntbt_twins,261.48,89.00,30.28,-177.90,84.00
+    red-spawns:
+    - tpl:tntbt_twins,262.50,29.00,-10.50,0.45,-2.85
+    - tpl:tntbt_twins,285.50,29.00,11.50,-0.01,-1.35
+    - tpl:tntbt_twins,238.50,29.00,11.50,0.14,-2.10
+    blue-spawns:
+    - tpl:tntbt_twins,261.50,29.00,71.50,-179.25,-1.05
+    - tpl:tntbt_twins,238.50,29.00,50.50,177.74,-1.05
+    - tpl:tntbt_twins,285.50,29.00,50.50,-178.51,-2.55
+    void-y: 9
+    build-height-limit: 56
+    max-players: 0
+  废墟:
+    world: 'tpl:tntbt_ruins'
+    pos1: tpl:tntbt_ruins,218.00,174.00,7.00,0.00,0.00
+    pos2: tpl:tntbt_ruins,8.00,174.00,234.00,0.00,0.00
+    lobby: tpl:tntbt_ruins,116.67,196.00,123.48,-87.00,90.00
+    red-spawns:
+    - tpl:tntbt_ruins,99.50,167.00,89.50,2.25,-8.85
+    - tpl:tntbt_ruins,119.50,168.00,91.50,5.10,-8.25
+    - tpl:tntbt_ruins,141.50,170.00,92.50,0.75,-4.50
+    blue-spawns:
+    - tpl:tntbt_ruins,141.50,167.00,157.50,-180.00,-3.60
+    - tpl:tntbt_ruins,119.50,170.00,158.50,179.55,-2.25
+    - tpl:tntbt_ruins,97.50,173.00,158.50,-178.80,2.10
+    void-y: 9
+    build-height-limit: 200
+    max-players: 0

@@ -1,0 +1,308 @@
+lobby:
+  world: world
+  x: 1.662831368256901
+  y: 57.0
+  z: -3.077234252752694
+  yaw: -92.3504
+  pitch: 9.820203
+menu-item: COMPASS
+menu-title: 游戏大厅
+games:
+- icon: GRASS_BLOCK
+  name: 建筑猜猜乐
+  alias: 猜猜乐
+  color: '6'
+  command: gtb join
+  join-prefix: gtb join
+- icon: DIAMOND_SWORD
+  name: 单挑 PvP
+  alias: 决斗
+  color: c
+  command: duel join
+  join-prefix: duel join
+- icon: POTATO
+  name: 烫手山芋
+  alias: 烫手山芋
+  color: e
+  command: hp join
+  join-prefix: hp join
+- icon: SNOWBALL
+  name: 雪塔大作战
+  alias: 雪塔大作战
+  color: b
+  command: tr join
+  join-prefix: tr join
+- icon: IRON_SWORD
+  name: 密室杀手
+  alias: 密室杀手
+  color: '8'
+  command: mm join
+  join-prefix: mm join
+- icon: LEATHER_BOOTS
+  name: 绿茵足球
+  alias: 绿茵足球
+  color: a
+  command: fb join
+  join-prefix: fb join
+- icon: MAGENTA_CONCRETE
+  name: 色盲派对
+  alias: 色盲派对
+  color: d
+  command: cp join
+  join-prefix: cp join
+- icon: LADDER
+  name: 你建我跑
+  alias: 你建我跑
+  color: '3'
+  command: br join
+  join-prefix: br join
+- icon: CRYING_OBSIDIAN
+  name: 幸运之柱
+  alias: 幸运之柱
+  color: '5'
+  command: lp join
+  join-prefix: lp join
+tab:
+  show-empty-games: false
+lock-inventory: false
+menu:
+  items:
+    '11':
+      material: GRASS_BLOCK
+      name: '&6&l建筑猜猜乐'
+      lore:
+      - '&r3D版你画我猜！'
+      action: game:建筑猜猜乐
+    '12':
+      material: DIAMOND_SWORD
+      name: '&c&l单挑PVP'
+      lore:
+      - 不服单挑
+      action: game:单挑 PvP
+    '13':
+      material: IRON_SWORD
+      name: '&8&l密室杀手'
+      lore:
+      - 1杀手 1侦探 1猎人
+      action: game:密室杀手
+    '14':
+      material: LEATHER_BOOTS
+      name: '&a&l绿茵足球'
+      lore:
+      - 红蓝两队踢球进门
+      - 冲刺/高跳/射门靴/挑高靴
+      action: game:绿茵足球
+    '15':
+      material: LADDER
+      name: '&3&l你建我跑'
+      lore:
+      - 你建跑酷，我来跑！
+      - 建造者先跑，通过后其他人开跑
+      action: game:你建我跑
+    '20':
+      material: CRYING_OBSIDIAN
+      name: '&5&l幸运之柱'
+      lore:
+      - 空手开局，每2秒一件随机物品
+      - 缩圈 + 箭雨 + 苦力怕雨 + TNT雨
+      action: game:幸运之柱
+    '21':
+      material: TNT
+      name: '&b&lTNT大战'
+      lore:
+      - '&7把敌人全部炸下去吧！'
+      action: game:TNT大战
+    '22':
+      material: CREEPER_SPAWN_EGG
+      name: '&b&l街机游戏派对'
+      lore:
+      - '&7在多轮小游戏中成为冠军！木嘿嘿嘿！'
+      action: game:街机派对
+    '31':
+      material: SLIME_BALL
+      name: '&b&l迷你小游戏'
+      lore:
+      - 烫手山芋 / 雪塔大作战 / 色盲派对
+      - 点击打开子菜单
+      action: open:迷你小游戏
+    '53':
+      material: NETHER_STAR
+      name: '&e&l头衔菜单'
+      lore:
+      - '&7点击查看并选择你的头衔'
+      - '&7也可以输入 &f/titles'
+      action: cmd:titles
+    '45':
+      material: ENDER_EYE
+      name: '&b&l观战'
+      lore:
+      - '&7查看正在进行的小游戏，点一下进去观战'
+      - '&7观战中途退出：点聊天栏的按钮或输入 &f/hub'
+      action: spectate
+    '49':
+      material: COMPASS
+      name: '&e&l派对设置 &7(管理员)'
+      lore:
+      - '&7调整街机派对：每局小游戏个数、人数、过渡时间'
+      - '&7以及每个小游戏的启用/禁用'
+      action: cmd:arcade menu
+      op-only: true
+    '16':
+      material: SHIELD
+      name: '&c&l战线模式'
+      lore:
+      - '&7守住自己的战线，把对手推回去'
+      - '&7（Hold the Fort：新加入的游戏）'
+      action: game:战线模式
+  rows: 6
+  sub:
+    天坑:
+      rows: 3
+    单挑 PvP:
+      rows: 3
+      items:
+        '0':
+          action: arena:单挑 PvP|重锤
+        '1':
+          action: arena:单挑 PvP|相扑
+    烫手山芋:
+      rows: 3
+    绿茵足球:
+      rows: 3
+    色盲派对:
+      rows: 3
+    你建我跑:
+      rows: 3
+    幸运之柱:
+      rows: 3
+    迷你小游戏:
+      rows: 6
+      title: '&b&l迷你小游戏'
+      items:
+        '10':
+          material: POTATO
+          name: '&e&l烫手山芋'
+          lore:
+          - '&7在 TNT 爆炸前传给别人'
+          action: game:烫手山芋
+        '11':
+          material: SNOWBALL
+          name: '&b&l雪塔大作战'
+          lore:
+          - '&7踩雪雪塌，雪球砸人'
+          action: game:雪塔大作战
+        '12':
+          material: MAGENTA_CONCRETE
+          name: '&d&l色盲派对'
+          lore:
+          - '&7站对颜色，站错塌陷'
+          action: game:色盲派对
+        '13':
+          material: WATER_BUCKET
+          name: '&b&l花落水家'
+          lore:
+          - '&7从高台跳进水池占据点位'
+          - '&7占点最多的人获胜'
+          action: game:跳水填格
+        '14':
+          material: DIAMOND HOE
+          name: '&b&lbattlefield1 占地风云1'
+          lore:
+          - '&7用锄头画出尽可能多的领地！'
+          action: game:battlefield 1 (占地1)
+        '15':
+          material: PAPER
+          name: '&b&l记忆翻牌'
+          lore:
+          - '&7记忆连连看！'
+          action: game:记忆翻牌
+        '16':
+          material: DIAMOND PICKAXE
+          name: '&b&l击退大作战'
+          lore:
+          - '&7用镐子和风弹把其他人击落下去！'
+          action: game:击退大战
+        '19':
+          material: CARROT ON A STICK
+          name: '&b&l群友竞速'
+          lore:
+          - '&7带着群友竞争第一名！'
+          action: game:群友竞速赛
+        '20':
+          material: DIAMOND SHOVEL
+          name: '&b&l一掘到底'
+          lore:
+          - '&7用合理的工具快速挖到底部！'
+          action: game:一掘到底
+        '21':
+          material: ANVIL
+          name: '&b&l铁砧掘战'
+          lore:
+          - '&7躲避铁砧还有砸出来的洞！'
+          action: game:铁砧掘战
+        '22':
+          material: MILK BUCKET
+          name: '&b&l动物屠宰'
+          lore:
+          - '&7击杀动物以增加积分！'
+          action: game:动物屠宰
+        '23':
+          material: SNIFFER EGG
+          name: '&b&l蛇行派对'
+          lore:
+          - '&7贪吃蛇！'
+          action: game:蛇行派对
+        '24':
+          material: GRASS BLOCK
+          name: '&b&l高地之王'
+          lore:
+          - '&7占领高地，拍飞其他人！'
+          action: game:高台之王
+        '25':
+          material: BOW
+          name: '&b&lOne shot'
+          lore:
+          - '&7在击败对手前只有一次机会的秒杀箭！'
+          action: game:One Shot
+        '28':
+          material: BLAZE POWDER
+          name: '&b&l跃火者'
+          lore:
+          - '&7昂首，足践烈焰（注意打开粒子效果显示）'
+          action: game:跃火者
+        '29':
+          material: ARROW
+          name: '&b&l万箭齐发'
+          lore:
+          - '&7躲避箭雨，成为幸存者！'
+          action: game:万箭齐发
+        '49':
+          material: ARROW
+          name: '&7返回主菜单'
+          lore:
+          - '&7回到游戏大厅'
+          action: cmd:hub menu
+      version: 2
+    密室杀手:
+      items:
+        '0':
+          action: arena:密室杀手|圣诞工厂
+        '1':
+          action: arena:密室杀手|ship
+      rows: 4
+    TNT大战:
+      rows: 3
+      title: '&c&lTNT 对战 · 选择地图'
+      items:
+        '0':
+          material: TNT
+          name: '&b&l似曾相识的两栋楼'
+          lore:
+          - '&7经典地图，你觉得如此熟悉'
+          action: game:TNT 对战
+        '1':
+          material: TNT
+          name: '&b&l废墟'
+          lore:
+          - '&7下方是雷区'
+          action: game:TNT 对战

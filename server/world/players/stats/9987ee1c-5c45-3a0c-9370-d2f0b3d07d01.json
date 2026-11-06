@@ -1,0 +1,38 @@
+{
+  "stats": {
+    "minecraft:used": {
+      "minecraft:red_wool": 40,
+      "minecraft:stone_sword": 72,
+      "minecraft:splash_potion": 4,
+      "minecraft:bow": 5
+    },
+    "minecraft:custom": {
+      "minecraft:time_since_rest": 15896,
+      "minecraft:walk_one_cm": 115442,
+      "minecraft:leave_game": 3,
+      "minecraft:walk_under_water_one_cm": 907,
+      "minecraft:damage_taken": 1954,
+      "minecraft:damage_dealt": 1161,
+      "minecraft:play_time": 42504,
+      "minecraft:jump": 316,
+      "minecraft:time_since_death": 15876,
+      "minecraft:sprint_one_cm": 34118,
+      "minecraft:fall_one_cm": 85502,
+      "minecraft:swim_one_cm": 1942,
+      "minecraft:total_world_time": 42504,
+      "minecraft:fly_one_cm": 81114,
+      "minecraft:walk_on_water_one_cm": 2277,
+      "minecraft:crouch_one_cm": 1733,
+      "minecraft:sneak_time": 844,
+      "minecraft:deaths": 6,
+      "minecraft:player_kills": 1
+    },
+    "minecraft:mined": {
+      "minecraft:white_stained_glass": 1
+    },
+    "minecraft:killed_by": {
+      "minecraft:player": 5
+    }
+  },
+  "DataVersion": 4903
+}

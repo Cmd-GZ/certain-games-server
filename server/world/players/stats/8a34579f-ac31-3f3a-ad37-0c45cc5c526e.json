@@ -1,0 +1,82 @@
+{
+  "stats": {
+    "minecraft:used": {
+      "minecraft:oak_fence": 1,
+      "minecraft:spruce_fence": 9,
+      "minecraft:chainmail_helmet": 1,
+      "minecraft:acacia_planks": 1,
+      "minecraft:diamond_helmet": 1,
+      "minecraft:waxed_weathered_copper": 1,
+      "minecraft:iron_pickaxe": 1,
+      "minecraft:tnt": 17,
+      "minecraft:diorite_stairs": 1,
+      "minecraft:black_concrete": 1,
+      "minecraft:magenta_banner": 1,
+      "minecraft:blue_wool": 1232,
+      "minecraft:red_wool": 1207,
+      "minecraft:stone_sword": 141,
+      "minecraft:cut_sandstone_slab": 1,
+      "minecraft:black_wool": 15,
+      "minecraft:diamond_leggings": 1,
+      "minecraft:dark_prismarine_stairs": 1,
+      "minecraft:white_wool": 1,
+      "minecraft:sulfur": 1,
+      "minecraft:oak_log": 28,
+      "minecraft:diamond_chestplate": 1,
+      "minecraft:pale_oak_fence": 1,
+      "minecraft:oak_stairs": 9,
+      "minecraft:cyan_terracotta": 1,
+      "minecraft:cooked_beef": 31,
+      "minecraft:gray_carpet": 1,
+      "minecraft:flint_and_steel": 34,
+      "minecraft:copper_bars": 1,
+      "minecraft:snowball": 3,
+      "minecraft:spruce_trapdoor": 8,
+      "minecraft:oak_pressure_plate": 8,
+      "minecraft:brown_wool": 31,
+      "minecraft:acacia_hanging_sign": 1,
+      "minecraft:bow": 181
+    },
+    "minecraft:custom": {
+      "minecraft:pig_one_cm": 97042,
+      "minecraft:time_since_rest": 16806,
+      "minecraft:walk_one_cm": 748327,
+      "minecraft:leave_game": 2,
+      "minecraft:walk_under_water_one_cm": 39056,
+      "minecraft:mob_kills": 25,
+      "minecraft:damage_taken": 9426,
+      "minecraft:play_time": 345034,
+      "minecraft:damage_dealt": 5448,
+      "minecraft:jump": 11171,
+      "minecraft:time_since_death": 16806,
+      "minecraft:drop": 4,
+      "minecraft:sprint_one_cm": 858332,
+      "minecraft:fall_one_cm": 671903,
+      "minecraft:total_world_time": 345034,
+      "minecraft:swim_one_cm": 50918,
+      "minecraft:fly_one_cm": 2873018,
+      "minecraft:walk_on_water_one_cm": 31864,
+      "minecraft:crouch_one_cm": 26542,
+      "minecraft:sneak_time": 12494,
+      "minecraft:climb_one_cm": 1888,
+      "minecraft:deaths": 12,
+      "minecraft:player_kills": 25
+    },
+    "minecraft:killed": {
+      "minecraft:chicken": 25
+    },
+    "minecraft:killed_by": {
+      "minecraft:player": 7
+    },
+    "minecraft:dropped": {
+      "minecraft:sugar": 1,
+      "minecraft:diamond_shovel": 1,
+      "minecraft:chainmail_helmet": 1,
+      "minecraft:netherite_hoe": 1
+    },
+    "minecraft:picked_up": {
+      "minecraft:gold_ingot": 5
+    }
+  },
+  "DataVersion": 4903
+}

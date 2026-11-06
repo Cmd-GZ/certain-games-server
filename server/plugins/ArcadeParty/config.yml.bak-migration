@@ -1,0 +1,209 @@
+# ============================================================
+# 街机派对（ArcadeParty）配置文件
+# 修改后在非对局状态执行 /arcade reload，或重启服务器
+# 也可以管理员用 /arcade menu 打开菜单，在游戏里直接调
+# 注意：YAML 的冒号后面必须有空格，缩进必须用空格（不能用 Tab）
+# ============================================================
+
+# ---------- 人数 ----------
+# 最少开局人数（至少 2）
+min-players: 2
+# 每局派对最多多少名玩家（超出部分不能加入派对）
+max-players: 16
+
+# ---------- 派对流程 ----------
+# 每局派对串烧几个小游戏（最多不超过启用的小游戏数量）
+games-per-party: 4
+# 两个小游戏之间的准备阶段（秒）
+transition-seconds: 3
+# 单个小游戏最长等多久（秒）：超时按“无人得分”进入下一局，防止卡死
+round-timeout-seconds: 600
+
+# ---------- 星星 ----------
+stars:
+  first: 3
+  second: 2
+  third: 1
+  # 因为人数超过小游戏上限而当轮旁观的人，补偿多少颗星
+  spectator-bonus: 1
+
+# ---------- 场地 ----------
+# 派对的等待区（聚会开始前后都在这里集合）
+lobby: world_mini_game,-262.50,51.00,594.68,-90.1,-10.1
+# 颁奖台区域：观众站位 + 第 1/2/3 名的站位
+podium:
+  audience: ''
+  first: world_mini_game,-249.68,57.00,594.48,90.1,6.3
+  second: world_mini_game,-249.80,55.00,599.40,91.1,2.9
+  third: world_mini_game,-249.58,53.00,589.38,89.7,3.0
+  end-delay-seconds: 10
+
+# ---------- 颁奖烟花 ----------
+fireworks:
+  enabled: true
+  # 每次放几颗
+  count: 3
+  # 每颗之间隔多少 tick
+  interval-ticks: 10
+  # 升空多少 tick 后爆炸（20 tick = 1 秒）
+  flight-ticks: 30
+  # 烟花类型（BALL / BALL_LARGE / STAR / CREEPER / BURST）
+  types:
+  - BALL
+  - BALL_LARGE
+  - STAR
+  - CREEPER
+  - BURST
+  spots:
+  - world_mini_game,-258.50,51.00,585.50,0.0,0.0
+  - world_mini_game,-249.50,51.00,585.50,0.0,0.0
+  - world_mini_game,-240.50,51.00,585.50,0.0,0.0
+  - world_mini_game,-240.50,51.00,594.50,0.0,0.0
+  - world_mini_game,-240.50,51.00,603.50,0.0,0.0
+  - world_mini_game,-249.50,51.00,603.50,0.0,0.0
+  - world_mini_game,-258.50,51.00,603.50,0.0,0.0
+  - world_mini_game,-262.50,50.00,607.50,0.0,0.0
+  - world_mini_game,-266.50,50.00,601.50,0.0,0.0
+  - world_mini_game,-266.50,50.00,587.50,0.0,0.0
+  - world_mini_game,-262.50,50.00,581.50,0.0,0.0
+  - world_mini_game,-256.50,50.00,577.50,0.0,0.0
+  - world_mini_game,-249.50,50.00,576.50,0.0,0.0
+  - world_mini_game,-242.50,50.00,577.50,0.0,0.0
+  - world_mini_game,-236.50,50.00,581.50,0.0,0.0
+  - world_mini_game,-232.50,50.00,587.50,0.0,0.0
+  - world_mini_game,-231.50,50.00,594.50,0.0,0.0
+  - world_mini_game,-232.50,50.00,601.50,0.0,0.0
+  - world_mini_game,-236.50,50.00,607.50,0.0,0.0
+  - world_mini_game,-242.50,50.00,611.50,0.0,0.0
+  - world_mini_game,-249.50,50.00,612.50,0.0,0.0
+  - world_mini_game,-256.50,50.00,611.50,0.0,0.0
+
+# ---------- 右侧计分板（准备阶段的星星榜） ----------
+scoreboard:
+  enabled: true
+  title: '&e&l街机派对 · 星星'
+  line: '&e{name}'
+
+# ---------- 小游戏池 ----------
+# key = 游戏标识（游戏里 ArcadeBridge.report 用的 key）
+# join-command / start-command：派对用它把玩家拉进小游戏并开局（不要带前导 /）
+# max-players：这局小游戏最多坐几个人，超出的当轮旁观并拿补偿星
+games:
+  digtobottom:
+    display: 一掘到底
+    enabled: false
+    max-players: 8
+    join-command: dig join {arena}
+    start-command: dig start {arena}
+    arena-aware: true
+  anvilbattle:
+    display: 铁砧掘战
+    enabled: true
+    max-players: 12
+    join-command: anvil join
+    start-command: anvil start
+    arena-aware: false
+  animalslaughter:
+    display: 动物屠宰
+    enabled: true
+    max-players: 12
+    join-command: animal join
+    start-command: animal start
+    arena-aware: false
+  snakeparty:
+    display: 蛇行派对
+    enabled: true
+    max-players: 16
+    join-command: snake join
+    start-command: snake start
+    arena-aware: false
+  hotpotato:
+    display: 烫手山芋
+    enabled: true
+    arena-aware: true
+    max-players: 12
+    join-command: hotpotato join {arena}
+    start-command: hotpotato start {arena}
+  tntrun:
+    display: 雪塔大作战
+    enabled: true
+    arena-aware: true
+    max-players: 12
+    join-command: tntrun join {arena}
+    start-command: tntrun start {arena}
+  colorparty:
+    display: 色盲派对
+    enabled: false
+    arena-aware: true
+    max-players: 12
+    join-command: colorparty join {arena}
+    start-command: colorparty start {arena}
+  grouprace:
+    display: 群友竞速
+    enabled: false
+    arena-aware: false
+    max-players: 16
+    join-command: race join
+    start-command: race start
+  knockback:
+    display: 击退大战
+    enabled: true
+    arena-aware: false
+    max-players: 16
+    join-command: knockback join
+    start-command: knockback start
+  landclaim:
+    display: 占地风云1
+    enabled: false
+    arena-aware: false
+    max-players: 16
+    join-command: land join
+    start-command: land start
+  jumpfill:
+    display: 花落水家
+    enabled: false
+    arena-aware: false
+    max-players: 16
+    join-command: jump join
+    start-command: jump start
+  memoryflip:
+    display: 记忆翻牌
+    enabled: true
+    arena-aware: false
+    max-players: 16
+    join-command: memory join
+    start-command: memory start
+  hillking:
+    display: 高台之王
+    enabled: true
+    arena-aware: false
+    max-players: 16
+    join-command: hill join
+    start-command: hill start
+  oneshot:
+    display: One Shot
+    enabled: true
+    arena-aware: false
+    max-players: 16
+    join-command: oneshot join
+    start-command: oneshot start
+  firejumper:
+    display: 跃火者
+    enabled: true
+    arena-aware: false
+    max-players: 16
+    join-command: fj join
+    start-command: fj start
+  arrowrain:
+    display: 万箭齐发
+    enabled: true
+    arena-aware: false
+    max-players: 16
+    join-command: arrowrain join
+    start-command: arrowrain start
+config-version: 1
+transition:
+  in-arena: true
+  freeze: true
+flow: party
+flow-game: ''

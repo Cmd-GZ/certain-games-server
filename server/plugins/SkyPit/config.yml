@@ -1,0 +1,64 @@
+# ========== 天坑插件配置（OP 用 /skypit 命令写入，也可手动编辑后 /skypit reload） ==========
+
+region:
+  world: world
+  x1: -8.328998522222964
+  y1: 55.33019082497331
+  z1: 30.833586806747398
+  x2: 62.1435292027033
+  y2: 38.119500525747526
+  z2: -36.78358830989072
+entry:
+  world: ''
+  x: 0.0
+  y: 0.0
+  z: 0.0
+  yaw: 0.0
+  pitch: 0.0
+spawn:
+  world: ''
+  x: 0.0
+  y: 0.0
+  z: 0.0
+  yaw: 0.0
+  pitch: 0.0
+kit:
+  slots:
+    '0':
+      ==: org.bukkit.inventory.ItemStack
+      DataVersion: 4903
+      id: minecraft:stone_sword
+      count: 1
+      components:
+        minecraft:unbreakable: '{}'
+      schema_version: 1
+    '1':
+      ==: org.bukkit.inventory.ItemStack
+      DataVersion: 4903
+      id: minecraft:bow
+      count: 1
+      schema_version: 1
+    '9':
+      ==: org.bukkit.inventory.ItemStack
+      DataVersion: 4903
+      id: minecraft:spectral_arrow
+      count: 32
+      schema_version: 1
+  offhand:
+    ==: org.bukkit.inventory.ItemStack
+    DataVersion: 4903
+    id: minecraft:splash_potion
+    count: 1
+    components:
+      minecraft:potion_contents: '{potion:"minecraft:healing"}'
+    schema_version: 1
+
+# 浮空文字排行榜（/skypit top 在脚下生成，top remove 移除；自动刷新前十名）
+leaderboards:
+- world: world
+  x: 14.85650583021545
+  y: 56.92423208502398
+  z: -3.5770577603233713
+  yaw: 91.75582885742188
+  pitch: 10.11985969543457
+  entity: 8763c4f8-8686-43d9-87df-f3577bea174e

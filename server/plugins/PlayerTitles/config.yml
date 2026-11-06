@@ -1,0 +1,20 @@
+# 头衔菜单入口物品
+menu-item:
+  enabled: true
+  # 物品材质（Bukkit 材质名）
+  material: NETHER_STAR
+  # 放在玩家背包的哪个槽位（0-35，0-8 为快捷栏）
+  slot: 8
+  name: "&e头衔菜单 &7(右键打开)"
+  lore:
+    - "&7点击查看并选择你的头衔"
+    - "&7该物品无法丢弃或移动"
+
+# 聊天设置
+chat:
+  # 玩家发言时是否在名字前显示头衔
+  enabled: true
+
+# 头衔菜单标题
+menu:
+  title: "&8头衔菜单"

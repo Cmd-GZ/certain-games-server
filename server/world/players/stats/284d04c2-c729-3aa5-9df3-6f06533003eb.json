@@ -1,0 +1,55 @@
+{
+  "stats": {
+    "minecraft:dropped": {
+      "minecraft:gold_ingot": 6
+    },
+    "minecraft:killed_by": {
+      "minecraft:player": 37
+    },
+    "minecraft:used": {
+      "minecraft:red_wool": 10,
+      "minecraft:stone_sword": 346,
+      "minecraft:wind_charge": 12,
+      "minecraft:tnt": 2,
+      "minecraft:mace": 6,
+      "minecraft:white_wool": 6,
+      "minecraft:gray_wool": 26,
+      "minecraft:golden_apple": 1,
+      "minecraft:yellow_stained_glass": 15,
+      "minecraft:flint_and_steel": 1,
+      "minecraft:snowball": 1,
+      "minecraft:light_gray_wool": 8,
+      "minecraft:egg": 198,
+      "minecraft:yellow_wool": 23,
+      "minecraft:bow": 215
+    },
+    "minecraft:custom": {
+      "minecraft:time_since_rest": 16273,
+      "minecraft:walk_one_cm": 110547,
+      "minecraft:leave_game": 1,
+      "minecraft:damage_taken": 15778,
+      "minecraft:damage_dealt": 17603,
+      "minecraft:play_time": 82104,
+      "minecraft:damage_absorbed": 17,
+      "minecraft:open_shulker_box": 18,
+      "minecraft:jump": 1726,
+      "minecraft:time_since_death": 16253,
+      "minecraft:drop": 1,
+      "minecraft:sprint_one_cm": 229358,
+      "minecraft:open_chest": 3,
+      "minecraft:fall_one_cm": 93904,
+      "minecraft:total_world_time": 82104,
+      "minecraft:fly_one_cm": 783599,
+      "minecraft:pot_flower": 1,
+      "minecraft:crouch_one_cm": 6191,
+      "minecraft:sneak_time": 4467,
+      "minecraft:climb_one_cm": 904,
+      "minecraft:deaths": 37,
+      "minecraft:player_kills": 61
+    },
+    "minecraft:picked_up": {
+      "minecraft:gold_ingot": 37
+    }
+  },
+  "DataVersion": 4903
+}
