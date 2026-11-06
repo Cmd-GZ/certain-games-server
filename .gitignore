@@ -28,3 +28,6 @@ Thumbs.db
 
 # ------
 .server/
+
+# 交付打包产物（tools/pack-server.sh 的输出）
+dist/
