@@ -195,8 +195,22 @@ public final class MemoryFlipArena {
      */
     public int build(Player player, int count, int rows, int cols, int spacing,
                      Material wall, Material floor) {
+        return buildAt(player.getLocation(), count, rows, cols, spacing, wall, floor);
+    }
+
+    /**
+     * 在**指定位置**建翻板（无玩家也能建：房间初始化 / 地图自动铺板用）。
+     *
+     * <p>为什么要有它：无客户端环境（脚本/面板）里没有"站在场地的 OP"，
+     * 而记忆翻牌的房间必须有翻板才能开局。地图在 maps.yml 里已经声明了 `entry`，
+     * 于是房间一建好就能按 entry 自动铺板（见 {@code MemoryFlipManager#autoBuildIfNeeded}）。
+     */
+    public int buildAt(Location base, int count, int rows, int cols, int spacing,
+                       Material wall, Material floor) {
         clear();
-        Location base = player.getLocation();
+        if (base == null) {
+            return 0;
+        }
         World world = base.getWorld();
         if (world == null || count < 4) {
             return 0;

@@ -365,8 +365,11 @@ public final class MemoryFlipManager {
             return;
         }
         if (!arena().isReady()) {
-            Chat.send(player, "&c场地还没配置完整（缺 " + arena().missing() + "）。");
-            return;
+            // 房间没翻板时先按地图 entry 自动铺一套（无客户端环境也能开局，见 autoBuildIfNeeded）
+            if (!autoBuildIfNeeded() || !arena().isReady()) {
+                Chat.send(player, "&c场地还没配置完整（缺 " + arena().missing() + "）。");
+                return;
+            }
         }
         game().waiting.add(id);
         game().joinTick.put(id, (long) Bukkit.getCurrentTick());
@@ -386,6 +389,69 @@ public final class MemoryFlipManager {
         Chat.send(player, "&a已加入" + GAME + " &7(" + game().waiting.size() + "/" + effectiveMaxPlayers() + ")");
         updateCountdown();
         reportArena();
+    }
+
+    /**
+     * **房间没有翻板时，按地图的 entry 自动铺一套**（无客户端环境也能开局）。
+     *
+     * <p>为什么需要：记忆翻牌的场地是运行时建的（`/memory build` 要一个站在场地的 OP），
+     * 而房间/派对是由脚本或面板驱动的 —— 于是两房验证时"场地永远未配置"。
+     * 地图（maps.yml）本来就声明了 `entry`（含朝向），房间又是它自己的世界副本，
+     * 在这里铺板既安全又可复现。
+     *
+     * @return 是否铺了板（已经配置好时不重复铺）
+     */
+    public boolean autoBuildIfNeeded() {
+        MemoryFlipArena a = arena();
+        if (a != null && a.isReady()) {
+            return false;
+        }
+        String roomId = com.hub.room.RoomContext.currentRoomId();
+        if (roomId == null || roomId.isBlank()) {
+            plugin.getLogger().info("[自动铺板] 跳过：没有房间上下文");
+            return false;
+        }
+        var room = com.hub.room.RoomManager.room(roomId);
+        if (room == null) {
+            plugin.getLogger().info("[自动铺板] 跳过：房间 " + roomId + " 不存在");
+            return false;
+        }
+        org.bukkit.World world = com.hub.room.RoomManager.worldOfRoom(roomId);
+        if (world == null) {
+            plugin.getLogger().info("[自动铺板] 跳过：房间世界没加载（" + roomId + "）");
+            return false;
+        }
+        // room.map() 的格式是 `游戏:地图`（例如 memoryflip:记忆翻牌），去掉前缀再查 maps.yml
+        String mapName = room.map() == null ? "" : room.map();
+        int colon = mapName.indexOf(':');
+        if (colon >= 0) {
+            mapName = mapName.substring(colon + 1);
+        }
+        var map = com.hub.room.GameMaps.get("memoryflip", mapName);
+        if (map == null || map.entry() == null) {
+            plugin.getLogger().info("[自动铺板] 跳过：地图 " + mapName + " 没登记 entry");
+            return false;
+        }
+        var e = map.entry();
+        org.bukkit.Location base = new org.bukkit.Location(world,
+                e.x(), e.y(), e.z(), e.yaw(), e.pitch());
+        int rows = Math.max(2, Math.min(8, plugin.getConfig().getInt("board.rows", 4)));
+        int cols = Math.max(2, Math.min(8, plugin.getConfig().getInt("board.cols", 4)));
+        int spacing = Math.max(cols + 2, Math.min(32, plugin.getConfig().getInt("board.spacing", 6)));
+        int count = rows * cols;
+        int built = a.buildAt(base, count, rows, cols, spacing,
+                org.bukkit.Material.matchMaterial(plugin.getConfig().getString("board.wall", "OAK_PLANKS")),
+                org.bukkit.Material.matchMaterial(plugin.getConfig().getString("board.floor", "SMOOTH_STONE")));
+        if (built <= 0) {
+            plugin.getLogger().info("[自动铺板] 失败：buildAt 返回 0（位置 " + base + "）");
+        }
+        if (built > 0) {
+            a.setLobby(base);
+            a.save();
+            plugin.getLogger().info("房间 " + roomId + " 没有翻板 → 已按地图 entry 自动铺了 "
+                    + built + " 面（含等待点）");
+        }
+        return built > 0;
     }
 
     public void leave(Player player, boolean silent) {
@@ -546,7 +612,14 @@ public final class MemoryFlipManager {
         updateActionBar();
         updateLiveBoard();
         reportArena();
-        game().gameTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickGame, 20L, 20L);
+        // **每房间的 tick 必须绑住自己那一局**：`bound` 是 manager 上的单槽，
+        // 两个房间同时跑时，后一个房间的 tick 会把 bound 抢过去 → 两房共用一份状态
+        // （实测：两房各 2 人，却报"第一/二/三名 1/1/1"共 3 人，2026-11-06）。
+        final MemoryGame tickGame = game();
+        game().gameTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            use(tickGame.key);
+            tickGame();
+        }, 20L, 20L);
     }
 
     private PlayState prepareBoard(UUID id, MemoryFlipArena.Board board, int boardIndex, Random gameRandom) {
@@ -837,7 +910,20 @@ public final class MemoryFlipManager {
         }, firsts, seconds, thirds);
         Top3.award(data, firsts, seconds, thirds);
         saveData();
-        ArcadeBridge.report("memoryflip", firsts, seconds, thirds);
+        // **上报时要带上"是哪一场派对"**：结算跑在调度线程里，没有房间上下文；
+        // 派对那边按房间/玩家认领，如果既没上下文又没名次（本局无人得分），就会被丢弃 ——
+        // 实测现象：两房都报"没有正常回报结果，本局按无人得分处理"（2026-11-06）。
+        String reportRoom = game().key;
+        if (reportRoom != null && !reportRoom.isBlank()) {
+            com.hub.room.RoomContext.pushRoom(reportRoom);
+        }
+        try {
+            ArcadeBridge.report("memoryflip", firsts, seconds, thirds);
+        } finally {
+            if (reportRoom != null && !reportRoom.isBlank()) {
+                com.hub.room.RoomContext.popRoom();
+            }
+        }
         broadcast("&6===============================");
 
         liveSidebar.hide("memoryflip");
