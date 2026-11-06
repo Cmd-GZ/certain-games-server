@@ -84,7 +84,7 @@ public final class MemoryFlipCommand implements CommandExecutor, TabCompleter {
                 if (p == null) {
                     return true;
                 }
-                manager.arena().setLobby(p.getLocation());
+                manager.arenaFor(p).setLobby(p.getLocation());
                 manager.saveAll();
                 Chat.send(sender, "&a等待点已设置并保存。");
             }
@@ -158,7 +158,7 @@ public final class MemoryFlipCommand implements CommandExecutor, TabCompleter {
         if (floor == null || !floor.isBlock()) {
             floor = Material.SMOOTH_STONE;
         }
-        int built = manager.arena().build(player, count, rows, cols, spacing, wall, floor);
+        int built = manager.arenaFor(player).build(player, count, rows, cols, spacing, wall, floor);
         manager.saveAll();
         Chat.send(sender, "&a已清掉旧场地并生成 &e" + built + " &a面翻牌墙（" + rows + "×" + cols
                 + "，共 " + (rows * cols) + " 格），面向你站的方向。");

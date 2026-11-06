@@ -33,15 +33,35 @@ public final class MemoryFlipArena {
     }
 
     private final JavaPlugin plugin;
+    /** 房间键（"main" = 没有房间时的老路径，数据仍在 config.yml）。 */
+    private final String key;
     private Location lobby;
     private final List<Board> boards = new ArrayList<>();
 
     public MemoryFlipArena(JavaPlugin plugin) {
+        this(plugin, "main");
+    }
+
+    public MemoryFlipArena(JavaPlugin plugin, String key) {
         this.plugin = plugin;
+        this.key = key == null || key.isBlank() ? "main" : key;
+    }
+
+    public String key() {
+        return key;
+    }
+
+    /** 每个房间一份翻板数据：main 沿用 config.yml，其它房间用 arena-&lt;房间键&gt;.yml。 */
+    private org.bukkit.configuration.file.FileConfiguration file() {
+        if ("main".equals(key)) {
+            return plugin.getConfig();
+        }
+        java.io.File f = new java.io.File(plugin.getDataFolder(), "arena-" + key + ".yml");
+        return org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(f);
     }
 
     public void load() {
-        FileConfiguration cfg = plugin.getConfig();
+        FileConfiguration cfg = file();
         lobby = parse(cfg.getString("lobby", ""));
         boards.clear();
         ConfigurationSection sec = cfg.getConfigurationSection("boards");
@@ -74,15 +94,22 @@ public final class MemoryFlipArena {
     }
 
     public void save() {
-        plugin.reloadConfig();
-        FileConfiguration cfg = plugin.getConfig();
+        java.io.File target = "main".equals(key) ? null
+                : new java.io.File(plugin.getDataFolder(), "arena-" + key + ".yml");
+        FileConfiguration cfg;
+        if (target == null) {
+            plugin.reloadConfig();
+            cfg = plugin.getConfig();
+        } else {
+            cfg = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(target);
+        }
         // R2：读不出来（场地未就绪）时**什么都不写**，绝不能把磁盘上已有的坐标擦成 ''
         if (lobby != null) {
             cfg.set("lobby", encode(lobby));
         }
         // ⚠ 只有读到棋盘时才重写 boards 段：读不出来就**别动它**（R2，否则一次开服就会清空）
         if (boards.isEmpty()) {
-            plugin.saveConfig();
+            flush(cfg, target);
             return;
         }
         cfg.set("boards", null);
@@ -101,7 +128,20 @@ public final class MemoryFlipArena {
             }
             cfg.set(path + ".blocks", blocks);
         }
-        plugin.saveConfig();
+        flush(cfg, target);
+    }
+
+    /** main → plugin.saveConfig()；房间 → 写自己的 arena-&lt;键&gt;.yml。 */
+    private void flush(FileConfiguration cfg, java.io.File target) {
+        if (target == null) {
+            plugin.saveConfig();
+            return;
+        }
+        try {
+            cfg.save(target);
+        } catch (java.io.IOException ex) {
+            plugin.getLogger().warning("保存翻板数据失败（" + target.getName() + "）：" + ex.getMessage());
+        }
     }
 
     public boolean isReady() {

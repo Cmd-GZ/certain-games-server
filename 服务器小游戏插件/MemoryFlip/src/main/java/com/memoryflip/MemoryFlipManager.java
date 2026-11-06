@@ -58,7 +58,8 @@ public final class MemoryFlipManager {
     }
 
     private final MemoryFlipPlugin plugin;
-    private final MemoryFlipArena arena;
+    /** 没有房间上下文时用的那一份（老路径，数据仍读 config.yml）。 */
+    private final MemoryFlipArena defaultArena;
     private final LiveSidebar liveSidebar;
     private final Random random = new Random();
     private StartCountdown startCountdown;
@@ -117,7 +118,7 @@ public final class MemoryFlipManager {
 
     /** 新建一局：连同它自己的等待倒计时一起建（D22：每房间一个倒计时）。 */
     private MemoryGame newGame(String key) {
-        MemoryGame g = new MemoryGame(key, arenaKey());
+        MemoryGame g = new MemoryGame(key, arenaKey(), plugin);
         g.countdown = new WaitCountdown(plugin, new GameHost(g));
         return g;
     }
@@ -153,7 +154,8 @@ public final class MemoryFlipManager {
 
     public MemoryFlipManager(MemoryFlipPlugin plugin) {
         this.plugin = plugin;
-        this.arena = new MemoryFlipArena(plugin);
+        this.defaultArena = new MemoryFlipArena(plugin, "main");
+        this.defaultArena.load();
         this.liveSidebar = new LiveSidebar(plugin);
         // D22：每房间一个 WaitCountdown（在 newGame() 里创建），见 GameHost
     }
@@ -179,7 +181,7 @@ public final class MemoryFlipManager {
 
     /** 实际可用人数：不能超过已建好的翻牌墙数量。 */
     public int effectiveMaxPlayers() {
-        int boards = arena.getBoards().size();
+        int boards = arena().getBoards().size();
         return boards <= 0 ? maxPlayers() : Math.min(maxPlayers(), boards);
     }
 
@@ -216,11 +218,10 @@ public final class MemoryFlipManager {
 
     public void load() {
         ensureDefaults();
-        arena.load();
         data = PlayerStats.load("memoryflip", new File(plugin.getDataFolder(), "data.yml"));
-        World world = arena.getLobby() != null ? arena.getLobby().getWorld() : null;
-        if (world == null && !arena.getBoards().isEmpty()) {
-            world = arena.getBoards().get(0).stand.getWorld();
+        World world = defaultArena.getLobby() != null ? defaultArena.getLobby().getWorld() : null;
+        if (world == null && !defaultArena.getBoards().isEmpty()) {
+            world = defaultArena.getBoards().get(0).stand.getWorld();
         }
         game().questionItem = null;
         game().checkItem = null;
@@ -234,7 +235,8 @@ public final class MemoryFlipManager {
             HubAPI.registerGame(GAME, GAME, "FILLED_MAP", "b");
             reportArena();
         }, 40L);
-        plugin.getLogger().info("场地" + (arena.isReady() ? "已配置" : "未配置（缺 " + arena.missing() + "）") + "。");
+        plugin.getLogger().info("场地" + (defaultArena.isReady() ? "已配置" : "未配置（缺 " + defaultArena.missing()
+                + "）") + "（每个房间各自一份翻板数据）");
     }
 
     public void reload() {
@@ -284,8 +286,18 @@ public final class MemoryFlipManager {
         return true;
     }
 
+    /** **当前房间**的场地（翻板/等待点）；没有上下文时退回 main 那一份。 */
     public MemoryFlipArena arena() {
-        return arena;
+        String roomId = com.hub.room.RoomContext.currentRoomId();
+        if (roomId == null || roomId.isBlank()) {
+            return defaultArena;
+        }
+        return games.ofKey(roomId, k -> newGame(k)).arena;
+    }
+
+    /** 某个玩家所在房间的场地（玩家在房间里打命令时用这个）。 */
+    public MemoryFlipArena arenaFor(org.bukkit.entity.Player p) {
+        return gameFor(p, arenaKey()).arena;
     }
 
     public State state() {
@@ -321,7 +333,7 @@ public final class MemoryFlipManager {
     }
 
     public void saveAll() {
-        arena.save();
+        arena().save();
     }
 
     // ---------- 加入 / 离开 ----------
@@ -352,8 +364,8 @@ public final class MemoryFlipManager {
             Chat.send(player, "&c等待队列已满（" + effectiveMaxPlayers() + " 人）。");
             return;
         }
-        if (!arena.isReady()) {
-            Chat.send(player, "&c场地还没配置完整（缺 " + arena.missing() + "）。");
+        if (!arena().isReady()) {
+            Chat.send(player, "&c场地还没配置完整（缺 " + arena().missing() + "）。");
             return;
         }
         game().waiting.add(id);
@@ -367,7 +379,7 @@ public final class MemoryFlipManager {
         player.getInventory().clear();
         player.setGameMode(GameMode.SURVIVAL);
         resetPlayer(player);
-        player.teleport(arena.getLobby());
+        player.teleport(arena().getLobby());
         giveWaitItems(player);
         HubAPI.setGame(id, GAME);
         HubAPI.announceJoin(plugin.getName(), player.getName());
@@ -453,11 +465,11 @@ public final class MemoryFlipManager {
         if (game().state != State.WAITING) {
             return;
         }
-        if (!arena.isReady()) {
+        if (!arena().isReady()) {
             for (UUID id : game().waiting) {
                 Player p = Bukkit.getPlayer(id);
                 if (p != null) {
-                    Chat.send(p, "&c场地未配置完整（缺 " + arena.missing() + "），无法开始。");
+                    Chat.send(p, "&c场地未配置完整（缺 " + arena().missing() + "），无法开始。");
                 }
             }
             return;
@@ -476,11 +488,11 @@ public final class MemoryFlipManager {
             updateCountdown();
             return;
         }
-        if (ready.size() > arena.getBoards().size()) {
+        if (ready.size() > arena().getBoards().size()) {
             for (UUID id : ready) {
                 Player p = Bukkit.getPlayer(id);
                 if (p != null) {
-                    Chat.send(p, "&c翻牌墙数量不够（当前 " + arena.getBoards().size() + " 面），请管理员 /memory build。");
+                    Chat.send(p, "&c翻牌墙数量不够（当前 " + arena().getBoards().size() + " 面），请管理员 /memory build。");
                 }
             }
             return;
@@ -503,7 +515,7 @@ public final class MemoryFlipManager {
 
         // 每局重新播种，保证每局的物品组合与牌面位置都不一样
         Random gameRandom = new Random(System.nanoTime());
-        List<MemoryFlipArena.Board> boards = new ArrayList<>(arena.getBoards());
+        List<MemoryFlipArena.Board> boards = new ArrayList<>(arena().getBoards());
         Collections.shuffle(boards, gameRandom);
         List<UUID> order = new ArrayList<>(game().playing);
         Collections.shuffle(order, gameRandom);
@@ -553,7 +565,7 @@ public final class MemoryFlipManager {
         int repaired = 0;
         for (Location loc : board.frames) {
             ItemFrame frame = null;
-            for (ItemFrame candidate : arena.framesAt(loc)) {
+            for (ItemFrame candidate : arena().framesAt(loc)) {
                 if (used.add(candidate.getUniqueId())) {
                     frame = candidate;
                     break;
@@ -938,8 +950,8 @@ public final class MemoryFlipManager {
             Chat.send(player, "&e对局已经在进行中。");
             return;
         }
-        if (!arena.isReady()) {
-            Chat.send(player, "&c场地未配置完整（缺 " + arena.missing() + "）。");
+        if (!arena().isReady()) {
+            Chat.send(player, "&c场地未配置完整（缺 " + arena().missing() + "）。");
             return;
         }
         startGame(true);
@@ -1015,8 +1027,8 @@ public final class MemoryFlipManager {
                 ? "剩余 " + game().secondsLeft + "s · " + game().playing.size() + " 人" : null;
         HubAPI.setArena(GAME, ARENA, game().state == State.RUNNING ? GameState.PLAYING : GameState.WAITING,
                 game().waiting.size() + game().playing.size(), extra);
-        if (arena.getLobby() != null) {
-            HubAPI.setArenaSpectator(GAME, ARENA, arena.getLobby().clone().add(0, 6, 0));
+        if (arena().getLobby() != null) {
+            HubAPI.setArenaSpectator(GAME, ARENA, arena().getLobby().clone().add(0, 6, 0));
         }
     }
 

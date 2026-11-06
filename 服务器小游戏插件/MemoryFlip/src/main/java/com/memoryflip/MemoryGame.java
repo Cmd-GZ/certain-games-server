@@ -43,6 +43,8 @@ final class MemoryGame {
     MemoryFlipManager.State state = MemoryFlipManager.State.WAITING;
     /** 本房间的对局会话。 */
     MemoryFlipSession session;
+    /** **本房间的场地**（翻板墙 + 等待点；D22：两个房间的翻板互不影响）。 */
+    final MemoryFlipArena arena;
     /** endGame 传下来的收场文案（每房间一份，避免两个房间互相覆盖）。 */
     String pendingEndMessage;
 
@@ -52,8 +54,10 @@ final class MemoryGame {
     ItemStack questionItem;
     ItemStack checkItem;
 
-    MemoryGame(String key, String arenaName) {
+    MemoryGame(String key, String arenaName, org.bukkit.plugin.java.JavaPlugin plugin) {
         this.key = key;
         this.arenaName = arenaName;
+        this.arena = new MemoryFlipArena(plugin, key);
+        this.arena.load();
     }
 }
