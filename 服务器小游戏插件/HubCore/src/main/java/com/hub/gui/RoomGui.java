@@ -333,14 +333,11 @@ public final class RoomGui {
             int idx = slot - 1;
             if (idx >= 0 && idx < rooms.size()) {
                 String rid = rooms.get(idx).roomId;
-                if (rightClick && p.hasPermission("hub.admin")) {
-                    // 右键 = 管理员的管理页（开始/停止/删除）。**普通玩家看不到这一页**
-                    open(p, holder.gameKey, Mode.ROOM_ACTIONS, rid);
-                } else {
-                    // 左键 = 直接进房（玩家点房间就是为了玩，不该再点一层）
-                    p.closeInventory();
-                    joinRoom(p, rid);
-                }
+                // **左键/右键都是"进房"**：管理页（开始/停止/删除）不属于玩家界面，
+                // 以前右键会弹出它（OP 右键更是直接进），2026-11-07 反馈确认这是 bug。
+                // 管理动作只留命令：`/hub room actions <房间>` / `/hub start|stop|delete`。
+                p.closeInventory();
+                joinRoom(p, rid);
             }
             return true;
         }
@@ -497,7 +494,7 @@ public final class RoomGui {
         lore.add(noItalic("&7地图：&f" + map));
         lore.add(noItalic("&7房间：&8" + r.roomId));
         lore.add(noItalic(r.idleSeconds() > 0 ? "&7空置：&f" + r.idleSeconds() + "s" : "&a有人在场"));
-        lore.add(noItalic("&8左键进入"));
+        lore.add(noItalic("&8点击进入"));
         meta.lore(lore);
         it.setItemMeta(meta);
         return it;

@@ -6,7 +6,7 @@
 
     <groupId>com.hub</groupId>
     <artifactId>minigame-lib</artifactId>
-    <version>1.44.0</version>
+    <version>1.45.0</version>
     <packaging>jar</packaging>
 
     <name>MiniGameLib</name>

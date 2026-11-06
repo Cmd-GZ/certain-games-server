@@ -26,4 +26,4 @@ templates:
   lp:
     folder: tmpl_lp
   htf:
-    folder: tmpl_htf
+    folder: world_htf      # 暂时用持久世界当模板来源（没有 tmpl_htf 目录）
