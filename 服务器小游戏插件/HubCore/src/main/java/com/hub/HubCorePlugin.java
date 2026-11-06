@@ -1211,6 +1211,19 @@ public class HubCorePlugin extends JavaPlugin implements CommandExecutor, TabCom
                         + com.hub.api.Contract.VERSION + "）");
             }
 
+            // [菜单] R1：玩家看得见的菜单 vs 注册表（2026-11-07 那批 bug 的自动化断言）
+            if (menuLayout != null && menuLayout.hasMain()) {
+                var menuIssues = menuLayout.audit();
+                if (menuIssues.isEmpty()) {
+                    out.add("&b[菜单] &a入口齐全、无重复、子小游戏都在「迷你小游戏」里");
+                } else {
+                    out.add("&b[菜单] &c" + menuIssues.size() + " 个问题：");
+                    for (String issue : menuIssues) {
+                        out.add("  &c" + issue);
+                    }
+                }
+            }
+
             // [目录] R1：plugin.yml / maps.yml / games.yml 合并视图
             if (gameCatalog != null) {
                 gameCatalog.snapshot();

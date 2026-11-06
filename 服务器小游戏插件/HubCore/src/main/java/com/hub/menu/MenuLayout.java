@@ -606,6 +606,8 @@ public final class MenuLayout {
             return;
         }
         var subGames = new java.util.LinkedHashSet<String>(com.hub.room.PartyGames.all());
+        // **整份菜单里已经出现过的游戏**（根 + 所有子菜单；三种 action 写法都会解析成 key）
+        java.util.Set<String> presentKeys = gameKeysAnywhere();
         int addedRoot = 0, addedSub = 0;
 
         // —— 子小游戏 → 子菜单 ——
@@ -632,7 +634,8 @@ public final class MenuLayout {
                 continue;   // 没登记显示名 / 没地图：跳过（审计会单独报）
             }
             String action = "game:" + display;
-            if (findItemSlot(subBase + ".items", action) >= 0) {
+            // **按游戏 key 判重**：上游可能写成 cmd:<插件命令> join，那也算"已经有了"
+            if (presentKeys.contains(key)) {
                 continue;
             }
             int slot = firstFreeSlot(subBase + ".items", size(Place.SUB, "迷你小游戏"));
@@ -645,6 +648,7 @@ public final class MenuLayout {
             plugin.getConfig().set(path + ".material", "PAPER");
             plugin.getConfig().set(path + ".name", "&f" + display);
             plugin.getConfig().set(path + ".action", action);
+            presentKeys.add(key);
             addedSub++;
         }
 
@@ -660,34 +664,31 @@ public final class MenuLayout {
             if (display == null) {
                 continue;
             }
-            String action = "game:" + display;
-            if (findItemSlot("menu.items", action) >= 0) {
-                continue;
+            if (presentKeys.contains(key)) {
+                continue;   // 上游已经用它自己的写法摆过了（game:/cmd:/arena:），不要重复添加
             }
-            int slot = firstFreeSlot("menu.items", size(Place.MAIN, null));
-            if (slot < 0) {
-                plugin.getLogger().warning("[菜单派生] 主菜单没有空槽了，" + display
-                        + " 需手动加：/hub menu edit");
-                continue;
-            }
-            plugin.getConfig().set(itemPathMain(slot) + ".material", "PAPER");
-            plugin.getConfig().set(itemPathMain(slot) + ".name", "&f" + display);
-            plugin.getConfig().set(itemPathMain(slot) + ".action", action);
-            addedRoot++;
+            // **根菜单不自动补**：主菜单是玩家第一眼看到的东西，上游已经摆好了位置；
+            // 自动塞一格 PAPER 只会变成"多出来的纸"（2026-11-07 的 bug）。缺的只提示 OP。
+            plugin.getLogger().info("[菜单派生] 游戏 " + display + "（" + key
+                    + "）在主菜单还没有入口，需要时用 /hub menu edit 手动加");
         }
 
-        // —— 清理"同一游戏两份入口"里的坏那份（上游手配的 `cmd:<游戏> join`）——
-        // 现在每个游戏已经有 `game:<显示名>` 入口了，而旧的 `cmd:` 直连在房间化后是**点不通的**
-        //（`/buildrun join` 少了场地名、`/gtb join` 虽然能跑但不带房间上下文）。
-        int removed = 0;
-        removed += dropLegacyCmdEntries("menu.items");
-        removed += dropLegacyCmdEntries(subBase + ".items");
-        if (removed > 0) {
-            plugin.getLogger().info("[菜单派生] 清掉 " + removed
-                    + " 个重复的旧 `cmd:<游戏> join` 入口（同一游戏已有 game: 入口）");
+        // —— 上游的 `cmd:<游戏> join` 入口：**就地翻译**成 `game:<显示名>`（布局/图标/文案一律不动）——
+        // 房间化之后直连命令少了场地参数、点不动，但上游摆的位置是对的。
+        int normalized = 0;
+        normalized += normalizeLegacyCmdEntries("menu.items");
+        var subSec = plugin.getConfig().getConfigurationSection("menu.sub");
+        if (subSec != null) {
+            for (String name : subSec.getKeys(false)) {
+                normalized += normalizeLegacyCmdEntries("menu.sub." + name + ".items");
+            }
+        }
+        if (normalized > 0) {
+            plugin.getLogger().info("[菜单派生] 把 " + normalized
+                    + " 个旧 `cmd:<游戏> join` 入口翻译成 game: 动作（保留原槽位与图标）");
         }
 
-        if (addedRoot > 0 || addedSub > 0) {
+        if (addedRoot > 0 || addedSub > 0 || normalized > 0) {
             save();
             plugin.getLogger().info("[菜单派生] 已补入口：根菜单 " + addedRoot
                     + " 个、「迷你小游戏」子菜单 " + addedSub + " 个（只填空槽，未改动已有布局）");
@@ -696,6 +697,258 @@ public final class MenuLayout {
         }
     }
 
+
+    /**
+     * **把一个菜单项的 action 解析成"它属于哪个游戏"（游戏 key）**。
+     *
+     * <p>为什么需要：上游菜单里同一个游戏有三种写法 ——`game:<显示名>`、`cmd:<插件命令> join`、
+     * `arena:<游戏>|<场地>`。以前派生入口时按 **action 字符串** 比对，于是上游写的
+     * `cmd:jump join` 和我们要补的 `game:跳水填格` 被当成两回事 → **同一个游戏在菜单里出现两次**
+     * （实测：迷你小游戏子菜单里出现了"击退大战 / 击退大作战"、"battlefield 1 / 占地风云1"两份）。
+     *
+     * <p>这里统一按"命令首词 → games.yml 的 join-command 首词"反查游戏 key。
+     */
+    private String gameKeyOfAction(String action) {
+        String[] parsed = parseAction(action);
+        if (parsed == null) {
+            return null;
+        }
+        switch (parsed[0]) {
+            case "game" -> {
+                return resolveGameKey(parsed[1]);
+            }
+            case "arena" -> {
+                return resolveGameKey(parsed[1]);
+            }
+            case "cmd" -> {
+                String command = parsed[3];   // parseAction 把 cmd 的命令文本放在 [3]，不是 [1]
+                if (command == null) {
+                    return null;
+                }
+                String[] parts = command.trim().split("\\s+");
+                String head = parts[0].toLowerCase(java.util.Locale.ROOT);
+                // **只有 `<命令> join` 才是"进这个游戏"**；`arcade menu` / `xxx start` 不是入口
+                // **第二个词必须是 join**（`dig join 一号场` 也算；`arcade menu` 不算）
+                if (parts.length < 2 || !"join".equalsIgnoreCase(parts[1])) {
+                    return null;
+                }
+                var file = new java.io.File(plugin.getDataFolder(), "games.yml");
+                if (!file.isFile()) {
+                    return null;
+                }
+                var yaml = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(file);
+                var gamesSec = yaml.getConfigurationSection("games");
+                if (gamesSec == null) {
+                    return null;
+                }
+                var cmdObj = org.bukkit.Bukkit.getPluginCommand(head);
+                for (String key : gamesSec.getKeys(false)) {
+                    String join = gamesSec.getString(key + ".join-command", "");
+                    if (join == null || join.isBlank()) {
+                        continue;
+                    }
+                    String joinHead = join.trim().split("\\s+")[0].toLowerCase(java.util.Locale.ROOT);
+                    if (joinHead.equals(head)) {
+                        return key;
+                    }
+                    // **命令别名**：上游菜单写 `cmd:kb join`，games.yml 里是 `knockback join` ——
+                    // 但 `kb` 和 `knockback` 是同一个插件命令，按插件身份认作同一个游戏。
+                    if (cmdObj != null) {
+                        var joinCmd = org.bukkit.Bukkit.getPluginCommand(joinHead);
+                        if (joinCmd != null && joinCmd.getPlugin() == cmdObj.getPlugin()) {
+                            return key;
+                        }
+                    }
+                }
+                return null;
+            }
+            default -> {
+                return null;
+            }
+        }
+    }
+
+    /** 某一段 items 里已经出现过的游戏 key 集合（root 或某个子菜单）。 */
+    private java.util.Set<String> gameKeysIn(String path) {
+        java.util.Set<String> keys = new java.util.HashSet<>();
+        var items = plugin.getConfig().getConfigurationSection(path);
+        if (items == null) {
+            return keys;
+        }
+        for (String k : items.getKeys(false)) {
+            String key = gameKeyOfAction(items.getString(k + ".action"));
+            if (key != null) {
+                keys.add(key);
+            }
+        }
+        return keys;
+    }
+
+    /** 整个菜单（根 + 所有子菜单）里出现过的游戏 key。 */
+    private java.util.Set<String> gameKeysAnywhere() {
+        java.util.Set<String> all = new java.util.HashSet<>(gameKeysIn("menu.items"));
+        var sub = plugin.getConfig().getConfigurationSection("menu.sub");
+        if (sub != null) {
+            for (String name : sub.getKeys(false)) {
+                all.addAll(gameKeysIn("menu.sub." + name + ".items"));
+            }
+        }
+        return all;
+    }
+
+    /**
+     * **把"玩家看到的名字"解析成游戏 key**。
+     *
+     * <p>两道：① 注册表（`plugin.yml` 的 `minigame.name` / key）——这是我们的权威名；
+     * ② **maps.yml 的区域名**——上游菜单里写的是区域名（"色盲派对 / 烫手山芋 / 雪塔大作战"），
+     * 而这些区域在自己的 `regions[].game` 上标了 key，所以能直接反查。
+     *
+     * <p>为什么需要：上游菜单用区域名、我们的注册表用另一套显示名（用户拍板"以注册表为准"），
+     * 两套名字对不上 → 派生入口时认不出"这个游戏已经有入口了"，于是**同一个游戏在菜单里出现两份**
+     * （玩家看到的"一排多出来的纸"，2026-11-07）。
+     */
+    private String resolveGameKey(String name) {
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+        var reg = plugin.getRegistry();
+        if (reg != null) {
+            // ① 注册表：**keyOf 返回小写 key**（canonicalName 返回的是显示名，别混用）
+            String key = reg.keyOf(name);
+            if (key != null) {
+                return key;
+            }
+            // ② 宽松匹配：去掉空格/颜色码/大小写差异（上游写 "单挑PVP"，注册表是 "单挑 PvP"）
+            String norm = normalizeName(name);
+            for (String k : reg.keys()) {
+                String display = reg.displayOfKey(k);
+                if (display != null && normalizeName(display).equals(norm)) {
+                    return k;
+                }
+                if (normalizeName(k).equals(norm)) {
+                    return k;
+                }
+            }
+        }
+        // ③ 派对配置里的 display（上游菜单用的就是这些名字：击退大作战 / 一掘到底 …）
+        java.io.File partyCfg = new java.io.File(plugin.getDataFolder().getParentFile(),
+                "ArcadeParty/config.yml");
+        if (partyCfg.isFile()) {
+            var yaml = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(partyCfg);
+            var games = yaml.getConfigurationSection("games");
+            if (games != null) {
+                for (String key : games.getKeys(false)) {
+                    String display = games.getString(key + ".display", "");
+                    if (display != null && normalizeName(display).equals(normalizeName(name))) {
+                        return key;
+                    }
+                }
+            }
+        }
+        // ④ maps.yml：区域名 → 该区域声明的 game
+        String want = normalizeName(name);
+        for (String game : com.hub.room.GameMaps.games()) {
+            for (String map : com.hub.room.GameMaps.mapNames(game)) {
+                var gm = com.hub.room.GameMaps.get(game, map);
+                if (gm == null) {
+                    continue;
+                }
+                for (var w : gm.worlds()) {
+                    if (w.regions() == null) {
+                        continue;
+                    }
+                    for (var r : w.regions()) {
+                        if (r.name() != null && normalizeName(r.name()).equals(want)) {
+                            return game;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** 名字归一化：去颜色码、去空白、小写（上游与注册表的写法差异只在这些地方）。 */
+    private static String normalizeName(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String s = org.bukkit.ChatColor.stripColor(raw);
+        s = s.replaceAll("[\\s\\u00a0]+", "");
+        return s.toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /**
+     * **菜单体检**：把"玩家能看见的菜单"与"注册表/地图表"对一遍。
+     *
+     * <p>为什么要有：2026-11-07 那一批 bug（主菜单多出一排纸、子小游戏重复两份、
+     * 派对设置被改成"游戏入口"）全是**菜单与游戏清单不一致**，靠玩家截图才发现。
+     * 这里把它变成可断言的一行文字，`/hub doctor` 每次都报。
+     *
+     * @return 问题列表（空 = 干净）
+     */
+    public java.util.List<String> audit() {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        var reg = plugin.getRegistry();
+        if (reg == null || !hasMain()) {
+            return out;
+        }
+        java.util.Map<String, Integer> seen = new java.util.HashMap<>();
+        java.util.Map<String, Integer> rootCount = new java.util.HashMap<>();
+        countGames("menu.items", seen);
+        countGames("menu.items", rootCount);
+        var sub = plugin.getConfig().getConfigurationSection("menu.sub");
+        java.util.Set<String> subKeys = new java.util.HashSet<>();
+        if (sub != null) {
+            for (String name : sub.getKeys(false)) {
+                countGames("menu.sub." + name + ".items", seen);
+                subKeys.addAll(gameKeysIn("menu.sub." + name + ".items"));
+            }
+        }
+        for (var e : rootCount.entrySet()) {
+            if (e.getValue() > 1) {
+                out.add("重复入口（主菜单）：" + e.getKey() + " 出现 " + e.getValue() + " 次");
+            }
+        }
+        for (String key : reg.keys()) {
+            if (com.hub.room.GameMaps.mapNames(key).isEmpty()) {
+                continue;   // 没地图的游戏本来就点不开（quark / skypit），不算菜单问题
+            }
+            if (!seen.containsKey(key)) {
+                out.add("没有入口：" + key + "（" + reg.displayOfKey(key) + "）");
+                continue;
+            }
+            boolean subGame = com.hub.room.PartyGames.isSubGame(key);
+            if (subGame && !subKeys.contains(key)) {
+                out.add("子小游戏不在「迷你小游戏」子菜单：" + key);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 统计某段 items 里每个游戏 key 出现几次（**只算"游戏入口"**）。
+     *
+     * <p>`arena:<游戏>|<场地>` 是"这个游戏的场地子菜单"（上游的 单挑 PvP / 密室杀手 就是这种），
+     * 同一个游戏有它**不算重复**；只有两个 `game:` 入口指向同一游戏才是重复。
+     */
+    private void countGames(String path, java.util.Map<String, Integer> seen) {
+        var items = plugin.getConfig().getConfigurationSection(path);
+        if (items == null) {
+            return;
+        }
+        for (String k : items.getKeys(false)) {
+            String action = items.getString(k + ".action");
+            String[] parsed = parseAction(action);
+            if (parsed == null || !("game".equals(parsed[0]) || "cmd".equals(parsed[0]))) {
+                continue;
+            }
+            String key = gameKeyOfAction(action);
+            if (key != null) {
+                seen.merge(key, 1, Integer::sum);
+            }
+        }
+    }
     /** 在某个 items 段里找第一处 action 等于给定值（null = 找第一个空格）。 */
     private int findItemSlot(String path, String action) {
         var items = plugin.getConfig().getConfigurationSection(path);
@@ -1207,12 +1460,16 @@ public final class MenuLayout {
     }
 
     /**
-     * 删掉"某个游戏已经有 `game:` 入口"时残留的 `cmd:<前缀> join` 旧入口。
+     * 把上游菜单里的 `cmd:<插件命令> join` 入口**就地翻译**成 `game:<显示名>`。
      *
-     * <p>判断依据：`games.yml` 里每个游戏的 join-command 首词（`br join` → `br`）。
-     * 只有**该游戏已经有 `game:` 入口**时才删，避免把唯一入口删掉。
+     * <p>为什么翻译而不是删除：菜单是**玩家看得见的东西**，上游已经把图标/名字/坐标摆好了；
+     * 房间化之后 `cmd:buildrun join` 这类直连少了场地参数，点不动，但那份**布局是对的**。
+     * 以前这里是"删掉旧入口 + 在空槽补一个 PAPER"，结果同一个游戏在菜单里出现两份、
+     * 还多出一排纸（玩家看到的 bug，2026-11-07）。现在只改 action，槽位/图标/文案全保留。
+     *
+     * @return 翻译了几项
      */
-    private int dropLegacyCmdEntries(String path) {
+    private int normalizeLegacyCmdEntries(String path) {
         var items = plugin.getConfig().getConfigurationSection(path);
         if (items == null) {
             return 0;
@@ -1232,6 +1489,11 @@ public final class MenuLayout {
         for (String key : new java.util.ArrayList<>(items.getKeys(false))) {
             String action = items.getString(key + ".action");
             if (action == null || !action.startsWith("cmd:")) {
+                continue;
+            }
+            // **管理员入口不翻译**：`op-only` 的格子是设置面板（派对设置 → `/arcade menu`），
+            // 不是"进游戏"；以前它被翻译成 `game:街机派对`，于是在主菜单里和真正的派对入口撞车。
+            if (items.getBoolean(key + ".op-only", false)) {
                 continue;
             }
             String cmd = action.substring(4).trim();
@@ -1263,8 +1525,8 @@ public final class MenuLayout {
             }
             String display = plugin.getRegistry() == null ? null
                     : plugin.getRegistry().displayOfKey(gameKey);
-            if (display != null && reached.contains(display)) {
-                plugin.getConfig().set(path + "." + key, null);
+            if (display != null && !reached.contains(display)) {
+                plugin.getConfig().set(path + "." + key + ".action", "game:" + display);
                 removed++;
             }
         }
