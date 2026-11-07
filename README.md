@@ -56,3 +56,23 @@ java -Xms4G -Xmx6G -jar server.jar nogui
 /hub join <房间名>
 /hub room maps <游戏>              看这个游戏有哪些地图
 ```
+
+### 跑完服之后还剩下什么会变（无法 gitignore 的部分）
+
+一局服跑完，`git status` 只会剩下面这些——它们**必须留在库里**（否则 clone 下来世界加载不了），
+但内容会被服务器自己重写：
+
+```
+server.properties                      # 只差第一行时间戳
+world/level.dat, level.dat_old         # 世界元数据（种子/版本标记）
+world/**/data/minecraft/game_rules.dat # 世界规则快照
+world/**/data/paper/level_overrides.dat
+world/**/data/minecraft/world_clocks.dat
+```
+
+**推荐流程**：跑完服不要直接 `git add -A`，先丢掉这些"只是跑过一次"的改动，再提交有意的修改：
+
+```bash
+git restore world server.properties   # 丢弃运行态差异
+git status                            # 这时剩下的才是你真改过的东西
+```
