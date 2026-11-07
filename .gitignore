@@ -1,10 +1,27 @@
-# 本分支 = 服务器本体（根目录就是服务器根）
-# 只有运行期垃圾不入库，jar 全部要入库（否则上游 checkout 起来没有插件/服务端）
+# ── server-data 分支 = 服务器本体（根目录就是服务器根）──────────────
+# 规则：**只排运行期垃圾**；插件 jar、配置、世界、libraries 全部入库。
+
+# 运行期目录
 /cache/
-/logs/*
-/crash-reports/*
-/world/dimensions/minecraft/room_*/
+/logs/
+/crash-reports/
+/plugins/spark/tmp/
+/.paper/
+
+# 世界身份 / 会话锁（带上会被判"重复世界"）
 **/session.lock
-/plugins-disabled/
-/server-pack-*.zip
+*.lock
+
+# 测试/回档残留
+/world/dimensions/minecraft/room_*/
+*.bak
+*.bak-migration
+*.tmp
 *.tar.gz
+/server-pack-*.zip
+/plugins-disabled/
+
+# 运行时缓存（每次启动都会重写）
+/usercache.json
+/plugins/usercache.json
+/plugins/whitelist.json
