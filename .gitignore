@@ -31,7 +31,3 @@ Thumbs.db
 
 # 交付打包产物（tools/pack-server.sh 的输出）
 dist/
-
-# server-data 分支：服务器本体里的 jar 必须入库（上游要先能直接起服）
-# 注意顺序：`**/*.jar` 在前，这里用 ! 重新包含
-!server/**/*.jar
