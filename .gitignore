@@ -1,28 +1,36 @@
-# ── server-data 分支 = 服务器本体（根目录就是服务器根）──────────────
-# 规则：**只排运行期垃圾**；插件 jar、配置、世界、libraries 全部入库。
+# ─────────────────────────────────────────────────────────────────────────
+# server-data 分支 = 服务器本体（根目录就是服务器根）
+#
+# 原则：**"跑服会自动改写、又不影响别人复现"的东西不入库**；
+#       配置 / 插件 jar / 模板世界 / 服务端本体 必须入库（否则 clone 下来跑不起来）。
+# 详细判定表见 README.md「提交策略」。
+# ─────────────────────────────────────────────────────────────────────────
 
-# 运行期目录
+# 运行期垃圾（每次开服都会重写/增长）
 /cache/
 /logs/
 /crash-reports/
-/plugins/spark/tmp/
 /.paper/
+/plugins/spark/tmp/
+*.tmp
 
-# 世界身份 / 会话锁（带上会被判"重复世界"）
+# 世界身份 / 会话锁（带上会被判"重复世界"，直接起不了服）
 **/session.lock
 *.lock
+
+# 玩家个人数据（每次有人进服就改；复现 bug 不需要它）
+/world/players/
+
+# 运行时缓存（每次启动重写，内容与机器相关）
+/usercache.json
+/plugins/usercache.json
+/whitelist.json
+/plugins/whitelist.json
 
 # 测试/回档残留
 /world/dimensions/minecraft/room_*/
 *.bak
 *.bak-migration
-*.tmp
 *.tar.gz
 /server-pack-*.zip
 /plugins-disabled/
-
-# 运行时缓存（每次启动都会重写）
-/usercache.json
-/plugins/usercache.json
-/plugins/whitelist.json
-/whitelist.json
