@@ -1,7 +1,0 @@
-name: JoinQuitBroadcast
-version: '1.2.0'
-main: com.example.joinquit.JoinQuitBroadcastPlugin
-api-version: '26.2'
-description: 玩家进入 / 退出服务器时在聊天栏进行播报
-author: example
-softdepend: [PlayerTitles]

@@ -1,7 +1,0 @@
-# ========== 雪塔大作战（原 TNT Run）配置 ==========
-arenas: {}
-
-min-players: 2
-max-players: 12
-fade-ticks: 10          # 踩上后多少 tick 消失（10 tick = 0.5s）；消失后下面还是雪块就继续排队，层层往下塌
-camp-check-ticks: 20    # 防蹲人：每多少 tick 对站着的玩家做一次踩雪检测（20 tick = 1s，站着不动也会塌）

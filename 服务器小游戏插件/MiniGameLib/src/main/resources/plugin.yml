@@ -1,6 +1,0 @@
-name: MiniGameLib
-version: '1.44.0'
-main: com.hub.MiniGameLibPlugin
-api-version: '1.21'
-description: 小游戏公共库：HubAPI（主城对接）、Chat、建场模式、等待倒计时
-# 公共库不注册任何命令、不占用 tab 补全；HubCore 与各小游戏插件都 depend 它

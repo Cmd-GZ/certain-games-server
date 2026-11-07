@@ -1,37 +1,10 @@
-# ---- Build outputs ----
-**/target/
-服务器小游戏插件/.build/
-服务器小游戏插件/build/
-**/*.jar
-
-# ---- Server runtime (Paper server, worlds, plugin data) ----
-服务器小游戏插件/server/
-服务器小游戏插件/toolchain/
-
-# ---- Player data snapshots and release jars ----
-服务器小游戏插件/backups/
-新服务器小游戏插件/*.jar
-
-# ---- IDE / OS / logs ----
-.idea/
-*.iml
-.vscode/
-*.log
-logs/
-.DS_Store
-Thumbs.db
-
-# ---- Local agent settings ----
-.claude/
-
-
-
-# ------
-.server/
-
-# 交付打包产物（tools/pack-server.sh 的输出）
-dist/
-
-# server-data 分支：服务器本体里的 jar 必须入库（上游要先能直接起服）
-# 注意顺序：`**/*.jar` 在前，这里用 ! 重新包含
-!server/**/*.jar
+# 本分支 = 服务器本体（根目录就是服务器根）
+# 只有运行期垃圾不入库，jar 全部要入库（否则上游 checkout 起来没有插件/服务端）
+/cache/
+/logs/*
+/crash-reports/*
+/world/dimensions/minecraft/room_*/
+**/session.lock
+/plugins-disabled/
+/server-pack-*.zip
+*.tar.gz
